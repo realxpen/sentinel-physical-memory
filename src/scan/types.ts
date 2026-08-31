@@ -22,6 +22,8 @@ export interface ScanMedia {
   mimeType: string
   durationMs?: number
   sizeBytes?: number
+  /** Frames already extracted by a trusted ingestion layer (usually the browser). */
+  extractedFrames?: ScanFrame[]
 }
 
 export interface ScanOptions {
