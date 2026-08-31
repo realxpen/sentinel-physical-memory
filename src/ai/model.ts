@@ -1,4 +1,4 @@
-import type { PerceptionResult } from '../domain/sentinel'
+import type { AskBuildingRequest, AskBuildingResponse, PerceptionResult } from '../domain/sentinel'
 import type { ScanArtifact } from '../scan/types'
 
 export type ModelRole = 'perception' | 'reasoning' | 'verification'
@@ -9,10 +9,22 @@ export interface ModelInferenceRequest {
   artifacts: ScanArtifact[]
 }
 
+export interface ReasoningInferenceRequest {
+  role: 'reasoning' | 'verification'
+  request: AskBuildingRequest
+  context: string
+}
+
 export interface ModelAdapter {
   readonly provider: string
   readonly model: string
   infer(request: ModelInferenceRequest): Promise<PerceptionResult>
+}
+
+export interface ReasoningModelAdapter {
+  readonly provider: string
+  readonly model: string
+  reason(request: ReasoningInferenceRequest): Promise<AskBuildingResponse>
 }
 
 export interface ArtifactContent {
