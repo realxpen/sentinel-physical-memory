@@ -11,6 +11,7 @@ import type {
   SpatialObject,
 } from '../domain/sentinel'
 import type { PerceptionResult } from '../domain/sentinel'
+import { EnvironmentalDiffEngine } from './diff-engine'
 
 export interface MemoryIds {
   state: () => string
@@ -28,14 +29,11 @@ export interface MemoryStoreDependencies {
 
 const makeId = (prefix: string) => `${prefix}_${crypto.randomUUID()}`
 
-/**
- * In-memory temporal store for SENTINEL's environmental memory.
- * Persistence can later be replaced without changing callers or domain contracts.
- */
 export class EnvironmentalMemoryStore {
   private readonly now: () => Date
   private readonly ids: MemoryIds
   private readonly memories = new Map<string, EnvironmentalMemory>()
+  private readonly snapshots = new Map<string, { objects: SpatialObject[]; issues: Issue[] }>()
 
   constructor(deps: MemoryStoreDependencies = {}) {
     this.now = deps.now ?? (() => new Date())
@@ -67,7 +65,6 @@ export class EnvironmentalMemoryStore {
   ingestScan(environmentId: string, source: ScanSource, perception: PerceptionResult, summary?: string): EnvironmentalState {
     const memory = this.require(environmentId)
     this.assertPerceptionIdentity(environmentId, source.id, perception)
-
     const capturedAt = source.capturedAt || this.now().toISOString()
     this.upsertSource(memory, source)
     this.upsertEvidence(memory, perception.evidence)
@@ -78,52 +75,32 @@ export class EnvironmentalMemoryStore {
     memory.observations.push(...observations)
 
     const state: EnvironmentalState = {
-      id: this.ids.state(),
-      environmentId,
-      capturedAt,
-      sourceIds: [source.id],
-      objectIds: objects.map((item) => item.id),
-      issueIds: issues.map((item) => item.id),
-      relationIds: relations.map((item) => item.id),
-      summary: summary ?? this.defaultSummary(objects, issues, relations),
-      version: memory.states.length + 1,
+      id: this.ids.state(), environmentId, capturedAt, sourceIds: [source.id],
+      objectIds: objects.map((item) => item.id), issueIds: issues.map((item) => item.id), relationIds: relations.map((item) => item.id),
+      summary: summary ?? this.defaultSummary(objects, issues, relations), version: memory.states.length + 1,
     }
     memory.states.push(state)
+    this.snapshots.set(state.id, { objects: this.clone(objects), issues: this.clone(issues) })
     memory.environment.currentStateId = state.id
     memory.environment.stateIds.push(state.id)
     memory.environment.updatedAt = capturedAt
     memory.environment.objectIds = unique([...memory.environment.objectIds, ...objects.map((item) => item.id)])
     memory.environment.issueIds = unique([...memory.environment.issueIds, ...issues.map((item) => item.id)])
     memory.environment.roomIds = unique([...memory.environment.roomIds, ...objects.filter((item) => item.category === 'room').map((item) => item.id)])
-    return { ...state, sourceIds: [...state.sourceIds], objectIds: [...state.objectIds], issueIds: [...state.issueIds], relationIds: [...state.relationIds] }
+    return this.clone(state)
   }
 
   compare(environmentId: string, fromStateId: string, toStateId: string): EnvironmentalDiff {
     const memory = this.require(environmentId)
     const from = this.requireState(memory, fromStateId)
     const to = this.requireState(memory, toStateId)
-    const fromObjects = this.objectsForState(memory, from)
-    const toObjects = this.objectsForState(memory, to)
-    const changes = []
-
-    for (const current of toObjects) {
-      const previous = this.findMatch(current, fromObjects)
-      if (!previous) {
-        changes.push({ id: makeId('change'), environmentId, fromStateId, toStateId, type: 'added' as const, entityId: current.id, title: `New: ${current.name}`, description: `${current.name} was not present in the previous state.`, confidence: current.confidence, evidenceIds: [...current.evidenceIds] })
-        continue
-      }
-      if (current.state !== previous.state) {
-        changes.push({ id: makeId('change'), environmentId, fromStateId, toStateId, type: 'changed' as const, entityId: current.id, title: `Changed: ${current.name}`, description: `${current.name} changed from ${previous.state ?? 'unknown'} to ${current.state ?? 'unknown'}.`, confidence: Math.min(current.confidence, previous.confidence), evidenceIds: unique([...previous.evidenceIds, ...current.evidenceIds]) })
-      }
-      if (this.positionChanged(current, previous)) {
-        changes.push({ id: makeId('change'), environmentId, fromStateId, toStateId, type: 'moved' as const, entityId: current.id, title: `Moved: ${current.name}`, description: `${current.name} appears to have moved relative to its previous position.`, confidence: Math.min(current.confidence, previous.confidence), evidenceIds: unique([...previous.evidenceIds, ...current.evidenceIds]) })
-      }
-    }
-    for (const previous of fromObjects) {
-      if (!this.findMatch(previous, toObjects)) changes.push({ id: makeId('change'), environmentId, fromStateId, toStateId, type: 'removed' as const, entityId: previous.id, title: `Removed: ${previous.name}`, description: `${previous.name} was present previously but is not present in the current state.`, confidence: previous.confidence, evidenceIds: [...previous.evidenceIds] })
-    }
-
-    const diff: EnvironmentalDiff = { id: this.ids.diff(), environmentId, fromStateId, toStateId, createdAt: this.now().toISOString(), changes, summary: changes.length ? `${changes.length} environmental change(s) detected.` : 'No material environmental changes detected.' }
+    const fromSnapshot = this.snapshots.get(from.id)
+    const toSnapshot = this.snapshots.get(to.id)
+    if (!fromSnapshot || !toSnapshot) throw new Error('Historical snapshot unavailable for one or both states')
+    const diff = new EnvironmentalDiffEngine({ now: this.now, id: () => this.ids.diff().replace(/^diff_/, 'change_') }).compare(
+      { stateId: from.id, environmentId, objects: fromSnapshot.objects, issues: fromSnapshot.issues },
+      { stateId: to.id, environmentId, objects: toSnapshot.objects, issues: toSnapshot.issues },
+    )
     memory.diffs.push(diff)
     return this.clone(diff)
   }
@@ -178,14 +155,10 @@ export class EnvironmentalMemoryStore {
   }
 
   private upsertSource(memory: EnvironmentalMemory, source: ScanSource): void { if (!memory.sources.some((item) => item.id === source.id)) memory.sources.push({ ...source, metadata: source.metadata ? { ...source.metadata } : undefined }) }
-  private objectsForState(memory: EnvironmentalMemory, state: EnvironmentalState): SpatialObject[] { return state.objectIds.map((id) => memory.objects.find((item) => item.id === id)).filter((item): item is SpatialObject => Boolean(item)) }
-  private findMatch(item: SpatialObject, candidates: SpatialObject[]): SpatialObject | undefined { return candidates.find((candidate) => candidate.id === item.id) ?? candidates.find((candidate) => candidate.category === item.category && candidate.name.toLowerCase() === item.name.toLowerCase()) }
-  private positionChanged(a: SpatialObject, b: SpatialObject): boolean { const pa = a.position; const pb = b.position; if (!pa || !pb) return false; return pa.roomId !== pb.roomId || pa.relativeToId !== pb.relativeToId || pa.description !== pb.description }
   private require(environmentId: string): EnvironmentalMemory { const memory = this.memories.get(environmentId); if (!memory) throw new Error(`Environment ${environmentId} not found`); return memory }
   private requireState(memory: EnvironmentalMemory, stateId: string): EnvironmentalState { const state = memory.states.find((item) => item.id === stateId); if (!state) throw new Error(`State ${stateId} not found`); return state }
-  private assertPerceptionIdentity(environmentId: string, sourceId: string, perception: PerceptionResult): void { if (perception.sourceId !== sourceId) throw new Error(`Perception sourceId must equal ${sourceId}`); for (const object of perception.objects) if (object.environmentId !== environmentId) throw new Error(`Object ${object.id} has the wrong environmentId`); for (const issue of perception.observations) if (issue.environmentId !== environmentId || issue.sourceId !== sourceId) throw new Error(`Observation ${issue.id} has invalid scan identity`) }
+  private assertPerceptionIdentity(environmentId: string, sourceId: string, perception: PerceptionResult): void { if (perception.sourceId !== sourceId) throw new Error(`Perception sourceId must equal ${sourceId}`); for (const object of perception.objects) if (object.environmentId !== environmentId) throw new Error(`Object ${object.id} has the wrong environmentId`); for (const observation of perception.observations) if (observation.environmentId !== environmentId || observation.sourceId !== sourceId) throw new Error(`Observation ${observation.id} has invalid scan identity`) }
   private defaultSummary(objects: SpatialObject[], issues: Issue[], relations: EnvironmentRelation[]): string { return `${objects.length} object(s), ${issues.length} issue(s), ${relations.length} relation(s) recorded.` }
   private clone<T>(value: T): T { return structuredClone(value) }
 }
-
 function unique(values: string[]): string[] { return [...new Set(values)] }
