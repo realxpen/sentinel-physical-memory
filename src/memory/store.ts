@@ -13,12 +13,12 @@ import type {
 import type { PerceptionResult } from '../domain/sentinel'
 
 export interface MemoryIds {
-  state: string
-  object: string
-  issue: string
-  relation: string
-  evidence: string
-  diff: string
+  state: () => string
+  object: () => string
+  issue: () => string
+  relation: () => string
+  evidence: () => string
+  diff: () => string
 }
 
 export interface MemoryStoreDependencies {
