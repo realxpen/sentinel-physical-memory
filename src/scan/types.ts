@@ -1,4 +1,4 @@
-import type { EnvironmentId, Observation, ScanSource } from '../domain/sentinel'
+import type { EnvironmentId, EnvironmentalDiff, EnvironmentalState, Observation, ScanSource } from '../domain/sentinel'
 
 export type ScanStage =
   | 'queued'
@@ -6,6 +6,8 @@ export type ScanStage =
   | 'sampling'
   | 'extracting'
   | 'normalizing'
+  | 'memorizing'
+  | 'comparing'
   | 'complete'
   | 'failed'
 
@@ -22,7 +24,6 @@ export interface ScanMedia {
   mimeType: string
   durationMs?: number
   sizeBytes?: number
-  /** Frames already extracted by a trusted ingestion layer (usually the browser). */
   extractedFrames?: ScanFrame[]
 }
 
@@ -65,6 +66,8 @@ export interface ScanResult {
   frames: ScanFrame[]
   artifacts: ScanArtifact[]
   observations: Observation[]
+  state: EnvironmentalState
+  diff?: EnvironmentalDiff
   completedAt: string
 }
 
