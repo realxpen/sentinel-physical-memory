@@ -1,4 +1,5 @@
-import type { Observation } from '../domain/sentinel'
+import type { PerceptionResult } from '../domain/sentinel'
+import type { ModelAdapter } from '../ai/model'
 import type {
   PerceptionBatch,
   ScanArtifact,
@@ -13,25 +14,27 @@ export interface ScanPipelineDependencies {
   now?: () => Date
   id?: (prefix: string) => string
   onProgress?: (progress: ScanProgress) => void
+  model?: ModelAdapter
 }
 
 const defaultId = (prefix: string) => `${prefix}_${crypto.randomUUID()}`
 
-/** Deterministic orchestration layer. Model inference is intentionally injected later. */
+/** Orchestrates deterministic scan preparation and optional model perception. */
 export class ScanPipeline {
   private readonly now: () => Date
   private readonly id: (prefix: string) => string
   private readonly onProgress?: (progress: ScanProgress) => void
+  private readonly model?: ModelAdapter
 
   constructor(deps: ScanPipelineDependencies = {}) {
     this.now = deps.now ?? (() => new Date())
     this.id = deps.id ?? defaultId
     this.onProgress = deps.onProgress
+    this.model = deps.model
   }
 
   async run(input: ScanInput): Promise<ScanResult> {
     const scanId = this.id('scan')
-
     this.emit(scanId, 'queued', 0, 'Scan queued')
     this.validate(input)
     this.emit(scanId, 'validating', 15, 'Input validated')
@@ -42,15 +45,9 @@ export class ScanPipeline {
     const artifacts = this.createArtifacts(frames, input)
     this.emit(scanId, 'extracting', 55, 'Scan artifacts prepared')
 
-    // Deliberately deterministic: this stage produces no model-generated claims.
-    const batch: PerceptionBatch = {
-      scanId,
-      artifacts,
-      observations: [],
-    }
-
-    const observations = this.normalize(batch.observations)
-    this.emit(scanId, 'normalizing', 85, 'Observations normalized')
+    const perception = await this.perceive(scanId, artifacts, input)
+    const observations = this.normalize(perception.observations)
+    this.emit(scanId, 'normalizing', 85, `${observations.length} observation(s) normalized`)
     this.emit(scanId, 'complete', 100, 'Scan pipeline complete')
 
     return {
@@ -64,8 +61,27 @@ export class ScanPipeline {
     }
   }
 
+  private async perceive(scanId: string, artifacts: ScanArtifact[], input: ScanInput): Promise<PerceptionResult> {
+    if (!this.model) {
+      const batch: PerceptionBatch = { scanId, artifacts, observations: [] }
+      return { sourceId: input.source.id, observations: batch.observations, objects: [], relations: [], evidence: [] }
+    }
+
+    return this.model.infer({
+      role: 'perception',
+      artifacts,
+      prompt: [
+        `Analyze scan ${scanId} for environment ${input.environmentId}.`,
+        'Identify only visually supported rooms, objects, conditions, and spatial relationships.',
+        'Create evidence entries for every observation and object that can be grounded to a frame.',
+        'Return the SENTINEL PerceptionResult JSON schema exactly.',
+      ].join('\n'),
+    })
+  }
+
   private validate(input: ScanInput): void {
     if (!input.environmentId) throw this.error('INVALID_ENVIRONMENT', 'environmentId is required')
+    if (!input.source?.id) throw this.error('INVALID_SOURCE', 'source.id is required')
     if (!input.media.uri) throw this.error('INVALID_MEDIA', 'media.uri is required')
     if (!input.media.mimeType) throw this.error('INVALID_MEDIA', 'media.mimeType is required')
     if (input.media.kind === 'image' && input.media.durationMs !== undefined) {
@@ -102,8 +118,8 @@ export class ScanPipeline {
     return artifacts
   }
 
-  private normalize(observations: Observation[]): Observation[] {
-    return observations.map((observation) => ({ ...observation }))
+  private normalize<T>(items: T[]): T[] {
+    return items.map((item) => ({ ...item }))
   }
 
   private emit(scanId: string, stage: ScanProgress['stage'], progress: number, message: string): void {
