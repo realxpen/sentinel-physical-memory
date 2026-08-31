@@ -1,0 +1,77 @@
+import type { EnvironmentRelation, Evidence, Observation, PerceptionResult, SpatialObject } from '../domain/sentinel'
+
+export class PerceptionValidationError extends Error {
+  readonly code = 'INVALID_PERCEPTION_SCHEMA'
+  constructor(message: string) { super(message); this.name = 'PerceptionValidationError' }
+}
+
+export function validatePerception(value: unknown): PerceptionResult {
+  if (!isRecord(value)) throw new PerceptionValidationError('Perception result must be an object')
+  return {
+    sourceId: requireString(value.sourceId, 'sourceId'),
+    observations: requireArray(value.observations, 'observations').map(validateObservation),
+    objects: requireArray(value.objects, 'objects').map(validateSpatialObject),
+    relations: requireArray(value.relations, 'relations').map(validateRelation),
+    evidence: requireArray(value.evidence, 'evidence').map(validateEvidence),
+  }
+}
+
+function validateObservation(value: unknown, i: number): Observation {
+  const r = requireRecord(value, `observations[${i}]`)
+  return {
+    id: requireString(r.id, `observations[${i}].id`), environmentId: requireString(r.environmentId, `observations[${i}].environmentId`),
+    sourceId: requireString(r.sourceId, `observations[${i}].sourceId`),
+    modality: requireEnum(r.modality, ['video','image','audio','document','sensor'], `observations[${i}].modality`),
+    capturedAt: requireString(r.capturedAt, `observations[${i}].capturedAt`), label: requireString(r.label, `observations[${i}].label`),
+    description: requireString(r.description, `observations[${i}].description`), confidence: requireConfidence(r.confidence, `observations[${i}].confidence`),
+    position: r.position === undefined ? undefined : requireRecord(r.position, `observations[${i}].position`) as Observation['position'],
+    evidenceIds: requireStringArray(r.evidenceIds, `observations[${i}].evidenceIds`),
+  }
+}
+
+function validateSpatialObject(value: unknown, i: number): SpatialObject {
+  const r = requireRecord(value, `objects[${i}]`)
+  return {
+    id: requireString(r.id, `objects[${i}].id`), environmentId: requireString(r.environmentId, `objects[${i}].environmentId`),
+    category: requireEnum(r.category, ['room','door','window','furniture','equipment','electrical','hvac','safety','signage','document','person','obstruction','other'], `objects[${i}].category`),
+    name: requireString(r.name, `objects[${i}].name`), description: optionalString(r.description, `objects[${i}].description`),
+    position: r.position === undefined ? undefined : requireRecord(r.position, `objects[${i}].position`) as SpatialObject['position'],
+    boundingBox: r.boundingBox === undefined ? undefined : requireRecord(r.boundingBox, `objects[${i}].boundingBox`) as SpatialObject['boundingBox'],
+    state: optionalString(r.state, `objects[${i}].state`), confidence: requireConfidence(r.confidence, `objects[${i}].confidence`),
+    firstSeenAt: requireString(r.firstSeenAt, `objects[${i}].firstSeenAt`), lastSeenAt: requireString(r.lastSeenAt, `objects[${i}].lastSeenAt`),
+    evidenceIds: requireStringArray(r.evidenceIds, `objects[${i}].evidenceIds`),
+  }
+}
+
+function validateRelation(value: unknown, i: number): EnvironmentRelation {
+  const r = requireRecord(value, `relations[${i}]`)
+  return {
+    id: requireString(r.id, `relations[${i}].id`), environmentId: requireString(r.environmentId, `relations[${i}].environmentId`),
+    fromId: requireString(r.fromId, `relations[${i}].fromId`), toId: requireString(r.toId, `relations[${i}].toId`),
+    type: requireEnum(r.type, ['contains','located_in','adjacent_to','near','attached_to','part_of','has_issue','requires_action','supports'], `relations[${i}].type`),
+    confidence: requireConfidence(r.confidence, `relations[${i}].confidence`), evidenceIds: requireStringArray(r.evidenceIds, `relations[${i}].evidenceIds`),
+  }
+}
+
+function validateEvidence(value: unknown, i: number): Evidence {
+  const r = requireRecord(value, `evidence[${i}]`)
+  return {
+    id: requireString(r.id, `evidence[${i}].id`), type: requireEnum(r.type, ['frame','image','audio','document','observation','previous_state'], `evidence[${i}].type`),
+    sourceId: requireString(r.sourceId, `evidence[${i}].sourceId`), capturedAt: requireString(r.capturedAt, `evidence[${i}].capturedAt`),
+    frameIndex: optionalNumber(r.frameIndex, `evidence[${i}].frameIndex`), timestampMs: optionalNumber(r.timestampMs, `evidence[${i}].timestampMs`),
+    uri: optionalString(r.uri, `evidence[${i}].uri`), excerpt: optionalString(r.excerpt, `evidence[${i}].excerpt`),
+    boundingBox: r.boundingBox === undefined ? undefined : requireRecord(r.boundingBox, `evidence[${i}].boundingBox`) as Evidence['boundingBox'],
+    confidence: r.confidence === undefined ? undefined : requireConfidence(r.confidence, `evidence[${i}].confidence`),
+    description: requireString(r.description, `evidence[${i}].description`),
+  }
+}
+
+function requireRecord(v: unknown, path: string): Record<string, unknown> { if (!isRecord(v)) throw new PerceptionValidationError(`${path} must be an object`); return v }
+function requireArray(v: unknown, path: string): unknown[] { if (!Array.isArray(v)) throw new PerceptionValidationError(`${path} must be an array`); return v }
+function requireString(v: unknown, path: string): string { if (typeof v !== 'string' || !v.trim()) throw new PerceptionValidationError(`${path} must be a non-empty string`); return v }
+function optionalString(v: unknown, path: string): string | undefined { return v === undefined || v === null ? undefined : requireString(v, path) }
+function requireStringArray(v: unknown, path: string): string[] { return requireArray(v, path).map((x, i) => requireString(x, `${path}[${i}]`)) }
+function optionalNumber(v: unknown, path: string): number | undefined { if (v === undefined || v === null) return undefined; if (typeof v !== 'number' || !Number.isFinite(v)) throw new PerceptionValidationError(`${path} must be a finite number`); return v }
+function requireConfidence(v: unknown, path: string): number { if (typeof v !== 'number' || !Number.isFinite(v) || v < 0 || v > 1) throw new PerceptionValidationError(`${path} must be between 0 and 1`); return v }
+function requireEnum<T extends string>(v: unknown, allowed: readonly T[], path: string): T { if (typeof v !== 'string' || !allowed.includes(v as T)) throw new PerceptionValidationError(`${path} contains an unsupported value`); return v as T }
+function isRecord(v: unknown): v is Record<string, unknown> { return typeof v === 'object' && v !== null && !Array.isArray(v) }
