@@ -41,3 +41,12 @@ Mitigation: enforce the MVP definition of done in `spec.md` and the 12-item chec
 ## Next checkpoint
 
 Bootstrap the application shell and typed data contracts, then validate the real Nebius/NVIDIA inference path as early as possible.
+
+## 2026-09-05 — Vercel deployment sync
+
+- Living Spatial Intelligence UI direction is locked and implemented.
+- `/api/scan` now returns serialized environmental memory and real scan-to-scan diffs.
+- The client sends previous memory back on rescans so the existing memory engine can hydrate and compare states.
+- The Ask interface is wired to `/api/ask-building` using the current grounded environmental memory.
+- Reality Diff now renders actual diff results after a second observation.
+- This commit intentionally triggers the Git-connected Vercel project to deploy the latest `main` state.
