@@ -1,4 +1,6 @@
 import { createNebiusNemotronAdapter } from '../src/ai/nebius'
+import type { EnvironmentalMemory } from '../src/domain/sentinel'
+import { EnvironmentalMemoryStore } from '../src/memory/store'
 import type { ScanFrame, ScanInput } from '../src/scan/types'
 import { ScanPipeline } from '../src/scan/pipeline'
 
@@ -23,13 +25,27 @@ export default async function handler(req: Request, res: Response) {
     const rawSize = Buffer.byteLength(JSON.stringify(req.body ?? {}), 'utf8')
     if (rawSize > MAX_BODY_BYTES) return res.status(413).json({ error: 'PAYLOAD_TOO_LARGE', message: 'Scan request exceeds 6 MB' })
     const input = parseScanInput(req.body)
+    const priorMemory = parseOptionalMemory(req.body, input.environmentId)
+    const memory = new EnvironmentalMemoryStore()
+    if (priorMemory) memory.hydrate(priorMemory)
 
     const adapter = createNebiusNemotronAdapter(apiKey, {
       baseUrl: process.env.NEBIUS_TOKEN_FACTORY_BASE_URL,
       model: process.env.NEBIUS_NEMOTRON_MODEL,
-      artifactResolver: { resolve: async (artifact) => ({ artifactId: artifact.artifactId, mimeType: artifact.kind === 'frame' ? 'image/jpeg' : input.media.mimeType, uri: artifact.uri }) },
+      artifactResolver: {
+        resolve: async (artifact) => ({
+          artifactId: artifact.artifactId,
+          mimeType: artifact.kind === 'frame' ? 'image/jpeg' : input.media.mimeType,
+          uri: artifact.uri,
+        }),
+      },
     })
-    const result = await new ScanPipeline({ model: adapter }).run(input)
+
+    const pipeline = new ScanPipeline({ model: adapter, memory })
+    const result = await pipeline.run(input)
+    const updatedMemory = pipeline.getMemory(input.environmentId)
+    if (!updatedMemory) throw new Error('Environmental memory was not created')
+
     return res.status(200).json({
       scanId: result.scanId,
       environmentId: result.environmentId,
@@ -38,6 +54,9 @@ export default async function handler(req: Request, res: Response) {
       frames: result.frames.map(({ frameId, timestampMs }) => ({ frameId, timestampMs })),
       artifacts: result.artifacts.filter((artifact) => artifact.kind === 'frame').map(({ artifactId, frameId }) => ({ artifactId, frameId })),
       observations: result.observations,
+      state: result.state,
+      diff: result.diff,
+      memory: updatedMemory,
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown scan error'
@@ -71,6 +90,15 @@ function parseScanInput(value: unknown): ScanInput {
     media: { kind, uri, mimeType, durationMs, sizeBytes: optionalNumber(media.sizeBytes), extractedFrames },
     options: { maxFrames: extractedFrames?.length ?? 1, sampleIntervalMs: 2000, preserveAudio: false },
   }
+}
+
+function parseOptionalMemory(value: unknown, environmentId: string): EnvironmentalMemory | undefined {
+  if (!isRecord(value) || value.memory === undefined || value.memory === null) return undefined
+  if (!isRecord(value.memory)) throw new Error('memory must be an environmental memory object')
+  const memory = value.memory as unknown as EnvironmentalMemory
+  if (!isRecord(memory.environment) || memory.environment.id !== environmentId) throw new Error('memory.environment.id must match environmentId')
+  if (!Array.isArray(memory.states) || !Array.isArray(memory.objects) || !Array.isArray(memory.issues) || !Array.isArray(memory.observations) || !Array.isArray(memory.evidence) || !Array.isArray(memory.relations) || !Array.isArray(memory.sources) || !Array.isArray(memory.diffs)) throw new Error('memory is missing required collections')
+  return memory
 }
 
 function parseFrames(value: unknown): ScanFrame[] {
