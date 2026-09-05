@@ -3,72 +3,275 @@ import { createRoot } from 'react-dom/client'
 import './styles.css'
 import { ingestVideoFile } from './scan/video-ingestion'
 
-interface ScanResponse { scanId: string; frames: Array<{ frameId: string; timestampMs: number }>; observations: Array<{ label: string; description: string; confidence: number }> }
+interface Observation {
+  label: string
+  description: string
+  confidence: number
+}
+
+interface ScanResponse {
+  scanId: string
+  frames: Array<{ frameId: string; timestampMs: number }>
+  observations: Observation[]
+}
+
+type View = 'memory' | 'observe' | 'changes'
+
+const demoChanges = [
+  { mark: '+', type: 'Added', detail: 'New conditions appear here after a second observation.' },
+  { mark: '↔', type: 'Moved', detail: 'SENTINEL compares remembered positions between scans.' },
+  { mark: '✓', type: 'Resolved', detail: 'Verified changes close the physical-world memory loop.' },
+]
+
+function SentinelMark({ active = false }: { active?: boolean }) {
+  return (
+    <div className="brand" aria-label="SENTINEL">
+      <span>SENTINEL</span>
+      <i className={active ? 'brand-dot active' : 'brand-dot'} />
+    </div>
+  )
+}
+
+function Confidence({ value }: { value: number }) {
+  const percent = Math.round(value * 100)
+  return (
+    <div className="confidence" aria-label={`Confidence ${percent}%`}>
+      <span>Observed confidence</span>
+      <div className="confidence-track"><i style={{ width: `${percent}%` }} /></div>
+      <strong>{percent}%</strong>
+    </div>
+  )
+}
 
 function App() {
   const inputRef = useRef<HTMLInputElement>(null)
-  const [status, setStatus] = useState('Ready')
+  const [status, setStatus] = useState('Ready to observe')
   const [result, setResult] = useState<ScanResponse | null>(null)
   const [error, setError] = useState('')
+  const [view, setView] = useState<View>('memory')
+  const [selectedObservation, setSelectedObservation] = useState<number | null>(null)
+
+  const isWorking = status.startsWith('Observing') || status.startsWith('Understanding') || status.startsWith('Remembering')
 
   async function handleVideo(file: File) {
     setError('')
     setResult(null)
+    setView('observe')
+    setSelectedObservation(null)
+
     try {
-      setStatus('Extracting key frames…')
+      setStatus('Observing · extracting evidence')
       const id = (prefix: string) => `${prefix}_${crypto.randomUUID()}`
       const ingestion = await ingestVideoFile(file, id, { maxFrames: 12, maxWidth: 960, jpegQuality: 0.68 })
-      setStatus(`Sending ${ingestion.frames.length} evidence frames to SENTINEL…`)
 
+      setStatus(`Understanding · ${ingestion.frames.length} evidence frames`)
       const response = await fetch('/api/scan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           environmentId: 'office-demo',
           source: { id: id('source'), environmentId: 'office-demo', capturedAt: new Date().toISOString() },
-          media: { kind: 'video', uri: `https://local.sentinel/media/${encodeURIComponent(file.name)}`, mimeType: file.type, durationMs: ingestion.durationMs, sizeBytes: file.size },
+          media: {
+            kind: 'video',
+            uri: `https://local.sentinel/media/${encodeURIComponent(file.name)}`,
+            mimeType: file.type,
+            durationMs: ingestion.durationMs,
+            sizeBytes: file.size,
+          },
           extractedFrames: ingestion.frames,
         }),
       })
+
+      setStatus('Remembering · grounding observations')
       const payload = await response.json() as ScanResponse & { message?: string }
       if (!response.ok) throw new Error(payload.message ?? 'Scan request failed')
+
       setResult(payload)
-      setStatus(`Scan complete · ${payload.observations.length} observation(s)`) 
+      setStatus('This space is now remembered')
+      setView('memory')
     } catch (scanError) {
-      setStatus('Scan failed')
+      setStatus('Observation interrupted')
       setError(scanError instanceof Error ? scanError.message : 'Unknown scan error')
     }
   }
 
+  const observation = selectedObservation === null ? null : result?.observations[selectedObservation]
+
   return (
-    <main className="shell">
-      <section className="hero">
-        <div className="eyebrow">SENTINEL / PHYSICAL ENVIRONMENT INTELLIGENCE</div>
-        <h1>Give the physical world a memory.</h1>
-        <p>Record a walkthrough. SENTINEL extracts key frames, builds evidence, and sends the visual state to Nemotron for perception.</p>
-        <div className="actions">
-          <button type="button" onClick={() => inputRef.current?.click()}>Scan walkthrough video</button>
-          <button type="button" className="secondary" onClick={() => setResult(null)}>Clear</button>
-          <input ref={inputRef} hidden type="file" accept="video/*" onChange={(event) => { const file = event.target.files?.[0]; if (file) void handleVideo(file); event.target.value = '' }} />
+    <main className={`app view-${view}`}>
+      <header className="topbar">
+        <SentinelMark active={isWorking} />
+        <div className="environment-status">
+          <span className="environment-name">Office 01</span>
+          <span>{result ? 'remembered now' : 'demo environment'}</span>
         </div>
-        <div className="scan-status" role="status">{status}</div>
-        {error && <div className="error" role="alert">{error}</div>}
-      </section>
+        <button className="profile-button" type="button" aria-label="Profile">XP</button>
+      </header>
 
-      <section className="status-grid" aria-label="Environment status">
-        <article><span>Last scan</span><strong>{result ? result.scanId : 'Awaiting walkthrough'}</strong></article>
-        <article><span>Frames</span><strong>{result ? result.frames.length : '—'}</strong></article>
-        <article><span>Observations</span><strong>{result ? result.observations.length : '—'}</strong></article>
-        <article><span>Memory</span><strong>{result ? 'Evidence captured' : 'Ready'}</strong></article>
-      </section>
+      <nav className="desktop-rail" aria-label="Primary navigation">
+        <button className={view === 'memory' ? 'active' : ''} type="button" onClick={() => setView('memory')}><span>◎</span><em>Memory</em></button>
+        <button className={view === 'observe' ? 'active' : ''} type="button" onClick={() => setView('observe')}><span>◉</span><em>Observe</em></button>
+        <button className={view === 'changes' ? 'active' : ''} type="button" onClick={() => setView('changes')}><span>↺</span><em>Changes</em></button>
+      </nav>
 
-      {result && <section className="results">
-        <div className="eyebrow">PERCEPTION / EVIDENCE</div>
-        <h2>What SENTINEL saw</h2>
-        {result.observations.length === 0 ? <p>No grounded observations were returned.</p> : result.observations.map((observation, index) => (
-          <article key={`${observation.label}-${index}`}><strong>{observation.label}</strong><span>{observation.description}</span><small>Confidence {Math.round(observation.confidence * 100)}%</small></article>
-        ))}
-      </section>}
+      {view === 'memory' && (
+        <section className="memory-view">
+          <div className="hero-copy">
+            <div className="eyebrow">PHYSICAL MEMORY / OFFICE 01</div>
+            <h1>{result ? 'This space is now remembered.' : 'Give this place a memory.'}</h1>
+            <p>{result
+              ? 'SENTINEL has grounded a new environmental state from your walkthrough. Explore what it observed or observe again to create a change history.'
+              : 'Walk through your environment once. SENTINEL extracts visual evidence, understands what it can support, and begins a persistent environmental memory.'}</p>
+          </div>
+
+          <div className="environment-stage" aria-label="Environmental memory canvas">
+            <div className="ambient-orb orb-one" />
+            <div className="ambient-orb orb-two" />
+            <div className="stage-grid" />
+            <div className="space-label reception"><span>Reception</span><small>remembered area</small></div>
+            <div className="space-label workspace"><span>Workspace</span><small>{result ? `${result.observations.length} grounded observations` : 'awaiting first observation'}</small></div>
+            <div className="space-label server"><span>Server Room</span><small>spatial memory</small></div>
+            <div className="memory-node node-a" />
+            <div className="memory-node node-b" />
+            <div className="memory-node node-c" />
+            <div className="memory-path path-a" />
+            <div className="memory-path path-b" />
+            <div className="stage-caption">
+              <span>{result ? 'LIVE MEMORY' : 'MEMORY CANVAS'}</span>
+              <strong>{result ? `${result.frames.length} evidence frames grounded` : 'Observe the environment to create its first state'}</strong>
+            </div>
+          </div>
+
+          <div className="memory-summary">
+            <div>
+              <span>Since you were last here</span>
+              <strong>{result ? `${result.observations.length} grounded observations` : 'No previous state yet'}</strong>
+            </div>
+            <button className="observe-cta" type="button" onClick={() => inputRef.current?.click()}>
+              <span className="observe-orb"><i /></span>
+              <span><strong>Observe environment</strong><small>Create a new physical memory</small></span>
+            </button>
+          </div>
+
+          {result && (
+            <section className="evidence-section">
+              <div className="section-heading">
+                <div><span className="eyebrow">EVIDENCE / CURRENT STATE</span><h2>What SENTINEL observed.</h2></div>
+                <span className="scan-id">{result.scanId}</span>
+              </div>
+              <div className="observation-list">
+                {result.observations.length === 0 ? (
+                  <div className="empty-observation">No grounded observations were returned for this walkthrough.</div>
+                ) : result.observations.map((item, index) => (
+                  <button className="observation-row" type="button" key={`${item.label}-${index}`} onClick={() => setSelectedObservation(index)}>
+                    <span className="observation-index">{String(index + 1).padStart(2, '0')}</span>
+                    <span className="observation-copy"><strong>{item.label}</strong><small>{item.description}</small></span>
+                    <span className="observation-confidence">{Math.round(item.confidence * 100)}%</span>
+                    <span className="arrow">↗</span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
+        </section>
+      )}
+
+      {view === 'observe' && (
+        <section className="observe-view">
+          <div className="observe-camera">
+            <div className="camera-noise" />
+            <div className="scan-line" />
+            <div className="camera-topline"><SentinelMark active /><span>{isWorking ? status : 'OBSERVATION MODE'}</span></div>
+            <div className="focus-frame focus-one"><span>Workspace</span></div>
+            <div className="focus-frame focus-two"><span>Evidence region</span></div>
+            <div className="observe-message">
+              <span className="eyebrow">LIVE STATE</span>
+              <h2>{isWorking ? status : 'Move naturally through the environment.'}</h2>
+              <p>SENTINEL uses selected key frames as evidence. Recognition stays restrained so the physical space remains the focus.</p>
+            </div>
+            <button className="capture-button" type="button" onClick={() => inputRef.current?.click()} aria-label="Choose walkthrough video">
+              <span><i /></span>
+              <strong>{isWorking ? 'Observing' : 'Begin observation'}</strong>
+            </button>
+          </div>
+          {error && <div className="error" role="alert"><strong>Observation interrupted</strong><span>{error}</span></div>}
+        </section>
+      )}
+
+      {view === 'changes' && (
+        <section className="changes-view">
+          <div className="hero-copy compact">
+            <div className="eyebrow">REALITY DIFF / PHYSICAL HISTORY</div>
+            <h1>What changed.</h1>
+            <p>{result
+              ? 'A second observation will let SENTINEL compare grounded environmental states and classify supported changes.'
+              : 'Reality Diff becomes available after SENTINEL has at least two observations of the same environment.'}</p>
+          </div>
+
+          <div className="diff-stage">
+            <div className="diff-half previous"><span>PREVIOUS</span><strong>{result ? 'Current memory' : 'No state'}</strong></div>
+            <div className="diff-divider"><i /></div>
+            <div className="diff-half current"><span>NEXT OBSERVATION</span><strong>Awaiting rescan</strong></div>
+            <div className="diff-label">BEFORE <b>↔</b> AFTER</div>
+          </div>
+
+          <div className="change-list" aria-label="Change categories preview">
+            <div className="preview-label">DEMO INTERACTION PREVIEW — NOT DETECTED EVENTS</div>
+            {demoChanges.map((change) => (
+              <div className="change-row" key={change.type}>
+                <span className={`change-mark ${change.type.toLowerCase()}`}>{change.mark}</span>
+                <div><strong>{change.type}</strong><small>{change.detail}</small></div>
+              </div>
+            ))}
+          </div>
+
+          <button className="wide-observe" type="button" onClick={() => inputRef.current?.click()}>
+            <span>Observe this space again</span><span>Build the next environmental state ↗</span>
+          </button>
+        </section>
+      )}
+
+      {observation && (
+        <div className="drawer-backdrop" role="presentation" onClick={() => setSelectedObservation(null)}>
+          <aside className="evidence-drawer" role="dialog" aria-modal="true" aria-label={`${observation.label} evidence`} onClick={(event) => event.stopPropagation()}>
+            <button className="drawer-close" type="button" onClick={() => setSelectedObservation(null)}>×</button>
+            <span className="eyebrow">OBSERVED / EVIDENCE-BACKED</span>
+            <h2>{observation.label}</h2>
+            <p>{observation.description}</p>
+            <Confidence value={observation.confidence} />
+            <div className="evidence-rule" />
+            <div className="evidence-note">
+              <span>What this means</span>
+              <strong>SENTINEL stores this as an observation, not a professional diagnosis.</strong>
+              <p>Interpretation and recommended action should remain separate from what the visual evidence directly supports.</p>
+            </div>
+          </aside>
+        </div>
+      )}
+
+      <div className="ask-bar" role="search">
+        <span className="ask-spark">✦</span>
+        <span>Ask this environment...</span>
+        <button type="button" aria-label="Ask SENTINEL" disabled>↗</button>
+      </div>
+
+      <nav className="mobile-nav" aria-label="Primary navigation">
+        <button className={view === 'memory' ? 'active' : ''} type="button" onClick={() => setView('memory')}><span>◎</span><small>Memory</small></button>
+        <button className={view === 'observe' ? 'active observe-nav' : 'observe-nav'} type="button" onClick={() => setView('observe')}><span>◉</span><small>Observe</small></button>
+        <button className={view === 'changes' ? 'active' : ''} type="button" onClick={() => setView('changes')}><span>↺</span><small>Changes</small></button>
+      </nav>
+
+      <input
+        ref={inputRef}
+        hidden
+        type="file"
+        accept="video/*"
+        onChange={(event) => {
+          const file = event.target.files?.[0]
+          if (file) void handleVideo(file)
+          event.target.value = ''
+        }}
+      />
     </main>
   )
 }
