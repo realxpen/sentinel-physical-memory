@@ -1,4 +1,4 @@
-import { StrictMode, useRef, useState } from 'react'
+import { StrictMode, useRef, useState, type FormEvent } from 'react'
 import { createRoot } from 'react-dom/client'
 import './styles.css'
 import './integration.css'
@@ -90,7 +90,7 @@ function App() {
     }
   }
 
-  async function askBuilding(event: React.FormEvent<HTMLFormElement>) {
+  async function askBuilding(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const trimmed = question.trim()
     if (!trimmed) return
@@ -182,8 +182,8 @@ function App() {
 
       <form className={`ask-bar ${answer ? 'has-answer' : ''}`} role="search" onSubmit={askBuilding}>
         <span className="ask-spark">✦</span>
-        <input value={question} onChange={(event) => setQuestion(event.target.value)} placeholder={memory ? 'Ask this environment…' : 'Observe first, then ask this environment…'} aria-label="Ask this environment" />
-        <button type="submit" aria-label="Ask SENTINEL" disabled={!question.trim() || !!askStatus}>↗</button>
+        <input value={question} onChange={(event) => { setQuestion(event.target.value); if (askStatus) setAskStatus('') }} placeholder={memory ? 'Ask this environment…' : 'Observe first, then ask this environment…'} aria-label="Ask this environment" />
+        <button type="submit" aria-label="Ask SENTINEL" disabled={!question.trim() || askStatus.startsWith('Reasoning')}>↗</button>
         {askStatus && <span className="ask-status">{askStatus}</span>}
       </form>
 
