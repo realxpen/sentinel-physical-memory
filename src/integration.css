@@ -1,0 +1,115 @@
+.ask-bar {
+  display: grid !important;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 58px;
+}
+
+.ask-bar input {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 14px;
+  letter-spacing: -.01em;
+}
+
+.ask-bar input::placeholder { color: #7f8981; }
+.view-memory .ask-bar input::placeholder { color: #758078; }
+
+.ask-bar button:disabled { opacity: .38; }
+
+.ask-status {
+  grid-column: 2 / 4;
+  margin-top: -5px;
+  color: #93a099;
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.view-memory .ask-status { color: #6d786f; }
+
+.answer-panel {
+  margin: 0 0 42px;
+  padding: clamp(26px, 4vw, 54px);
+  overflow: hidden;
+  position: relative;
+  border: 1px solid rgba(17, 21, 16, .09);
+  border-radius: 26px;
+  background: linear-gradient(130deg, rgba(238, 231, 255, .72), rgba(244, 244, 239, .94) 48%, rgba(220, 255, 229, .55));
+}
+
+.answer-panel::after {
+  content: '';
+  position: absolute;
+  width: 260px;
+  height: 260px;
+  right: -70px;
+  top: -100px;
+  border-radius: 50%;
+  background: rgba(91, 255, 138, .22);
+  filter: blur(58px);
+  pointer-events: none;
+}
+
+.answer-panel h2 {
+  position: relative;
+  z-index: 1;
+  max-width: 1000px;
+  margin: 14px 0 28px;
+  color: #111510;
+  font-size: clamp(32px, 4.6vw, 68px);
+  line-height: 1;
+  letter-spacing: -.055em;
+  font-weight: 650;
+}
+
+.answer-meta {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.answer-meta span {
+  padding: 7px 10px;
+  border: 1px solid rgba(17, 21, 16, .1);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .34);
+  color: #566058;
+  font-size: 9px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.empty-diff {
+  padding: 30px 0;
+  color: #98a39b;
+  font-size: 14px;
+}
+
+.change-mark.changed,
+.change-mark.unchanged { color: var(--cyan); }
+.change-mark.removed { color: #c7cfc9; }
+
+.diff-half strong {
+  max-width: 42ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .ask-bar {
+    left: 14px !important;
+    right: 14px !important;
+    bottom: 82px !important;
+  }
+
+  .answer-panel { border-radius: 20px; }
+  .answer-meta { gap: 6px; }
+  .answer-meta span:last-child { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
