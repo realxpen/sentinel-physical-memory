@@ -16,6 +16,26 @@ SENTINEL is **AI memory for the physical world**. The MVP must prove the closed 
 - Keep the hackathon MVP focused on a controlled office environment.
 - Do not expand into a contractor marketplace, payments, robotics, IoT fleet, or full facility-management SaaS before the core loop works.
 
+## Locked UI/UX direction
+
+The product design direction is **Living Spatial Intelligence** and is documented in `docs/product/uiux-direction.md`. Treat that document as the design contract unless the project owner explicitly changes it.
+
+The interface personality is **Quiet. Alive. Precise.**
+
+Non-negotiable visual/product rules:
+
+- Live observation and active reasoning use a near-black cinematic state with restrained luminous emerald intelligence cues.
+- Environmental memory/history uses the light editorial state where appropriate.
+- The environment is the visual center of the product; do not regress to a generic SaaS dashboard with dense metric cards and permanent chrome.
+- Primary navigation is **Memory / Observe / Changes**. `Ask this environment` is contextual and should not become a generic standalone chat page.
+- Use **Observe environment**, **Conditions**, **What changed**, and memory-oriented product language instead of generic upload/issue/report terminology when accurate.
+- **Reality Diff** is the signature change-comparison experience and verification remains first-class.
+- Recognition overlays should be restrained; avoid noisy object-detection bounding boxes unless evidence requires them.
+- Large editorial typography, negative space, cinematic environmental imagery, contextual translucent layers, and deliberate motion define the visual language.
+- Green means active intelligence, recognition, relationship or verified success; do not use neon green decoratively on every surface.
+- Preserve `prefers-reduced-motion` support.
+- Do not fabricate detected events for visual completeness. Static examples must be explicitly labelled as demo/interaction previews.
+
 ## NVIDIA / Nebius requirements
 
 The final application must make a real runtime call to Nebius Token Factory or run on Nebius AI Cloud and use at least one NVIDIA open-source model. Model usage should be central to the product architecture.
