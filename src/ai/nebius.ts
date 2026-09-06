@@ -3,7 +3,8 @@ import type { ScanArtifact } from '../scan/types.js'
 import { validatePerception, PerceptionValidationError } from './perception-schema.js'
 import { ModelAdapterError, type ArtifactResolver, type ModelAdapter, type ModelInferenceRequest, type ReasoningInferenceRequest, type ReasoningModelAdapter } from './model.js'
 
-const DEFAULT_BASE_URL = 'https://api.tokenfactory.nebius.com/v1'
+const DEFAULT_BASE_URL = 'https://api.tokenfactory.us-central1.nebius.com/v1'
+const LEGACY_GLOBAL_BASE_URL = 'https://api.tokenfactory.nebius.com/v1'
 const DEFAULT_MODEL = 'nvidia/nemotron-3-nano-omni'
 interface NebiusAdapterOptions { apiKey: string; baseUrl?: string; model?: string; fetchImpl?: typeof fetch; artifactResolver?: ArtifactResolver; timeoutMs?: number }
 interface ChatCompletionResponse { choices?: Array<{ message?: { content?: string | Array<{ type?: string; text?: string }> } }> }
@@ -21,7 +22,7 @@ export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapte
     const apiKey = options.apiKey.trim()
     if (!apiKey) throw new Error('NEBIUS_API_KEY is required')
     this.apiKey = apiKey
-    this.baseUrl = (options.baseUrl?.trim() || DEFAULT_BASE_URL).replace(/\/$/, '')
+    this.baseUrl = resolveBaseUrl(options.baseUrl)
     this.model = options.model?.trim() || DEFAULT_MODEL
     this.fetchImpl = options.fetchImpl ?? fetch
     this.artifactResolver = options.artifactResolver
@@ -83,6 +84,12 @@ export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapte
     if (value.stateId !== request.request.stateId && !request.context.includes(`STATE_ID ${value.stateId}`)) throw new ModelAdapterError({ code: 'INVALID_REASONING_STATE', message: 'Reasoning response referenced a state outside the supplied context', retryable: false })
     return { answer: value.answer, confidence: Math.max(0, Math.min(1, value.confidence)), stateId: value.stateId, evidenceIds: value.evidenceIds, relatedObjectIds: value.relatedObjectIds, relatedIssueIds: value.relatedIssueIds }
   }
+}
+
+function resolveBaseUrl(value?: string): string {
+  const configured = value?.trim().replace(/\/$/, '')
+  if (!configured || configured === LEGACY_GLOBAL_BASE_URL) return DEFAULT_BASE_URL
+  return configured
 }
 function extractJson(text: string): string { const fenced = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i); if (fenced) return fenced[1]; const start = text.indexOf('{'); const end = text.lastIndexOf('}'); return start >= 0 && end > start ? text.slice(start, end + 1) : text.trim() }
 function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value) }
