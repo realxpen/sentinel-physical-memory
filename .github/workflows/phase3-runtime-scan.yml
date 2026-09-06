@@ -1,0 +1,150 @@
+name: Phase 3 Production Scan Persistence
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase3-runtime-scan.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify-scan-persistence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Run Scan A, reload memory, Scan B, reload memory
+        env:
+          SENTINEL_BASE_URL: https://sentinel-physical-memory.vercel.app
+          SENTINEL_TEST_ENVIRONMENT: phase3-runtime-${{ github.run_id }}
+        run: |
+          python - <<'PY'
+          import base64
+          import json
+          import os
+          import struct
+          import urllib.error
+          import urllib.request
+          import zlib
+          from datetime import datetime, timezone
+
+          base = os.environ['SENTINEL_BASE_URL'].rstrip('/')
+          environment_id = os.environ['SENTINEL_TEST_ENVIRONMENT']
+
+          def png_data_url(rect_x):
+              width = 128
+              height = 128
+              raw = bytearray()
+              for y in range(height):
+                  raw.append(0)
+                  for x in range(width):
+                      if rect_x <= x < rect_x + 36 and 36 <= y < 92:
+                          raw.extend((220, 45, 45))
+                      else:
+                          raw.extend((242, 242, 238))
+
+              def chunk(kind, data):
+                  return struct.pack('>I', len(data)) + kind + data + struct.pack('>I', zlib.crc32(kind + data) & 0xffffffff)
+
+              payload = (
+                  b'\x89PNG\r\n\x1a\n'
+                  + chunk(b'IHDR', struct.pack('>IIBBBBB', width, height, 8, 2, 0, 0, 0))
+                  + chunk(b'IDAT', zlib.compress(bytes(raw), 9))
+                  + chunk(b'IEND', b'')
+              )
+              return 'data:image/png;base64,' + base64.b64encode(payload).decode('ascii')
+
+          def request_json(url, method='GET', payload=None, timeout=90):
+              body = None if payload is None else json.dumps(payload).encode('utf-8')
+              headers = {'Accept': 'application/json', 'User-Agent': 'sentinel-phase3-runtime-proof'}
+              if body is not None:
+                  headers['Content-Type'] = 'application/json'
+              request = urllib.request.Request(url, data=body, method=method, headers=headers)
+              try:
+                  with urllib.request.urlopen(request, timeout=timeout) as response:
+                      text = response.read().decode('utf-8', 'replace')
+                      return response.status, json.loads(text)
+              except urllib.error.HTTPError as error:
+                  text = error.read().decode('utf-8', 'replace')
+                  try:
+                      parsed = json.loads(text)
+                  except Exception:
+                      parsed = {'raw': text}
+                  raise RuntimeError(f'{method} {url} -> HTTP {error.code}: {json.dumps(parsed)[:2000]}') from error
+
+          now = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
+          image_a = png_data_url(18)
+          image_b = png_data_url(74)
+
+          def scan(source_id, captured_at, image):
+              payload = {
+                  'environmentId': environment_id,
+                  'source': {
+                      'id': source_id,
+                      'environmentId': environment_id,
+                      'capturedAt': captured_at,
+                  },
+                  'media': {
+                      'kind': 'image',
+                      'uri': image,
+                      'mimeType': 'image/png',
+                  },
+              }
+              status, result = request_json(f'{base}/api/scan', method='POST', payload=payload)
+              assert status == 200, result
+              assert result.get('persistence') == 'neon', result
+              return result
+
+          def read_memory():
+              status, payload = request_json(f'{base}/api/memory?environmentId={environment_id}')
+              assert status == 200, payload
+              assert payload.get('persistence') == 'neon', payload
+              memory = payload.get('memory')
+              assert isinstance(memory, dict), payload
+              return memory
+
+          print('Environment:', environment_id)
+          print('Running Scan A through production /api/scan and Nebius...')
+          scan_a = scan('source_runtime_a', now, image_a)
+          memory_a = read_memory()
+          assert len(memory_a.get('states') or []) >= 1, memory_a
+          state_a = memory_a['states'][-1]
+          snapshot_a = next((s for s in memory_a.get('snapshots', []) if s.get('stateId') == state_a.get('id')), None)
+          assert snapshot_a is not None, memory_a
+          print('Scan A persisted:', state_a.get('id'), 'version', state_a.get('version'))
+
+          later = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
+          print('Running Scan B through a second production invocation...')
+          scan_b = scan('source_runtime_b', later, image_b)
+          memory_b = read_memory()
+
+          states_b = memory_b.get('states') or []
+          snapshots_b = memory_b.get('snapshots') or []
+          diffs_b = memory_b.get('diffs') or []
+          assert len(states_b) >= 2, memory_b
+          state_b = states_b[-1]
+          restored_snapshot_a = next((s for s in snapshots_b if s.get('stateId') == state_a.get('id')), None)
+          snapshot_b = next((s for s in snapshots_b if s.get('stateId') == state_b.get('id')), None)
+          assert restored_snapshot_a == snapshot_a, {'before': snapshot_a, 'after': restored_snapshot_a}
+          assert snapshot_b is not None, memory_b
+          matching_diff = next((d for d in diffs_b if d.get('fromStateId') == state_a.get('id') and d.get('toStateId') == state_b.get('id')), None)
+          assert matching_diff is not None, diffs_b
+          assert memory_b.get('environment', {}).get('currentStateId') == state_b.get('id'), memory_b.get('environment')
+
+          print('PHASE 3 PRODUCTION SCAN PERSISTENCE VERIFIED')
+          print(json.dumps({
+              'environmentId': environment_id,
+              'persistence': 'neon',
+              'scanA': scan_a.get('scanId'),
+              'stateA': state_a.get('id'),
+              'scanB': scan_b.get('scanId'),
+              'stateB': state_b.get('id'),
+              'stateCount': len(states_b),
+              'snapshotCount': len(snapshots_b),
+              'diffId': matching_diff.get('id'),
+              'diffChanges': len(matching_diff.get('changes') or []),
+              'stateAImmutableAfterScanB': True,
+          }, indent=2))
+          PY
