@@ -5,8 +5,10 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/production-diagnostic.yml'
+      - 'api/health.ts'
       - 'api/memory.ts'
       - 'server/**'
+      - 'package.json'
 
 permissions:
   contents: read
@@ -23,6 +25,7 @@ jobs:
 
           urls = [
               "https://sentinel-physical-memory.vercel.app/",
+              "https://sentinel-physical-memory.vercel.app/api/health",
               "https://sentinel-physical-memory.vercel.app/api/memory",
               "https://sentinel-physical-memory.vercel.app/api/memory?environmentId=phase3-verification",
           ]
