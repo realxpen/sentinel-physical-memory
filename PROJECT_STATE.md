@@ -14,35 +14,32 @@ Hackathon track: **Best Apps and Agents**.
 
 ## Current phase
 
-**Phase 3 — Persistent Environmental Memory: NEON MIGRATION IMPLEMENTED / REMOTE VERIFICATION PENDING**
+**Phase 3 — Persistent Environmental Memory: NEON DATABASE VERIFIED / VERCEL RUNTIME ACTIVATION PENDING**
 
-Phase 3 now provides:
+## Phase 3 verified now
 
-- server-authoritative `EnvironmentalMemoryRepository` persistence;
-- `NeonEnvironmentalMemoryRepository` as the active durable implementation;
-- `InMemoryEnvironmentalMemoryRepository` only as a volatile fallback;
-- server-only runtime configuration through `DATABASE_URL`;
-- `GET /api/memory` reload restoration;
-- immutable `EnvironmentalStateSnapshot` records;
-- snapshot-aware historical Ask/Diff hydration;
-- a private Neon/Postgres schema with canonical aggregate + normalized records;
-- least-privilege `sentinel_app` function-only runtime access.
+- `NeonEnvironmentalMemoryRepository` is the active durable implementation.
+- `DATABASE_URL` is the server-only persistence configuration contract.
+- Dedicated Neon project `sentinel-physical-memory` exists in `aws-us-east-2`.
+- Active schema is deployed to Neon.
+- Canonical aggregate + normalized persistence works.
+- Immutable State A / State B snapshots survive database round-trips.
+- The database rejects an attempted rewrite of an already persisted historical snapshot.
+- The Neon migration commit passed the connected Vercel build check.
+- MONIFlow and Hustle remain untouched in Supabase.
 
-A dedicated Neon project named `sentinel-physical-memory` now exists in `aws-us-east-2`. MONIFlow and Hustle remain untouched in Supabase.
+## Phase 3 remaining gate
 
-## Phase 3 activation gate
+The connected Vercel integration available in this ChatGPT session does not expose environment-variable writes. Before Phase 3 can be marked complete:
 
-Before Phase 3 can be marked complete:
+1. add the Neon server connection as `DATABASE_URL` in the SENTINEL Vercel project (Production, and Preview if desired);
+2. redeploy or trigger a new production deployment;
+3. confirm `/api/memory?environmentId=office-demo` reports `persistence: "neon"`;
+4. run the real Observe path for Scan A and confirm persistent database memory;
+5. reload/fresh invocation and confirm the same state/evidence/snapshots restore without client resubmission;
+6. run Scan B and verify Reality Diff uses the persisted immutable snapshots.
 
-1. apply `infrastructure/neon/phase-3-environmental-memory.sql`;
-2. configure Vercel `DATABASE_URL` using the `sentinel_app` role;
-3. confirm the deployed API reports `neon` persistence;
-4. persist State v1 and restore it after a fresh invocation;
-5. persist State v2 and verify State v1's snapshot is unchanged after database round-trip;
-6. confirm Reality Diff uses the persisted immutable snapshots;
-7. verify `sentinel_app` cannot directly query private tables.
-
-**Do not advance the formal project gate to Phase 4 until these checks pass.**
+**Do not formally advance to Phase 4 until this deployed end-to-end gate passes.**
 
 ## Verified implementation baseline
 
@@ -54,6 +51,7 @@ Before Phase 3 can be marked complete:
 - Contextual Ask and Reality Diff presentation exist.
 - Frontend requests authoritative memory from `/api/memory` on mount.
 - Scan/Ask requests do not send full environmental memory back to the server.
+- UI recognizes `neon` vs `volatile` persistence restoration.
 
 ### Scan / observation
 
@@ -71,18 +69,20 @@ Before Phase 3 can be marked complete:
 
 - `EnvironmentalMemoryStore` remains the domain/state engine.
 - `EnvironmentalMemoryRepository` remains the persistence contract.
-- `NeonEnvironmentalMemoryRepository` is the active Phase 3 durable implementation.
+- `NeonEnvironmentalMemoryRepository` is the active durable implementation.
 - `EnvironmentalMemory` contains immutable per-state snapshots.
-- Hydration prefers persisted snapshots, preventing later normalized object changes from rewriting old state meaning.
+- Hydration prefers persisted snapshots.
+- Database persistence now rejects historical snapshot mutation.
 
 ### Neon / Postgres
 
-- Active SQL definition: `infrastructure/neon/phase-3-environmental-memory.sql`.
+- Active SQL: `infrastructure/neon/phase-3-environmental-memory.sql`.
 - Tables live in `sentinel_private`.
-- Canonical memory JSONB plus normalized environment/state/object/observation/issue/evidence/relation/diff/source records are written atomically.
+- Canonical memory JSONB plus normalized records are written atomically.
 - State rows persist immutable snapshot JSONB.
-- Runtime access is limited to the `sentinel_app` role and locked security-definer functions.
-- Supabase Phase 3 artifacts are superseded and retained only for history.
+- Database-level Phase 3 verification is recorded in `Knowledge/Technical/phase-3-neon-verification.md`.
+
+Security note: the API-created `sentinel_app` login inherits Neon's platform role in this project, so strict least-privilege login hardening remains a pre-production task. Credentials remain server-only and are never exposed to browser code.
 
 ### Diff / Ask
 
@@ -100,13 +100,13 @@ Before Phase 3 can be marked complete:
 
 ## Highest-priority gaps
 
-1. **Finish Phase 3 live Neon verification** — current gate blocker.
+1. **Finish Phase 3 Vercel runtime activation and real Scan A/B proof** — current gate blocker.
 2. Observation pipeline hardening — real phone video reliability.
 3. Condition model quality — observation vs interpretation semantics.
 4. Environmental state history UX/query hardening.
 5. Diff v2 — stable matching and evidence-qualified absence/removal.
 6. Action + verification — complete the closed loop.
-7. Automated tests/reliability — schema, persistence, diff and failure paths.
+7. Automated tests/reliability and least-privilege database role hardening.
 
 ## Locked decisions
 
@@ -127,7 +127,7 @@ Before Phase 3 can be marked complete:
 - [x] Phase 0 — Repo knowledge system and project state
 - [x] Phase 1 — Freeze the MVP contract
 - [x] Phase 2 — Core architecture cleanup
-- [ ] Phase 3 — Persistent Environmental Memory (**Neon migration implemented; remote verification pending**)
+- [ ] Phase 3 — Persistent Environmental Memory (**database verified; Vercel runtime activation pending**)
 - [ ] Phase 4 — Observation pipeline hardening
 - [ ] Phase 5 — Perception quality and condition model
 - [ ] Phase 6 — Environmental state history
@@ -146,6 +146,8 @@ Before Phase 3 can be marked complete:
 
 ## Current exit check
 
-The codebase is ready to use Neon/Postgres as the authoritative environmental-memory repository without the browser carrying memory between requests. Immutable state snapshots remain part of the persistent contract.
+Engineering implementation: **MET**.
 
-The Phase 3 engineering exit condition is met; the **runtime durability exit condition remains pending** until the live database and deployed cold-start checks pass.
+Neon database durability + historical-integrity proof: **MET**.
+
+Vercel runtime / real Scan A → reload → Scan B proof: **PENDING**.

@@ -21,24 +21,30 @@ Neon / Lakebase Postgres
 
 ## Runtime access
 
-The deployed backend uses a dedicated login role named `sentinel_app` through the server-only `DATABASE_URL` variable.
+The deployed backend uses a server-only `DATABASE_URL`. Database credentials never enter browser/Vite variables.
 
-`sentinel_app` receives:
+A dedicated `sentinel_app` login was created for the runtime surface. Validation showed that Neon API-created roles in this project inherit the platform `neon_superuser` role, so an explicit table `REVOKE` does not make that API-created login truly least-privileged. This limitation is recorded rather than hidden.
 
-- `USAGE` on the private schema;
-- execute permission on the two locked memory functions.
+For the hackathon MVP:
 
-It receives no direct table privileges. The functions are `SECURITY DEFINER` and fully schema-qualified.
+- database credentials remain server-only;
+- persistent tables remain in `sentinel_private`;
+- application code uses only the locked get/save functions;
+- no database credential is exposed to the browser.
+
+Before production, create a custom login that does not inherit Neon platform privileges and grant only schema usage + execution on the locked functions. Track that under reliability/security hardening rather than falsely treating it as already enforced.
 
 ## Storage shape
 
-The Phase 3 model remains unchanged:
+The Phase 3 model remains:
 
 1. canonical aggregate `EnvironmentalMemory` JSONB for deterministic repository reads;
 2. normalized environment/state/object/observation/issue/evidence/relation/diff/source records;
 3. immutable per-state object/issue snapshots.
 
-## Why
+The database save function now rejects any attempt to rewrite a snapshot that was already persisted for a historical state. This protects both the normalized state row and the canonical aggregate from historical drift.
+
+## Why Neon
 
 - keeps SENTINEL isolated from MONIFlow and Hustle;
 - preserves the existing Postgres-centered architecture rather than redesigning persistence;
@@ -49,6 +55,7 @@ The Phase 3 model remains unchanged:
 ## Consequences
 
 - `DATABASE_URL` replaces Supabase URL/secret variables for the active runtime;
-- `NeonEnvironmentalMemoryRepository` becomes the durable repository implementation;
+- `NeonEnvironmentalMemoryRepository` is the durable repository implementation;
 - the Supabase Phase 3 implementation is retained only as superseded project history;
-- Phase 3 is still not complete until the live Neon schema, Vercel configuration, cold-start restoration, immutable State v1 round-trip, and persisted diff checks pass.
+- Phase 3 durability still requires deployed Vercel runtime activation and end-to-end API verification;
+- strict least-privilege database login hardening remains a pre-production security task.

@@ -1,6 +1,9 @@
 -- SENTINEL Phase 3 — Persistent Environmental Memory on Neon / Lakebase Postgres
--- Prerequisite: a login role named sentinel_app exists. Do not hard-code its password here.
--- Runtime access is function-only; sentinel_app receives no direct table privileges.
+-- Prerequisite: a server runtime login role named sentinel_app exists.
+-- Keep the connection string server-side only; never expose it through VITE_* variables.
+-- The grants below define SENTINEL's intended function surface. Neon API-managed roles
+-- may inherit platform privileges, so production least-privilege role hardening remains
+-- a separate security task.
 
 begin;
 
@@ -138,6 +141,37 @@ begin
 
   if v_environment_id is null then
     raise exception 'p_memory.environment.id is required';
+  end if;
+
+  -- Every state must carry an immutable snapshot. Neon is a fresh Phase 3 store,
+  -- so the legacy pre-snapshot fallback belongs only to application hydration.
+  if exists (
+    select 1
+    from jsonb_array_elements(coalesce(p_memory -> 'states', '[]'::jsonb)) as state_item
+    where not exists (
+      select 1
+      from jsonb_array_elements(coalesce(p_memory -> 'snapshots', '[]'::jsonb)) as snapshot_item
+      where snapshot_item ->> 'stateId' = state_item ->> 'id'
+    )
+  ) then
+    raise exception 'every environmental state requires an immutable snapshot';
+  end if;
+
+  -- The canonical aggregate is also protected: if a previously stored state has a
+  -- snapshot, a later save cannot submit a different snapshot for that same state.
+  if exists (
+    select 1
+    from sentinel_private.sentinel_states existing
+    where existing.environment_id = v_environment_id
+      and existing.snapshot is not null
+      and exists (
+        select 1
+        from jsonb_array_elements(coalesce(p_memory -> 'snapshots', '[]'::jsonb)) as incoming_snapshot
+        where incoming_snapshot ->> 'stateId' = existing.id
+          and incoming_snapshot <> existing.snapshot
+      )
+  ) then
+    raise exception 'immutable environmental state snapshot mismatch';
   end if;
 
   insert into sentinel_private.sentinel_environments (id, payload, created_at, updated_at)

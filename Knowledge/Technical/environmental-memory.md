@@ -37,39 +37,30 @@ The browser is not a persistence mechanism:
 - Ask requests do not include previous memory;
 - `/api/memory` restores authoritative server memory after reload.
 
-Without `DATABASE_URL`, local development falls back to an explicitly reported `volatile` mode.
+Without `DATABASE_URL`, local/server development falls back to an explicitly reported `volatile` mode.
 
 ## Minimum durable records
 
-Phase 3 persists:
-
-- environments
-- states
-- immutable state snapshots
-- objects
-- observations
-- conditions/issues
-- evidence
-- relations
-- sources/media references
-- diffs
-- canonical aggregate environmental memory
-
-Action plans and verification results join this model in their later implementation phases.
+Phase 3 persists environments, states, immutable state snapshots, objects, observations, conditions/issues, evidence, relations, source/media references, diffs and the canonical aggregate environmental memory.
 
 ## Historical correctness
 
 A state is an immutable historical claim. Updating a remembered object's current normalized record must not alter what State v1 believed.
 
-Every accepted scan therefore captures the object/issue values that belonged to that state. `hydrate()` restores these exact snapshots after a database round-trip. Historical Ask and Diff use them rather than today's mutable entity values.
+Each accepted scan captures the object/issue values that belonged to that state. `hydrate()` restores these exact snapshots after a database round-trip. Historical Ask and Diff use them rather than today's mutable entity values.
+
+The Neon save function additionally enforces two database invariants:
+
+1. every persisted state must have a snapshot;
+2. an already persisted state's snapshot cannot be replaced with a different value.
+
+This prevents the canonical aggregate from silently rewriting history even if incorrect input reaches the repository.
 
 ## Neon database shape
 
 The database uses private normalized tables plus a canonical aggregate JSONB document.
 
-Why both:
-
-- aggregate memory gives deterministic, low-complexity repository reads;
+- aggregate memory gives deterministic repository reads;
 - normalized records support indexing, auditing and later targeted retrieval;
 - state rows retain immutable snapshot JSONB;
 - one server-side Postgres function persists the aggregate and normalized records atomically.
@@ -77,11 +68,11 @@ Why both:
 ## Security
 
 - persistent tables live in `sentinel_private`;
-- RLS is enabled as defense in depth;
-- the runtime role has no direct table privileges;
-- only the locked get/save functions are executable by `sentinel_app`;
-- functions are `SECURITY DEFINER` with an empty `search_path` and fully qualified table references;
+- RLS is enabled as defense in depth for non-privileged roles;
+- application code calls only the locked get/save functions;
 - `DATABASE_URL` remains server-only and must never be exposed through `VITE_*` variables.
+
+Neon API-created login roles in this project inherit `neon_superuser`, so the current API-created `sentinel_app` login is not a true least-privilege role even after explicit table revokes. This is a known security-hardening item, not a hidden assumption. A non-inheriting custom runtime login is required before production.
 
 ## Core queries
 
@@ -97,10 +88,11 @@ The Phase 3 repository initially retrieves the canonical aggregate. Later perfor
 
 ## Phase 3 exit condition
 
-1. Scan A persists to the dedicated SENTINEL Neon project.
-2. A fresh server invocation/browser reload restores the same environment, state, evidence and snapshots without client resubmission.
-3. Scan B creates State v2 while State v1 remains unchanged after another database reload.
-4. Reality Diff still compares the correct persisted historical snapshots.
-5. Runtime database access remains limited to the `sentinel_app` function surface.
+1. Neon database schema is active.
+2. State A and State B persist and round-trip with immutable historical snapshots.
+3. A historical snapshot rewrite attempt is rejected.
+4. Vercel receives the server-only `DATABASE_URL`.
+5. The deployed API reports `neon` persistence and restores memory after a fresh invocation/reload.
+6. The actual scan path creates the next durable state and Reality Diff reads the persisted snapshots.
 
-Until this remote test passes, Phase 3 remains **engineering implemented / remote verification pending**.
+Database-level items 1–3 are verified. Items 4–6 remain the deployment gate.
