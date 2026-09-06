@@ -1,9 +1,12 @@
-import { neon } from '@neondatabase/serverless'
 import type { EnvironmentalMemory } from '../src/domain/sentinel'
 import type { EnvironmentalMemoryRepository } from '../src/memory/repository'
 
+type NeonFactory = typeof import('@neondatabase/serverless')['neon']
+type NeonSql = ReturnType<NeonFactory>
+
 export class NeonEnvironmentalMemoryRepository implements EnvironmentalMemoryRepository {
-  private readonly sql: ReturnType<typeof neon>
+  private readonly connectionString: string
+  private sql?: NeonSql
 
   constructor(connectionString: string) {
     const normalized = connectionString.trim()
@@ -11,14 +14,15 @@ export class NeonEnvironmentalMemoryRepository implements EnvironmentalMemoryRep
       throw new Error('DATABASE_URL must be a PostgreSQL connection string')
     }
 
-    this.sql = neon(normalized)
+    this.connectionString = normalized
   }
 
   async get(environmentId: string): Promise<EnvironmentalMemory | undefined> {
     const normalizedEnvironmentId = environmentId.trim()
     if (!normalizedEnvironmentId) throw new Error('environmentId is required')
 
-    const rows = await this.sql`
+    const sql = await this.getSql()
+    const rows = await sql`
       select sentinel_private.sentinel_get_environmental_memory(${normalizedEnvironmentId}) as memory
     `
 
@@ -28,9 +32,18 @@ export class NeonEnvironmentalMemoryRepository implements EnvironmentalMemoryRep
   }
 
   async save(memory: EnvironmentalMemory): Promise<void> {
-    await this.sql`
+    const sql = await this.getSql()
+    await sql`
       select sentinel_private.sentinel_save_environmental_memory(${JSON.stringify(memory)}::jsonb)
     `
+  }
+
+  private async getSql(): Promise<NeonSql> {
+    if (!this.sql) {
+      const { neon } = await import('@neondatabase/serverless')
+      this.sql = neon(this.connectionString)
+    }
+    return this.sql
   }
 
   private parseMemory(value: unknown, environmentId: string): EnvironmentalMemory {
