@@ -98,14 +98,15 @@ export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapte
     let value: unknown
     try { value = JSON.parse(extractJson(text)) } catch { throw new ModelAdapterError({ code: 'INVALID_MODEL_JSON', message: 'Vision model returned invalid JSON', retryable: false }) }
     const sourceId = extractScanSourceId(request.prompt)
+    const environmentId = extractScanEnvironmentId(request.prompt)
     if (isRecord(value)) {
       value = {
         ...value,
         ...(sourceId ? { sourceId } : {}),
-        observations: Array.isArray(value.observations) ? value.observations : [],
-        objects: Array.isArray(value.objects) ? value.objects : [],
-        relations: Array.isArray(value.relations) ? value.relations : [],
-        evidence: Array.isArray(value.evidence) ? value.evidence : [],
+        observations: normalizeIdentityArray(value.observations, sourceId, environmentId, true),
+        objects: normalizeIdentityArray(value.objects, undefined, environmentId, false),
+        relations: normalizeIdentityArray(value.relations, undefined, environmentId, false),
+        evidence: normalizeIdentityArray(value.evidence, sourceId, undefined, false),
       }
     }
     try { return validatePerception(value) } catch (error) { if (error instanceof PerceptionValidationError) throw new ModelAdapterError({ code: error.code, message: error.message, retryable: false }); throw error }
@@ -122,7 +123,20 @@ function resolveBaseUrl(value?: string): string {
   if (!configured || configured === LEGACY_GLOBAL_BASE_URL) return DEFAULT_BASE_URL
   return configured
 }
+function normalizeIdentityArray(value: unknown, sourceId?: string, environmentId?: string, ensureObservationModality = false): unknown[] {
+  if (!Array.isArray(value)) return []
+  return value.map((item) => {
+    if (!isRecord(item)) return item
+    return {
+      ...item,
+      ...(sourceId ? { sourceId } : {}),
+      ...(environmentId ? { environmentId } : {}),
+      ...(ensureObservationModality && item.modality === undefined ? { modality: 'video' } : {}),
+    }
+  })
+}
 function extractScanSourceId(prompt: string): string | undefined { const match = prompt.match(/The scan source id is\s+([^\n.]+)\.?/i); return match?.[1]?.trim() || undefined }
+function extractScanEnvironmentId(prompt: string): string | undefined { const match = prompt.match(/for environment\s+([^\n.]+)\.?/i); return match?.[1]?.trim() || undefined }
 function extractJson(text: string): string { const fenced = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i); if (fenced) return fenced[1]; const start = text.indexOf('{'); const end = text.lastIndexOf('}'); return start >= 0 && end > start ? text.slice(start, end + 1) : text.trim() }
 function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value) }
 function isStringArray(value: unknown): value is string[] { return Array.isArray(value) && value.every((item) => typeof item === 'string') }
