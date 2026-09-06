@@ -1,5 +1,5 @@
-import { InMemoryEnvironmentalMemoryRepository, type EnvironmentalMemoryRepository } from '../src/memory/repository'
-import { NeonEnvironmentalMemoryRepository } from './neon-memory-repository'
+import { InMemoryEnvironmentalMemoryRepository, type EnvironmentalMemoryRepository } from '../src/memory/repository.js'
+import { NeonEnvironmentalMemoryRepository } from './neon-memory-repository.js'
 
 export type MemoryPersistenceMode = 'neon' | 'volatile'
 
