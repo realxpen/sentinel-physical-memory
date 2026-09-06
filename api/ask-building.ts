@@ -1,6 +1,6 @@
 import { createNebiusNemotronAdapter } from '../src/ai/nebius'
 import { AskBuildingService } from '../src/memory/ask-building'
-import { getMemoryPersistenceMode, getRuntimeEnvironmentalMemoryRepository } from './_memory-repository'
+import { getMemoryPersistenceMode, getRuntimeEnvironmentalMemoryRepository } from '../server/memory-repository'
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown }
 type Response = { status(code: number): Response; json(body: unknown): void }

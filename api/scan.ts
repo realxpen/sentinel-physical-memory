@@ -1,12 +1,10 @@
 import { createNebiusNemotronAdapter } from '../src/ai/nebius'
 import type { ScanArtifact, ScanFrame, ScanInput } from '../src/scan/types'
 import { ScanPipeline } from '../src/scan/pipeline'
-import { getMemoryPersistenceMode, getRuntimeEnvironmentalMemoryRepository } from './_memory-repository'
+import { getMemoryPersistenceMode, getRuntimeEnvironmentalMemoryRepository } from '../server/memory-repository'
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown }
 type Response = { status(code: number): Response; json(body: unknown): void }
-
-type IncomingFrame = { frameId: string; timestampMs: number; uri: string }
 
 const MAX_BODY_BYTES = 6 * 1024 * 1024
 const MAX_VIDEO_FRAMES = 12
