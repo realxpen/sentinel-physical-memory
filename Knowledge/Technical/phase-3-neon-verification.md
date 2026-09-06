@@ -1,6 +1,7 @@
 # Phase 3 Neon Verification Record
 
 Date: 2026-09-06
+Status: **COMPLETE**
 
 ## Project
 
@@ -13,9 +14,9 @@ No database password or connection string is recorded in repo knowledge.
 
 ## Schema activation
 
-`infrastructure/neon/phase-3-environmental-memory.sql` was applied to the main Neon branch. The active private schema contains the aggregate environmental memory plus normalized environment/state/object/observation/issue/evidence/relation/diff/source records.
+`infrastructure/neon/phase-3-environmental-memory.sql` is active on the main Neon branch. The private `sentinel_private` schema contains the canonical environmental memory plus normalized environment/state/object/observation/issue/evidence/relation/diff/source records.
 
-## Persistence proof
+## Database durability proof
 
 Verification environment: `phase3-verification`.
 
@@ -53,12 +54,44 @@ Postgres rejected it with:
 
 A read immediately afterward still returned State A = `Wall A` and State B = `Wall B`.
 
-## Vercel build
+## Production runtime proof
 
-The Neon repository migration commit `a46f85f` passed the connected Vercel build status.
+Production persistence is configured through server-only `DATABASE_URL` and reports `persistence: "neon"`.
 
-## Remaining proof
+A second, fully deployed verification environment `phase3-runtime-34027093828` passed the real scan path:
 
-The connected Vercel tool available in ChatGPT can inspect deployments but does not expose environment-variable writes. `DATABASE_URL` therefore still has to be placed in the Vercel project server environment before the deployed API can be tested in `neon` mode.
+`Scan A → Nebius perception → Neon → fresh GET /api/memory → Scan B → Neon → fresh GET /api/memory → Reality Diff`
 
-Phase 3 is not marked complete until that deployed end-to-end proof is finished.
+Results:
+
+- Scan A: `scan_f0a2e99a-c850-4f71-97ae-820b1aa2e98a`
+- State A: `state_81c0c92d-9354-4fde-aeb8-656c514615ac`
+- Scan B: `scan_774fa2d3-def2-4f39-ab7e-9993dba56948`
+- State B: `state_6ec21382-b657-48b4-876b-1f3d2e5a349b`
+- final state count: `2`
+- final snapshot count: `2`
+- diff: `diff_ddb287af-709e-4c67-a514-d252dc828d4c`
+- diff changes: `2`
+- State A immutable after Scan B: `true`
+
+GitHub Actions printed:
+
+`PHASE 3 PRODUCTION SCAN PERSISTENCE VERIFIED`
+
+## Model/runtime note
+
+The production scan used Nebius Token Factory at `https://api.tokenfactory.us-central1.nebius.com/v1`.
+
+Perception routes to `openbmb/MiniCPM-V-4_5`. Nemotron reasoning defaults to `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B`. DEC-006 records the live-catalog reason for this split route.
+
+## Security note
+
+Database credentials remain server-only and are never placed in browser/Vite variables.
+
+The API-created `sentinel_app` login inherits Neon's platform role in this project, so strict least-privilege login hardening remains pre-production security debt. This does not invalidate the durability or server-authority proof.
+
+## Conclusion
+
+Neon durability, historical immutability, production serverless restoration, and the real two-scan persistence/diff path are all verified.
+
+**Phase 3 persistence exit gate: PASSED.**

@@ -9,7 +9,6 @@ on:
       - 'api/memory.ts'
       - 'api/scan.ts'
       - 'api/ask-building.ts'
-      - 'api/model-catalog.ts'
       - 'server/**'
       - 'package.json'
 
@@ -33,7 +32,6 @@ jobs:
               "https://sentinel-physical-memory.vercel.app/api/memory?environmentId=phase3-verification",
               "https://sentinel-physical-memory.vercel.app/api/scan",
               "https://sentinel-physical-memory.vercel.app/api/ask-building",
-              "https://sentinel-physical-memory.vercel.app/api/model-catalog",
           ]
 
           for url in urls:
