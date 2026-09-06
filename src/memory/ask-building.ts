@@ -1,15 +1,12 @@
 import type { AskBuildingRequest, AskBuildingResponse, EnvironmentalMemory, Evidence, Issue, SpatialObject } from '../domain/sentinel'
 import type { ReasoningModelAdapter } from '../ai/model'
-
-export interface MemoryRetriever {
-  get(environmentId: string): EnvironmentalMemory | undefined
-}
+import type { EnvironmentalMemoryReader } from './repository'
 
 export class AskBuildingService {
-  constructor(private readonly memory: MemoryRetriever, private readonly model: ReasoningModelAdapter) {}
+  constructor(private readonly memory: EnvironmentalMemoryReader, private readonly model: ReasoningModelAdapter) {}
 
   async ask(request: AskBuildingRequest): Promise<AskBuildingResponse> {
-    const environment = this.memory.get(request.environmentId)
+    const environment = await this.memory.get(request.environmentId)
     if (!environment) throw new Error(`Environment ${request.environmentId} not found`)
     if (!environment.states.length) throw new Error(`Environment ${request.environmentId} has no scans yet`)
 
@@ -55,9 +52,10 @@ export class AskBuildingService {
   private evidenceLine(item: Evidence): string { return `- EVIDENCE ${item.id}: type=${item.type} source=${item.sourceId} description=${item.description} frame=${item.frameIndex ?? 'n/a'} timestampMs=${item.timestampMs ?? 'n/a'}` }
 
   private validateEvidence(answer: AskBuildingResponse, memory: EnvironmentalMemory, stateId: string): AskBuildingResponse {
+    const state = memory.states.find((item) => item.id === stateId)
     const validEvidence = new Set(memory.evidence.map((item) => item.id))
-    const validObjects = new Set(memory.objects.filter((item) => memory.states.find((state) => state.id === stateId)?.objectIds.includes(item.id)).map((item) => item.id))
-    const validIssues = new Set(memory.issues.filter((item) => memory.states.find((state) => state.id === stateId)?.issueIds.includes(item.id)).map((item) => item.id))
+    const validObjects = new Set(memory.objects.filter((item) => state?.objectIds.includes(item.id)).map((item) => item.id))
+    const validIssues = new Set(memory.issues.filter((item) => state?.issueIds.includes(item.id)).map((item) => item.id))
     return { ...answer, stateId, evidenceIds: answer.evidenceIds.filter((id) => validEvidence.has(id)), relatedObjectIds: answer.relatedObjectIds.filter((id) => validObjects.has(id)), relatedIssueIds: answer.relatedIssueIds.filter((id) => validIssues.has(id)) }
   }
 }

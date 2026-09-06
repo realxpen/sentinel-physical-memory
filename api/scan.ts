@@ -1,13 +1,11 @@
 import { createNebiusNemotronAdapter } from '../src/ai/nebius'
 import type { EnvironmentalMemory } from '../src/domain/sentinel'
-import { EnvironmentalMemoryStore } from '../src/memory/store'
-import type { ScanFrame, ScanInput } from '../src/scan/types'
+import { getRuntimeEnvironmentalMemoryRepository, reconcileRepositorySnapshot } from '../src/memory/repository'
+import type { ScanArtifact, ScanFrame, ScanInput } from '../src/scan/types'
 import { ScanPipeline } from '../src/scan/pipeline'
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown }
 type Response = { status(code: number): Response; json(body: unknown): void }
-
-type IncomingFrame = { frameId: string; timestampMs: number; uri: string }
 
 const MAX_BODY_BYTES = 6 * 1024 * 1024
 const MAX_VIDEO_FRAMES = 12
@@ -25,15 +23,16 @@ export default async function handler(req: Request, res: Response) {
     const rawSize = Buffer.byteLength(JSON.stringify(req.body ?? {}), 'utf8')
     if (rawSize > MAX_BODY_BYTES) return res.status(413).json({ error: 'PAYLOAD_TOO_LARGE', message: 'Scan request exceeds 6 MB' })
     const input = parseScanInput(req.body)
-    const priorMemory = parseOptionalMemory(req.body, input.environmentId)
-    const memory = new EnvironmentalMemoryStore()
-    if (priorMemory) memory.hydrate(priorMemory)
+    const repository = getRuntimeEnvironmentalMemoryRepository()
+
+    // Transitional Phase 2 bridge only. Phase 3 removes client-carried memory once durable storage is live.
+    await reconcileRepositorySnapshot(repository, parseOptionalMemory(req.body, input.environmentId))
 
     const adapter = createNebiusNemotronAdapter(apiKey, {
       baseUrl: process.env.NEBIUS_TOKEN_FACTORY_BASE_URL,
       model: process.env.NEBIUS_NEMOTRON_MODEL,
       artifactResolver: {
-        resolve: async (artifact) => ({
+        resolve: async (artifact: ScanArtifact) => ({
           artifactId: artifact.artifactId,
           mimeType: artifact.kind === 'frame' ? 'image/jpeg' : input.media.mimeType,
           uri: artifact.uri,
@@ -41,9 +40,9 @@ export default async function handler(req: Request, res: Response) {
       },
     })
 
-    const pipeline = new ScanPipeline({ model: adapter, memory })
+    const pipeline = new ScanPipeline({ model: adapter, memoryRepository: repository })
     const result = await pipeline.run(input)
-    const updatedMemory = pipeline.getMemory(input.environmentId)
+    const updatedMemory = await pipeline.getMemory(input.environmentId)
     if (!updatedMemory) throw new Error('Environmental memory was not created')
 
     return res.status(200).json({

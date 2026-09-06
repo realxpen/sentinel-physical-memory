@@ -1,6 +1,7 @@
 import { createNebiusNemotronAdapter } from '../src/ai/nebius'
 import { AskBuildingService } from '../src/memory/ask-building'
-import type { AskBuildingRequest, EnvironmentalMemory } from '../src/domain/sentinel'
+import type { EnvironmentalMemory } from '../src/domain/sentinel'
+import { getRuntimeEnvironmentalMemoryRepository, reconcileRepositorySnapshot } from '../src/memory/repository'
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown }
 type Response = { status(code: number): Response; json(body: unknown): void }
@@ -20,11 +21,16 @@ export default async function handler(req: Request, res: Response) {
     const rawSize = Buffer.byteLength(JSON.stringify(req.body ?? {}), 'utf8')
     if (rawSize > MAX_BODY_BYTES) return res.status(413).json({ error: 'PAYLOAD_TOO_LARGE', message: 'Ask request exceeds 2 MB' })
     const body = parseBody(req.body)
+    const repository = getRuntimeEnvironmentalMemoryRepository()
+
+    // Transitional Phase 2 bridge only. Durable repository becomes authoritative in Phase 3.
+    await reconcileRepositorySnapshot(repository, body.memory)
+
     const adapter = createNebiusNemotronAdapter(apiKey, {
       baseUrl: process.env.NEBIUS_TOKEN_FACTORY_BASE_URL,
       model: process.env.NEBIUS_NEMOTRON_REASONING_MODEL ?? process.env.NEBIUS_NEMOTRON_MODEL,
     })
-    const service = new AskBuildingService({ get: (environmentId) => body.memory.environment.id === environmentId ? body.memory : undefined }, adapter)
+    const service = new AskBuildingService(repository, adapter)
     const answer = await service.ask({ environmentId: body.environmentId, question: body.question, stateId: body.stateId })
     return res.status(200).json(answer)
   } catch (error) {
@@ -33,16 +39,21 @@ export default async function handler(req: Request, res: Response) {
   }
 }
 
-function parseBody(value: unknown): { environmentId: string; question: string; stateId?: string; memory: EnvironmentalMemory } {
+function parseBody(value: unknown): { environmentId: string; question: string; stateId?: string; memory?: EnvironmentalMemory } {
   if (!isRecord(value)) throw new Error('Request body must be a JSON object')
   const environmentId = requiredString(value.environmentId, 'environmentId')
   const question = requiredString(value.question, 'question')
   if (question.length > MAX_QUESTION_LENGTH) throw new Error(`question must be ${MAX_QUESTION_LENGTH} characters or fewer`)
-  if (!isRecord(value.memory)) throw new Error('memory must be an environmental memory object')
-  if (!isRecord(value.memory.environment) || value.memory.environment.id !== environmentId) throw new Error('memory.environment.id must match environmentId')
-  const memory = value.memory as unknown as EnvironmentalMemory
-  if (!Array.isArray(memory.states) || !Array.isArray(memory.objects) || !Array.isArray(memory.issues) || !Array.isArray(memory.evidence) || !Array.isArray(memory.relations) || !Array.isArray(memory.sources) || !Array.isArray(memory.diffs)) throw new Error('memory is missing required collections')
-  return { environmentId, question, stateId: optionalString(value.stateId), memory }
+  return { environmentId, question, stateId: optionalString(value.stateId), memory: parseOptionalMemory(value.memory, environmentId) }
+}
+
+function parseOptionalMemory(value: unknown, environmentId: string): EnvironmentalMemory | undefined {
+  if (value === undefined || value === null) return undefined
+  if (!isRecord(value)) throw new Error('memory must be an environmental memory object')
+  const memory = value as unknown as EnvironmentalMemory
+  if (!isRecord(memory.environment) || memory.environment.id !== environmentId) throw new Error('memory.environment.id must match environmentId')
+  if (!Array.isArray(memory.states) || !Array.isArray(memory.objects) || !Array.isArray(memory.issues) || !Array.isArray(memory.observations) || !Array.isArray(memory.evidence) || !Array.isArray(memory.relations) || !Array.isArray(memory.sources) || !Array.isArray(memory.diffs)) throw new Error('memory is missing required collections')
+  return memory
 }
 
 function requiredString(value: unknown, path: string): string { if (typeof value !== 'string' || !value.trim()) throw new Error(`${path} must be a non-empty string`); return value.trim() }

@@ -6,64 +6,117 @@ Support the smallest reliable closed loop:
 
 `Media → Perception → Environmental State → Durable Memory → Retrieval → Reasoning → Diff → Action → Verification`
 
-## Current code boundaries
+## Phase 2 architecture status
 
-```text
-src/scan/      browser/media ingestion and scan orchestration
-src/ai/        model contracts, Nebius adapter, perception schema
-src/domain/    SENTINEL domain types
-src/memory/    memory store, diff engine, Ask logic
-api/           serverless request handlers
-src/main.tsx   current React product shell
-```
+The core boundaries are now explicit in code. Phase 2 does not add durable storage yet; it makes persistence replaceable so Phase 3 can add Supabase/Postgres without changing domain behavior.
 
-## Target boundaries
+## Current boundaries
 
 ```text
 Browser / React
       │
-      ├── observe media
-      └── ask / compare / verify
+      ├── Observe media
+      └── Ask / compare / verify
       │
 Application API
       │
       ├── ScanPipeline
-      ├── Retrieval / Reasoning
+      ├── AskBuildingService
       ├── DiffEngine
-      └── VerificationService
+      └── future VerificationService implementation
       │
-      ├──────── ModelAdapter(s) ──────── Nebius Token Factory
+      ├──────── ModelAdapter(s) ───────── Nebius Token Factory
       │
-      └──────── EnvironmentalMemoryRepository ── durable store
+      └──────── EnvironmentalMemoryRepository
+                         │
+                         ├── InMemoryEnvironmentalMemoryRepository (Phase 2)
+                         └── PersistentRepository / Supabase-Postgres (Phase 3)
 ```
 
 ## Required replaceable contracts
 
-- `ModelAdapter`
-- `ReasoningModelAdapter`
-- `EnvironmentalMemoryRepository`
-- `DiffEngine`
-- `VerificationService`
+### ModelAdapter
 
-Current implementation already has model-adapter concepts and an in-memory memory store. The next architecture work should introduce repository boundaries around persistence without rewriting working domain logic unnecessarily.
+Already implemented. Multimodal perception does not depend on provider response shapes outside the adapter.
 
-## Model strategy
+### ReasoningModelAdapter
 
-Use the cheapest reliable specialization, not one giant model for every call.
+Already implemented. Ask/reasoning is provider-agnostic.
 
-- Nano Omni: perception.
-- Nano: normalization/specialist classification where useful.
-- Super: grounded reasoning/orchestration.
-- Ultra: only for genuinely difficult reasoning if access/latency justify it.
+### EnvironmentalMemoryRepository
 
-## API principle
+Implemented in Phase 2.
 
-API handlers validate/orchestrate. They should not become the source of truth for environmental-state rules.
+```text
+get(environmentId)
+save(memory)
+```
 
-## Data principle
+`EnvironmentalMemoryStore` remains responsible for domain/state mutation, normalization, state creation and snapshot reconstruction. It is not the persistence provider.
 
-Historical environmental states are immutable. Current entities may be normalized for lookup, but old state snapshots must remain reconstructible after persistence/restart.
+### DiffEngine
+
+Implemented as an interface and deterministic default implementation.
+
+The Phase 2 engine now treats a previously observed entity that is simply missing from a later scan as `uncertain`, not automatically removed/resolved. Evidence-qualified absence semantics will be strengthened in Phase 7.
+
+### VerificationService
+
+The contract now exists. The full implementation remains Phase 12 work.
+
+## Scan orchestration after Phase 2
+
+```text
+POST /api/scan
+      │
+      ├── validate request
+      ├── obtain EnvironmentalMemoryRepository
+      ├── ScanPipeline.run()
+      │      ├── repository.get(environment)
+      │      ├── hydrate EnvironmentalMemoryStore
+      │      ├── perception via ModelAdapter
+      │      ├── ingest state
+      │      ├── compare via DiffEngine
+      │      └── repository.save(updated memory)
+      └── return response
+```
+
+This removes persistence ownership from the scan pipeline itself.
+
+## Ask orchestration after Phase 2
+
+```text
+POST /api/ask-building
+      │
+      ├── validate request
+      ├── obtain EnvironmentalMemoryRepository
+      ├── AskBuildingService
+      │      ├── repository.get(environment)
+      │      ├── select state/history/diff/evidence
+      │      └── ReasoningModelAdapter.reason()
+      └── return grounded answer
+```
+
+`AskBuildingService` now consumes an asynchronous repository reader so a database-backed repository can replace the in-memory one directly.
+
+## Transitional compatibility bridge
+
+Until Phase 3 is complete, the web client still carries a serialized memory snapshot in scan/Ask requests. API handlers may reconcile that snapshot into the temporary in-memory repository so the existing prototype does not regress across separate serverless functions.
+
+This bridge is explicitly temporary and is not considered durable environmental memory. Phase 3 removes client-carried memory as the source of persistence and makes the server-side persistent repository authoritative.
+
+## Domain correctness rule
+
+Historical environmental states remain immutable snapshots. Current normalized entities may evolve for lookup, but previous states must remain reconstructible.
+
+Absence rule:
+
+> A later scan failing to observe a previously observed object/condition is not enough to prove removal or resolution.
+
+Until comparable evidence verifies absence, the diff state is `uncertain`.
 
 ## Infrastructure principle
 
-Nebius/NVIDIA usage must be real and visible in runtime behavior/metadata. Durable storage can begin with relational Postgres/Supabase plus JSONB; a graph database is not required for the MVP.
+Nebius/NVIDIA usage remains on the existing runtime inference path. Phase 2 deliberately does not rewrite the working provider adapter.
+
+Phase 3 target: Supabase/Postgres persistence behind `EnvironmentalMemoryRepository`.

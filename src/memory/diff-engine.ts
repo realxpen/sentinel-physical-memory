@@ -7,6 +7,10 @@ export interface EnvironmentalSnapshot {
   issues: Issue[]
 }
 
+export interface DiffEngine {
+  compare(from: EnvironmentalSnapshot, to: EnvironmentalSnapshot): EnvironmentalDiff
+}
+
 export interface DiffEngineOptions {
   now?: () => Date
   id?: () => string
@@ -15,7 +19,7 @@ export interface DiffEngineOptions {
 const makeId = () => `change_${crypto.randomUUID()}`
 
 /** Deterministic, model-agnostic comparison of two environmental snapshots. */
-export class EnvironmentalDiffEngine {
+export class EnvironmentalDiffEngine implements DiffEngine {
   private readonly now: () => Date
   private readonly id: () => string
 
@@ -43,7 +47,9 @@ export class EnvironmentalDiffEngine {
     }
 
     for (const previous of from.objects) {
-      if (!this.matchObject(previous, to.objects)) changes.push(this.change(from, to, 'removed', previous.id, `Removed: ${previous.name}`, `${previous.name} was present previously but is not present in the current state.`, previous.confidence, previous.evidenceIds))
+      if (!this.matchObject(previous, to.objects)) {
+        changes.push(this.change(from, to, 'uncertain', previous.id, `Not re-observed: ${previous.name}`, `${previous.name} was present previously but was not re-observed in the current scan. Absence alone is not sufficient evidence that it was removed.`, Math.min(previous.confidence, 0.5), previous.evidenceIds))
+      }
     }
 
     for (const currentIssue of to.issues) {
@@ -54,8 +60,11 @@ export class EnvironmentalDiffEngine {
         changes.push(this.change(from, to, type, currentIssue.id, `${type === 'resolved' ? 'Resolved' : 'Changed'} issue: ${currentIssue.title}`, `Issue status changed from ${previousIssue.status} to ${currentIssue.status}.`, Math.min(previousIssue.confidence, currentIssue.confidence), [...previousIssue.evidenceIds, ...currentIssue.evidenceIds]))
       }
     }
+
     for (const previousIssue of from.issues) {
-      if (!to.issues.some((issue) => this.sameIssue(issue, previousIssue))) changes.push(this.change(from, to, 'resolved', previousIssue.id, `Issue no longer observed: ${previousIssue.title}`, `${previousIssue.title} was not observed in the current state.`, previousIssue.confidence, previousIssue.evidenceIds))
+      if (!to.issues.some((issue) => this.sameIssue(issue, previousIssue))) {
+        changes.push(this.change(from, to, 'uncertain', previousIssue.id, `Not re-observed: ${previousIssue.title}`, `${previousIssue.title} was previously observed but was not re-observed in the current scan. A later verification step must confirm whether it is resolved.`, Math.min(previousIssue.confidence, 0.5), previousIssue.evidenceIds))
+      }
     }
 
     return { id: `diff_${crypto.randomUUID()}`, environmentId: from.environmentId, fromStateId: from.stateId, toStateId: to.stateId, createdAt: this.now().toISOString(), changes, summary: changes.length ? `${changes.length} environmental change(s) detected.` : 'No material environmental changes detected.' }

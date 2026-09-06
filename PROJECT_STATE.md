@@ -14,116 +14,108 @@ Hackathon track: **Best Apps and Agents**.
 
 ## Current phase
 
-**Phase 1 — Freeze the MVP contract: COMPLETE**
+**Phase 2 — Core architecture cleanup: COMPLETE**
 
-Phase 1 locked:
+Phase 2 established replaceable application boundaries without rewriting the working product:
 
-- one primary user: facility / operations manager;
-- one reference environment: controlled office;
-- one three-scan demo: Scan A baseline → Scan B diff → Scan C verification;
-- seven required environmental questions;
-- required Reality Diff vocabulary including `uncertain`;
-- evidence/uncertainty rules;
-- explicit supported and unsupported scope;
-- implementation acceptance criteria and a truthful current-capability audit.
-
-Canonical Phase 1 files:
-
-- `Knowledge/Product/mvp.md`
-- `Knowledge/Product/acceptance-criteria.md`
-- `Knowledge/Technical/phase-1-implementation-audit.md`
-- `Knowledge/Decisions/DEC-002-mvp-scope.md`
+- `EnvironmentalMemoryRepository`
+- `InMemoryEnvironmentalMemoryRepository`
+- repository-backed `ScanPipeline`
+- repository-backed `AskBuildingService`
+- `DiffEngine`
+- `VerificationService` contract
+- `uncertain` diff vocabulary and safer absence semantics
 
 ## Next phase
 
-**Phase 2 — Core architecture cleanup**
+**Phase 3 — Persistent Environmental Memory**
 
-Immediate objective: create the persistence/service boundaries required by the locked MVP **without rewriting working capabilities**.
+Immediate objective: implement the authoritative Supabase/Postgres-backed repository and stop depending on client-carried memory or serverless process memory.
 
-Priority work:
+Phase 3 must persist at minimum:
 
-1. introduce an `EnvironmentalMemoryRepository` interface;
-2. keep environmental state/domain behavior separated from durable storage;
-3. provide an in-memory repository implementation for development/testing;
-4. make API routes depend on repository/service contracts rather than client-supplied memory as the persistence mechanism;
-5. align the domain contract with `uncertain` change classification;
-6. define clean verification/diff service boundaries needed by later phases;
-7. keep the real Nebius adapter intact.
+- environments
+- states
+- objects
+- observations
+- conditions/issues
+- evidence
+- relations
+- diffs
+- scan sources required to reconstruct history
 
-Phase 2 exit target: clean build, explicit replaceable contracts, no duplicated environmental-memory logic in API routes, and an architecture ready for a persistent repository in Phase 3.
+The persistent repository must satisfy the existing `EnvironmentalMemoryRepository` contract.
 
 ## Verified implementation baseline
 
 ### Frontend
 
-- React + TypeScript + Vite application.
-- Primary product views use **Memory / Observe / Changes**.
-- Browser-side frame extraction is connected to the scan flow.
-- UI includes environmental memory presentation, evidence drawer, contextual Ask control, and Reality Diff view.
-- Static change examples are labelled as interaction previews when no real diff exists.
+- React + TypeScript + Vite.
+- Primary views: Memory / Observe / Changes.
+- Browser-side video frame extraction.
+- Contextual Ask and Reality Diff presentation exist.
 
-### Scan / observation pipeline
+### Scan / observation
 
-- `src/scan/video-ingestion.ts` extracts selected frames from walkthrough video.
-- `src/scan/pipeline.ts` orchestrates scan processing.
-- Current UI targets up to 12 evidence frames at reduced resolution/quality before inference.
-- `/api/scan` is the current serverless scan endpoint.
+- `src/scan/video-ingestion.ts` extracts selected frames.
+- `src/scan/pipeline.ts` now loads and saves memory through `EnvironmentalMemoryRepository`.
+- `/api/scan` remains the serverless scan endpoint.
 
 ### AI / Nebius
 
-- `src/ai/nebius.ts` contains a real Nebius Token Factory adapter.
-- Default base URL: `https://api.tokenfactory.nebius.com/v1`.
-- Default model: `nvidia/nemotron-3-nano-omni`.
-- Adapter calls `/chat/completions`, supports multimodal frame content, validates perception JSON, and supports grounded reasoning.
-- `src/ai/perception-schema.ts` validates structured perception output.
+- Real Nebius Token Factory adapter remains in `src/ai/nebius.ts`.
+- Default model remains `nvidia/nemotron-3-nano-omni` unless configured otherwise.
+- Structured perception validation remains in place.
 
 ### Environmental memory
 
-- `src/memory/store.ts` implements `EnvironmentalMemoryStore`.
-- Memories/snapshots are currently process-local `Map` structures.
-- It supports environment creation, scan ingestion, state versioning, evidence/source upsert, object/issue/relation normalization, hydration, and comparison.
-- Historical snapshots are used for diffing.
-- Durable persistence is not yet implemented.
+- `EnvironmentalMemoryStore` remains the domain/state engine.
+- It supports environment creation, scan ingestion, state versioning, evidence/source upsert, object/issue/relation normalization, hydration and comparison.
+- Persistence is now abstracted behind `EnvironmentalMemoryRepository`.
+- Phase 2 implementation is still in-memory and therefore **not durable across serverless cold starts**.
+- Client-carried serialized memory is retained only as a temporary compatibility bridge until Phase 3.
 
 ### Diff / Ask
 
-- `src/memory/diff-engine.ts` provides deterministic environmental comparison.
-- `src/memory/ask-building.ts` provides memory-grounded questions.
-- `/api/ask-building` is the reasoning endpoint.
-- Current diff behavior has a correctness gap: missing previous issues are treated as resolved without sufficient absence verification.
-- Current domain `ChangeType` does not yet include required `uncertain`.
+- `EnvironmentalDiffEngine` implements `DiffEngine`.
+- `ChangeType` now includes `uncertain`.
+- Missing prior observations no longer automatically prove removal/resolution.
+- `AskBuildingService` reads through the async memory repository.
 
 ### Action / verification
 
-- Domain types for action plans and verification already exist.
-- Full Action Planner and Verification Agent/service/UI loops are not implemented yet.
+- Domain types for action plans and verification exist.
+- `VerificationService` interface now exists.
+- Full action and verification implementations remain Phase 11/12 work.
 
-### Repository / delivery
+## Highest-priority gaps
 
-- MIT `LICENSE` exists.
-- `.env.example` exists.
-- Vercel configuration exists.
-- Build command: `tsc -b && vite build`.
-- No automated test script is currently defined.
+1. **Durable environmental memory** — Phase 3 blocker.
+2. **Historical correctness after database round-trip** — immutable snapshots must survive reload/cold start.
+3. **Observation pipeline hardening** — real phone video reliability.
+4. **Condition model quality** — observation vs interpretation semantics.
+5. **Diff v2** — stable matching and evidence-qualified absence/removal.
+6. **Action + verification** — complete the closed loop.
+7. **Automated tests/reliability** — schema, persistence, diff and failure paths.
 
 ## Locked decisions
 
-- Position SENTINEL as **persistent environmental memory + change verification**, not generic building inspection.
-- Primary user: facility / operations manager.
-- Demo environment: one office.
-- Primary hackathon track: Best Apps and Agents.
-- Avoid full metric 3D reconstruction in MVP; use semantic spatial grounding.
-- Use evidence-first safety language.
-- Keep the visual direction **Living Spatial Intelligence**.
-- Do not interpret one missed detection as proof of resolution.
+- SENTINEL = persistent environmental memory + change verification.
+- Primary user = facility / operations manager.
+- Demo environment = one controlled office.
+- Track = Best Apps and Agents.
+- No full metric 3D/BIM requirement for MVP.
+- Evidence-first safety language.
+- UI direction = Living Spatial Intelligence.
+- All durable memory access goes through `EnvironmentalMemoryRepository`.
 
-See `Knowledge/Decisions/` and `Knowledge/Product/acceptance-criteria.md`.
+See `Knowledge/Decisions/`.
 
 ## Phase roadmap
 
 - [x] Phase 0 — Repo knowledge system and project state
 - [x] Phase 1 — Freeze the MVP contract
-- [ ] Phase 2 — Core architecture cleanup
+- [x] Phase 2 — Core architecture cleanup
 - [ ] Phase 3 — Persistent Environmental Memory
 - [ ] Phase 4 — Observation pipeline hardening
 - [ ] Phase 5 — Perception quality and condition model
@@ -141,16 +133,8 @@ See `Knowledge/Decisions/` and `Knowledge/Product/acceptance-criteria.md`.
 - [ ] Phase 17 — Submission readiness
 - [ ] Phase 18 — Final demo polish
 
-## Phase 1 exit check
+## Phase 2 exit check
 
-A coding agent can now answer, without inventing scope:
-
-- exactly who the MVP serves;
-- exactly which environment is supported;
-- what Scan A, B and C must prove;
-- which seven questions the demo must support;
-- which features are explicitly forbidden from the hackathon MVP;
-- which existing capabilities are real versus partial/missing;
-- what correctness gaps must be fixed later.
+A new implementation should now be able to replace in-memory persistence with a database-backed repository without changing the scan pipeline, Ask service, or domain memory rules.
 
 **Exit condition: met.**
