@@ -7,6 +7,8 @@ on:
       - '.github/workflows/production-diagnostic.yml'
       - 'api/health.ts'
       - 'api/memory.ts'
+      - 'api/scan.ts'
+      - 'api/ask-building.ts'
       - 'server/**'
       - 'package.json'
 
@@ -28,6 +30,8 @@ jobs:
               "https://sentinel-physical-memory.vercel.app/api/health",
               "https://sentinel-physical-memory.vercel.app/api/memory",
               "https://sentinel-physical-memory.vercel.app/api/memory?environmentId=phase3-verification",
+              "https://sentinel-physical-memory.vercel.app/api/scan",
+              "https://sentinel-physical-memory.vercel.app/api/ask-building",
           ]
 
           for url in urls:
