@@ -18,10 +18,11 @@ export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapte
   private readonly timeoutMs: number
 
   constructor(options: NebiusAdapterOptions) {
-    if (!options.apiKey) throw new Error('NEBIUS_API_KEY is required')
-    this.apiKey = options.apiKey
-    this.baseUrl = (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/$/, '')
-    this.model = options.model ?? DEFAULT_MODEL
+    const apiKey = options.apiKey.trim()
+    if (!apiKey) throw new Error('NEBIUS_API_KEY is required')
+    this.apiKey = apiKey
+    this.baseUrl = (options.baseUrl?.trim() || DEFAULT_BASE_URL).replace(/\/$/, '')
+    this.model = options.model?.trim() || DEFAULT_MODEL
     this.fetchImpl = options.fetchImpl ?? fetch
     this.artifactResolver = options.artifactResolver
     this.timeoutMs = options.timeoutMs ?? 60_000
