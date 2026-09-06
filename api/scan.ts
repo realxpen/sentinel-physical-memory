@@ -9,6 +9,7 @@ type Response = { status(code: number): Response; json(body: unknown): void }
 const MAX_BODY_BYTES = 6 * 1024 * 1024
 const MAX_VIDEO_FRAMES = 12
 const ALLOWED_IMAGE_MIME = new Set(['image/jpeg', 'image/png', 'image/webp'])
+const DEFAULT_PERCEPTION_MODEL = 'openbmb/MiniCPM-V-4_5'
 
 export default async function handler(req: Request, res: Response) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'METHOD_NOT_ALLOWED', message: 'Use POST /api/scan' })
@@ -26,7 +27,7 @@ export default async function handler(req: Request, res: Response) {
 
     const adapter = createNebiusNemotronAdapter(apiKey, {
       baseUrl: process.env.NEBIUS_TOKEN_FACTORY_BASE_URL,
-      model: process.env.NEBIUS_NEMOTRON_MODEL,
+      model: process.env.NEBIUS_PERCEPTION_MODEL?.trim() || DEFAULT_PERCEPTION_MODEL,
       artifactResolver: {
         resolve: async (artifact: ScanArtifact) => ({
           artifactId: artifact.artifactId,

@@ -7,6 +7,7 @@ type Response = { status(code: number): Response; json(body: unknown): void }
 
 const MAX_BODY_BYTES = 64 * 1024
 const MAX_QUESTION_LENGTH = 1000
+const DEFAULT_REASONING_MODEL = 'nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B'
 
 export default async function handler(req: Request, res: Response) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'METHOD_NOT_ALLOWED', message: 'Use POST /api/ask-building' })
@@ -24,7 +25,7 @@ export default async function handler(req: Request, res: Response) {
 
     const adapter = createNebiusNemotronAdapter(apiKey, {
       baseUrl: process.env.NEBIUS_TOKEN_FACTORY_BASE_URL,
-      model: process.env.NEBIUS_NEMOTRON_REASONING_MODEL ?? process.env.NEBIUS_NEMOTRON_MODEL,
+      model: process.env.NEBIUS_NEMOTRON_REASONING_MODEL?.trim() || DEFAULT_REASONING_MODEL,
     })
     const service = new AskBuildingService(repository, adapter)
     const answer = await service.ask({ environmentId: body.environmentId, question: body.question, stateId: body.stateId })

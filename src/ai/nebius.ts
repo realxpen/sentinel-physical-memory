@@ -5,7 +5,7 @@ import { ModelAdapterError, type ArtifactResolver, type ModelAdapter, type Model
 
 const DEFAULT_BASE_URL = 'https://api.tokenfactory.us-central1.nebius.com/v1'
 const LEGACY_GLOBAL_BASE_URL = 'https://api.tokenfactory.nebius.com/v1'
-const DEFAULT_MODEL = 'nvidia/nemotron-3-nano-omni'
+const DEFAULT_MODEL = 'nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B'
 interface NebiusAdapterOptions { apiKey: string; baseUrl?: string; model?: string; fetchImpl?: typeof fetch; artifactResolver?: ArtifactResolver; timeoutMs?: number }
 interface ChatCompletionResponse { choices?: Array<{ message?: { content?: string | Array<{ type?: string; text?: string }> } }> }
 
