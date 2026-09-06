@@ -76,9 +76,40 @@ export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapte
     return parts
   }
 
-  private systemPrompt(role: ModelInferenceRequest['role']): string { return ['You are SENTINEL, a physical-environment perception system.', `Current role: ${role}.`, 'Return ONLY valid JSON matching the SENTINEL PerceptionResult schema.', 'Never invent an object, issue, location, measurement, or evidence source.', 'Use confidence values from 0 to 1.', 'Every observation and object must include evidenceIds that reference evidence entries.', 'Evidence must be grounded in the supplied frame artifacts.'].join(' ') }
+  private systemPrompt(role: ModelInferenceRequest['role']): string {
+    return [
+      'You are SENTINEL, a physical-environment perception system.',
+      `Current role: ${role}.`,
+      'Return ONLY one JSON object. No prose and no markdown.',
+      'The top-level JSON shape MUST be exactly: {"sourceId":"string","observations":[],"objects":[],"relations":[],"evidence":[]}.',
+      'All five top-level fields are required. Use an empty array when there are no supported items.',
+      'Observation item fields: id, environmentId, sourceId, modality (image|video|audio|document|sensor), capturedAt, label, description, confidence (0..1), optional position, evidenceIds (string[]).',
+      'Object item fields: id, environmentId, category (room|door|window|furniture|equipment|electrical|hvac|safety|signage|document|person|obstruction|other), name, optional description, optional position, optional boundingBox, optional state, confidence (0..1), firstSeenAt, lastSeenAt, evidenceIds (string[]).',
+      'Relation item fields: id, environmentId, fromId, toId, type (contains|located_in|adjacent_to|near|attached_to|part_of|has_issue|requires_action|supports), confidence (0..1), evidenceIds (string[]).',
+      'Evidence item fields: id, type (frame|image|audio|document|observation|previous_state), sourceId, capturedAt, optional frameIndex, optional timestampMs, optional uri, optional excerpt, optional boundingBox, optional confidence, description.',
+      'Never invent an object, condition, location, measurement, relationship, or evidence source.',
+      'Every observation and object must reference evidenceIds that exist in the evidence array.',
+      'Evidence must be grounded in the supplied frame artifacts.',
+    ].join(' ')
+  }
+
   private extractText(response: ChatCompletionResponse): string { const content = response.choices?.[0]?.message?.content; if (typeof content === 'string') return content; if (Array.isArray(content)) return content.map((part) => part.text ?? '').join(''); throw new ModelAdapterError({ code: 'EMPTY_MODEL_RESPONSE', message: 'Nebius returned no model content', retryable: true }) }
-  private parsePerceptionResult(text: string, request: ModelInferenceRequest): PerceptionResult { let value: unknown; try { value = JSON.parse(extractJson(text)) } catch { throw new ModelAdapterError({ code: 'INVALID_MODEL_JSON', message: 'Vision model returned invalid JSON', retryable: false }) } const sourceId = extractScanSourceId(request.prompt); if (sourceId && isRecord(value)) value = { ...value, sourceId }; try { return validatePerception(value) } catch (error) { if (error instanceof PerceptionValidationError) throw new ModelAdapterError({ code: error.code, message: error.message, retryable: false }); throw error } }
+  private parsePerceptionResult(text: string, request: ModelInferenceRequest): PerceptionResult {
+    let value: unknown
+    try { value = JSON.parse(extractJson(text)) } catch { throw new ModelAdapterError({ code: 'INVALID_MODEL_JSON', message: 'Vision model returned invalid JSON', retryable: false }) }
+    const sourceId = extractScanSourceId(request.prompt)
+    if (isRecord(value)) {
+      value = {
+        ...value,
+        ...(sourceId ? { sourceId } : {}),
+        observations: Array.isArray(value.observations) ? value.observations : [],
+        objects: Array.isArray(value.objects) ? value.objects : [],
+        relations: Array.isArray(value.relations) ? value.relations : [],
+        evidence: Array.isArray(value.evidence) ? value.evidence : [],
+      }
+    }
+    try { return validatePerception(value) } catch (error) { if (error instanceof PerceptionValidationError) throw new ModelAdapterError({ code: error.code, message: error.message, retryable: false }); throw error }
+  }
   private parseReasoningResult(text: string, request: ReasoningInferenceRequest): AskBuildingResponse { let value: unknown; try { value = JSON.parse(extractJson(text)) } catch { throw new ModelAdapterError({ code: 'INVALID_REASONING_JSON', message: 'Nemotron returned invalid reasoning JSON', retryable: false }) }
     if (!isRecord(value) || typeof value.answer !== 'string' || typeof value.confidence !== 'number' || typeof value.stateId !== 'string' || !isStringArray(value.evidenceIds) || !isStringArray(value.relatedObjectIds) || !isStringArray(value.relatedIssueIds)) throw new ModelAdapterError({ code: 'INVALID_REASONING_SCHEMA', message: 'Nemotron reasoning response did not match the AskBuildingResponse schema', retryable: false })
     if (value.stateId !== request.request.stateId && !request.context.includes(`STATE_ID ${value.stateId}`)) throw new ModelAdapterError({ code: 'INVALID_REASONING_STATE', message: 'Reasoning response referenced a state outside the supplied context', retryable: false })
