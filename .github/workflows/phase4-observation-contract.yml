@@ -1,0 +1,139 @@
+name: Phase 4 Observation Contract
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'api/scan.ts'
+      - 'src/scan/video-ingestion.ts'
+      - '.github/workflows/phase4-observation-contract.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-observation-contract:
+    runs-on: ubuntu-latest
+    env:
+      SENTINEL_BASE_URL: https://sentinel-physical-memory.vercel.app
+    steps:
+      - name: Verify Phase 4 production video contract
+        run: |
+          python - <<'PY'
+          import base64
+          import json
+          import os
+          import struct
+          import time
+          import urllib.error
+          import urllib.request
+          import zlib
+
+          base = os.environ['SENTINEL_BASE_URL'].rstrip('/')
+
+          def png_data_url(rect_x, tone):
+              width = 96
+              height = 96
+              raw = bytearray()
+              for y in range(height):
+                  raw.append(0)
+                  for x in range(width):
+                      if rect_x <= x < min(width, rect_x + 22) and 26 <= y < 70:
+                          raw.extend((tone, 48, 48))
+                      else:
+                          raw.extend((238, 239, 235))
+
+              def chunk(kind, data):
+                  return struct.pack('>I', len(data)) + kind + data + struct.pack('>I', zlib.crc32(kind + data) & 0xffffffff)
+
+              payload = (
+                  b'\x89PNG\r\n\x1a\n'
+                  + chunk(b'IHDR', struct.pack('>IIBBBBB', width, height, 8, 2, 0, 0, 0))
+                  + chunk(b'IDAT', zlib.compress(bytes(raw), 9))
+                  + chunk(b'IEND', b'')
+              )
+              return 'data:image/png;base64,' + base64.b64encode(payload).decode('ascii')
+
+          def request_json(path, payload=None):
+              body = None if payload is None else json.dumps(payload).encode('utf-8')
+              headers = {'Accept': 'application/json', 'User-Agent': 'sentinel-phase4-contract'}
+              if body is not None:
+                  headers['Content-Type'] = 'application/json'
+              request = urllib.request.Request(base + path, data=body, method='POST' if body is not None else 'GET', headers=headers)
+              try:
+                  with urllib.request.urlopen(request, timeout=120) as response:
+                      text = response.read().decode('utf-8', 'replace')
+                      return response.status, json.loads(text)
+              except urllib.error.HTTPError as error:
+                  text = error.read().decode('utf-8', 'replace')
+                  try:
+                      parsed = json.loads(text)
+                  except Exception:
+                      parsed = {'raw': text}
+                  return error.code, parsed
+
+          def video_payload(mime='video/mp4', duration=30000, frame_count=8, environment='phase4-contract'):
+              frames = []
+              for index in range(frame_count):
+                  timestamp = round(index * ((duration - 500) / max(1, frame_count - 1)))
+                  frames.append({
+                      'frameId': f'frame_{index}',
+                      'timestampMs': timestamp,
+                      'uri': png_data_url(4 + index * 8, 150 + index * 10),
+                  })
+              return {
+                  'environmentId': environment,
+                  'source': {
+                      'id': 'source_phase4_contract',
+                      'environmentId': environment,
+                      'capturedAt': '2026-09-06T16:00:00.000Z',
+                  },
+                  'media': {
+                      'kind': 'video',
+                      'uri': 'https://local.sentinel/media/phase4-contract.mp4',
+                      'mimeType': mime,
+                      'durationMs': duration,
+                      'sizeBytes': 5_000_000,
+                  },
+                  'extractedFrames': frames,
+              }
+
+          print('Waiting for the hardened production contract...')
+          for attempt in range(24):
+              status, payload = request_json('/api/scan', video_payload(mime='video/avi', frame_count=0))
+              if status == 415 and payload.get('error') == 'UNSUPPORTED_MEDIA_TYPE':
+                  break
+              if attempt == 23:
+                  raise AssertionError({'status': status, 'payload': payload})
+              time.sleep(5)
+
+          status, payload = request_json('/api/scan', video_payload(mime='video/avi', frame_count=0))
+          assert status == 415 and payload.get('error') == 'UNSUPPORTED_MEDIA_TYPE', (status, payload)
+          print('Unsupported MIME rejected correctly.')
+
+          status, payload = request_json('/api/scan', video_payload(duration=2000, frame_count=0))
+          assert status == 422 and payload.get('error') == 'VIDEO_TOO_SHORT', (status, payload)
+          print('Too-short walkthrough rejected correctly.')
+
+          status, payload = request_json('/api/scan', video_payload(frame_count=1))
+          assert status == 422 and payload.get('error') == 'TOO_FEW_FRAMES', (status, payload)
+          print('Too-few evidence frames rejected correctly.')
+
+          environment = f"phase4-contract-{os.environ.get('GITHUB_RUN_ID', 'manual')}"
+          status, payload = request_json('/api/scan', video_payload(environment=environment))
+          assert status == 200, (status, payload)
+          assert payload.get('persistence') == 'neon', payload
+          assert len(payload.get('frames') or []) == 8, payload
+          assert payload.get('state', {}).get('version') == 1, payload
+          assert payload.get('environmentId') == environment, payload
+          print('PHASE 4 PRODUCTION VIDEO CONTRACT VERIFIED')
+          print(json.dumps({
+              'environmentId': environment,
+              'scanId': payload.get('scanId'),
+              'stateId': payload.get('state', {}).get('id'),
+              'frameCount': len(payload.get('frames') or []),
+              'observationCount': len(payload.get('observations') or []),
+              'persistence': payload.get('persistence'),
+          }, indent=2))
+          PY
