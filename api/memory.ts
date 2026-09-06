@@ -1,5 +1,3 @@
-import { getMemoryPersistenceMode, getRuntimeEnvironmentalMemoryRepository } from '../server/memory-repository'
-
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; query?: Record<string, string | string[] | undefined> }
 type Response = { status(code: number): Response; json(body: unknown): void; setHeader?(name: string, value: string): void }
 
@@ -11,12 +9,14 @@ export default async function handler(req: Request, res: Response) {
 
   try {
     const environmentId = queryString(req.query?.environmentId, 'environmentId')
+    const { getMemoryPersistenceMode, getRuntimeEnvironmentalMemoryRepository } = await import('../server/memory-repository')
     const repository = getRuntimeEnvironmentalMemoryRepository()
     const memory = await repository.get(environmentId)
     res.setHeader?.('Cache-Control', 'no-store')
     return res.status(200).json({ environmentId, memory: memory ?? null, persistence: getMemoryPersistenceMode() })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown memory error'
+    console.error('SENTINEL_MEMORY_READ_FAILED', error)
     return res.status(500).json({ error: 'MEMORY_READ_FAILED', message })
   }
 }
