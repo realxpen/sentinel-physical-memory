@@ -1,11 +1,12 @@
 import { createNebiusNemotronAdapter } from '../src/ai/nebius'
-import type { EnvironmentalMemory } from '../src/domain/sentinel'
-import { getRuntimeEnvironmentalMemoryRepository, reconcileRepositorySnapshot } from '../src/memory/repository'
 import type { ScanArtifact, ScanFrame, ScanInput } from '../src/scan/types'
 import { ScanPipeline } from '../src/scan/pipeline'
+import { getMemoryPersistenceMode, getRuntimeEnvironmentalMemoryRepository } from './_memory-repository'
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown }
 type Response = { status(code: number): Response; json(body: unknown): void }
+
+type IncomingFrame = { frameId: string; timestampMs: number; uri: string }
 
 const MAX_BODY_BYTES = 6 * 1024 * 1024
 const MAX_VIDEO_FRAMES = 12
@@ -24,9 +25,6 @@ export default async function handler(req: Request, res: Response) {
     if (rawSize > MAX_BODY_BYTES) return res.status(413).json({ error: 'PAYLOAD_TOO_LARGE', message: 'Scan request exceeds 6 MB' })
     const input = parseScanInput(req.body)
     const repository = getRuntimeEnvironmentalMemoryRepository()
-
-    // Transitional Phase 2 bridge only. Phase 3 removes client-carried memory once durable storage is live.
-    await reconcileRepositorySnapshot(repository, parseOptionalMemory(req.body, input.environmentId))
 
     const adapter = createNebiusNemotronAdapter(apiKey, {
       baseUrl: process.env.NEBIUS_TOKEN_FACTORY_BASE_URL,
@@ -50,6 +48,7 @@ export default async function handler(req: Request, res: Response) {
       environmentId: result.environmentId,
       sourceId: result.source.id,
       completedAt: result.completedAt,
+      persistence: getMemoryPersistenceMode(),
       frames: result.frames.map(({ frameId, timestampMs }) => ({ frameId, timestampMs })),
       artifacts: result.artifacts.filter((artifact) => artifact.kind === 'frame').map(({ artifactId, frameId }) => ({ artifactId, frameId })),
       observations: result.observations,
@@ -89,15 +88,6 @@ function parseScanInput(value: unknown): ScanInput {
     media: { kind, uri, mimeType, durationMs, sizeBytes: optionalNumber(media.sizeBytes), extractedFrames },
     options: { maxFrames: extractedFrames?.length ?? 1, sampleIntervalMs: 2000, preserveAudio: false },
   }
-}
-
-function parseOptionalMemory(value: unknown, environmentId: string): EnvironmentalMemory | undefined {
-  if (!isRecord(value) || value.memory === undefined || value.memory === null) return undefined
-  if (!isRecord(value.memory)) throw new Error('memory must be an environmental memory object')
-  const memory = value.memory as unknown as EnvironmentalMemory
-  if (!isRecord(memory.environment) || memory.environment.id !== environmentId) throw new Error('memory.environment.id must match environmentId')
-  if (!Array.isArray(memory.states) || !Array.isArray(memory.objects) || !Array.isArray(memory.issues) || !Array.isArray(memory.observations) || !Array.isArray(memory.evidence) || !Array.isArray(memory.relations) || !Array.isArray(memory.sources) || !Array.isArray(memory.diffs)) throw new Error('memory is missing required collections')
-  return memory
 }
 
 function parseFrames(value: unknown): ScanFrame[] {

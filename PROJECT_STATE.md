@@ -14,37 +14,37 @@ Hackathon track: **Best Apps and Agents**.
 
 ## Current phase
 
-**Phase 2 — Core architecture cleanup: COMPLETE**
+**Phase 3 — Persistent Environmental Memory: ENGINEERING IMPLEMENTED / REMOTE VERIFICATION PENDING**
 
-Phase 2 established replaceable application boundaries without rewriting the working product:
+Phase 3 code now provides:
 
-- `EnvironmentalMemoryRepository`
-- `InMemoryEnvironmentalMemoryRepository`
-- repository-backed `ScanPipeline`
-- repository-backed `AskBuildingService`
-- `DiffEngine`
-- `VerificationService` contract
-- `uncertain` diff vocabulary and safer absence semantics
+- `SupabaseEnvironmentalMemoryRepository`
+- server-only repository configuration in `api/_memory-repository.ts`
+- persistent/volatile runtime mode reporting
+- server-authoritative scan and Ask paths
+- `GET /api/memory` reload restoration
+- removal of client-carried memory as persistence input
+- immutable `EnvironmentalStateSnapshot` records
+- snapshot-aware historical Ask/Diff hydration
+- Supabase/Postgres schema + atomic save/read RPC design
+- server-only Supabase environment-variable contract
 
-## Next phase
+## Phase 3 activation gate
 
-**Phase 3 — Persistent Environmental Memory**
+A dedicated SENTINEL Supabase project does not yet exist in the connected account. Existing Personal OS and MONIFlow projects must not be reused for SENTINEL data.
 
-Immediate objective: implement the authoritative Supabase/Postgres-backed repository and stop depending on client-carried memory or serverless process memory.
+Before Phase 3 can be marked complete:
 
-Phase 3 must persist at minimum:
+1. provision/select a dedicated SENTINEL Supabase project;
+2. apply `infrastructure/supabase/phase-3-environmental-memory.sql`;
+3. configure Vercel `SUPABASE_URL` + `SUPABASE_SECRET_KEY`;
+4. perform Scan A and confirm persistent database memory;
+5. reload/fresh invocation and confirm `/api/memory` restores exact state/evidence/snapshot data;
+6. perform Scan B and verify State v1 remains immutable after database round-trip;
+7. verify Reality Diff uses the persisted state snapshots;
+8. run Supabase security/performance advisors and resolve actionable findings.
 
-- environments
-- states
-- objects
-- observations
-- conditions/issues
-- evidence
-- relations
-- diffs
-- scan sources required to reconstruct history
-
-The persistent repository must satisfy the existing `EnvironmentalMemoryRepository` contract.
+**Do not advance the formal project gate to Phase 4 until these checks pass.**
 
 ## Verified implementation baseline
 
@@ -54,46 +54,59 @@ The persistent repository must satisfy the existing `EnvironmentalMemoryReposito
 - Primary views: Memory / Observe / Changes.
 - Browser-side video frame extraction.
 - Contextual Ask and Reality Diff presentation exist.
+- Frontend now requests authoritative memory from `/api/memory` on mount.
+- Scan/Ask requests no longer send full environmental memory back to the server.
 
 ### Scan / observation
 
 - `src/scan/video-ingestion.ts` extracts selected frames.
-- `src/scan/pipeline.ts` now loads and saves memory through `EnvironmentalMemoryRepository`.
-- `/api/scan` remains the serverless scan endpoint.
+- `src/scan/pipeline.ts` loads and saves memory through `EnvironmentalMemoryRepository`.
+- `/api/scan` is repository-backed and reports persistence mode.
 
 ### AI / Nebius
 
 - Real Nebius Token Factory adapter remains in `src/ai/nebius.ts`.
-- Default model remains `nvidia/nemotron-3-nano-omni` unless configured otherwise.
+- Default perception model remains `nvidia/nemotron-3-nano-omni` unless configured otherwise.
 - Structured perception validation remains in place.
 
 ### Environmental memory
 
 - `EnvironmentalMemoryStore` remains the domain/state engine.
-- It supports environment creation, scan ingestion, state versioning, evidence/source upsert, object/issue/relation normalization, hydration and comparison.
-- Persistence is now abstracted behind `EnvironmentalMemoryRepository`.
-- Phase 2 implementation is still in-memory and therefore **not durable across serverless cold starts**.
-- Client-carried serialized memory is retained only as a temporary compatibility bridge until Phase 3.
+- `EnvironmentalMemoryRepository` remains the persistence contract.
+- `SupabaseEnvironmentalMemoryRepository` is the Phase 3 durable implementation.
+- `InMemoryEnvironmentalMemoryRepository` remains only a local/volatile fallback.
+- `EnvironmentalMemory` now contains immutable per-state snapshots.
+- Hydration prefers persisted snapshots, preventing later normalized object changes from rewriting old state meaning.
+
+### Supabase/Postgres
+
+- SQL definition: `infrastructure/supabase/phase-3-environmental-memory.sql`.
+- Tables live in `sentinel_private`.
+- Canonical memory JSONB plus normalized environments/states/objects/observations/issues/evidence/relations/diffs/sources are written atomically.
+- State rows persist immutable snapshot JSONB.
+- Public Data API surface is limited to locked service-role RPC functions.
+- Remote database deployment has **not yet been performed** because no dedicated SENTINEL Supabase project is connected.
 
 ### Diff / Ask
 
 - `EnvironmentalDiffEngine` implements `DiffEngine`.
-- `ChangeType` now includes `uncertain`.
-- Missing prior observations no longer automatically prove removal/resolution.
+- `ChangeType` includes `uncertain`.
+- Missing prior observations do not automatically prove removal/resolution.
 - `AskBuildingService` reads through the async memory repository.
+- Historical Ask now uses the selected state's immutable snapshot.
 
 ### Action / verification
 
 - Domain types for action plans and verification exist.
-- `VerificationService` interface now exists.
+- `VerificationService` interface exists.
 - Full action and verification implementations remain Phase 11/12 work.
 
 ## Highest-priority gaps
 
-1. **Durable environmental memory** — Phase 3 blocker.
-2. **Historical correctness after database round-trip** — immutable snapshots must survive reload/cold start.
-3. **Observation pipeline hardening** — real phone video reliability.
-4. **Condition model quality** — observation vs interpretation semantics.
+1. **Activate and verify Phase 3 database persistence** — current gate blocker.
+2. **Observation pipeline hardening** — real phone video reliability.
+3. **Condition model quality** — observation vs interpretation semantics.
+4. **Environmental state history UX/query hardening**.
 5. **Diff v2** — stable matching and evidence-qualified absence/removal.
 6. **Action + verification** — complete the closed loop.
 7. **Automated tests/reliability** — schema, persistence, diff and failure paths.
@@ -108,6 +121,9 @@ The persistent repository must satisfy the existing `EnvironmentalMemoryReposito
 - Evidence-first safety language.
 - UI direction = Living Spatial Intelligence.
 - All durable memory access goes through `EnvironmentalMemoryRepository`.
+- Supabase/Postgres is the first durable store.
+- Browser-carried memory is not an authoritative persistence mechanism.
+- Historical states retain immutable snapshots.
 
 See `Knowledge/Decisions/`.
 
@@ -116,7 +132,7 @@ See `Knowledge/Decisions/`.
 - [x] Phase 0 — Repo knowledge system and project state
 - [x] Phase 1 — Freeze the MVP contract
 - [x] Phase 2 — Core architecture cleanup
-- [ ] Phase 3 — Persistent Environmental Memory
+- [ ] Phase 3 — Persistent Environmental Memory (**engineering implemented; remote verification pending**)
 - [ ] Phase 4 — Observation pipeline hardening
 - [ ] Phase 5 — Perception quality and condition model
 - [ ] Phase 6 — Environmental state history
@@ -133,8 +149,8 @@ See `Knowledge/Decisions/`.
 - [ ] Phase 17 — Submission readiness
 - [ ] Phase 18 — Final demo polish
 
-## Phase 2 exit check
+## Current exit check
 
-A new implementation should now be able to replace in-memory persistence with a database-backed repository without changing the scan pipeline, Ask service, or domain memory rules.
+The codebase can now use Supabase/Postgres as the authoritative environmental-memory repository without the browser carrying memory between requests. Immutable state snapshots are part of the persisted contract.
 
-**Exit condition: met.**
+The Phase 3 engineering exit condition is met; the **runtime durability exit condition remains pending** until a dedicated database is provisioned and verified.

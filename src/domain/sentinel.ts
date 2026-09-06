@@ -41,6 +41,7 @@ export interface SpatialObject { id: ID; environmentId: ID; category: ObjectCate
 export interface Issue { id: ID; environmentId: ID; type: IssueType; title: string; description: string; severity: IssueSeverity; status: IssueStatus; confidence: Confidence; objectIds: ID[]; roomId?: ID; evidenceIds: ID[]; firstDetectedAt: ISODateTime; lastObservedAt: ISODateTime; resolvedAt?: ISODateTime; resolutionNote?: string }
 export interface EnvironmentRelation { id: ID; environmentId: ID; fromId: ID; toId: ID; type: RelationType; confidence: Confidence; evidenceIds: ID[] }
 export interface EnvironmentalState { id: ID; environmentId: ID; capturedAt: ISODateTime; sourceIds: ID[]; objectIds: ID[]; issueIds: ID[]; relationIds: ID[]; summary: string; version: number }
+export interface EnvironmentalStateSnapshot { stateId: ID; environmentId: ID; objects: SpatialObject[]; issues: Issue[] }
 export interface Environment { id: ID; name: string; type: EnvironmentType; description?: string; createdAt: ISODateTime; updatedAt: ISODateTime; currentStateId?: ID; stateIds: ID[]; roomIds: ID[]; objectIds: ID[]; issueIds: ID[] }
 export interface Change { id: ID; environmentId: ID; fromStateId: ID; toStateId: ID; type: ChangeType; entityId?: ID; title: string; description: string; confidence: Confidence; evidenceIds: ID[] }
 export interface EnvironmentalDiff { id: ID; environmentId: ID; fromStateId: ID; toStateId: ID; createdAt: ISODateTime; changes: Change[]; summary: string }
@@ -49,7 +50,7 @@ export interface MoneyEstimate { currency: string; min: number; max: number; bas
 export interface ActionPlan { id: ID; environmentId: ID; createdAt: ISODateTime; goal: string; steps: ActionStep[]; rationale: string; evidenceIds: ID[] }
 export interface VerificationResult { id: ID; environmentId: ID; actionPlanId?: ID; verifiedAt: ISODateTime; status: 'passed' | 'partial' | 'failed' | 'inconclusive'; resolvedIssueIds: ID[]; remainingIssueIds: ID[]; newIssueIds: ID[]; changes: Change[]; summary: string; evidenceIds: ID[] }
 export interface ScanSource { id: ID; environmentId: ID; modality: ObservationModality; uri: string; capturedAt: ISODateTime; durationMs?: number; metadata?: Record<string, string | number | boolean> }
-export interface EnvironmentalMemory { environment: Environment; states: EnvironmentalState[]; objects: SpatialObject[]; issues: Issue[]; observations: Observation[]; evidence: Evidence[]; relations: EnvironmentRelation[]; sources: ScanSource[]; diffs: EnvironmentalDiff[] }
+export interface EnvironmentalMemory { environment: Environment; states: EnvironmentalState[]; snapshots: EnvironmentalStateSnapshot[]; objects: SpatialObject[]; issues: Issue[]; observations: Observation[]; evidence: Evidence[]; relations: EnvironmentRelation[]; sources: ScanSource[]; diffs: EnvironmentalDiff[] }
 export interface AskBuildingRequest { environmentId: ID; question: string; stateId?: ID }
 export interface AskBuildingResponse { answer: string; confidence: Confidence; stateId: ID; evidenceIds: ID[]; relatedObjectIds: ID[]; relatedIssueIds: ID[] }
 export interface PerceptionResult { sourceId: ID; observations: Observation[]; objects: SpatialObject[]; relations: EnvironmentRelation[]; evidence: Evidence[] }

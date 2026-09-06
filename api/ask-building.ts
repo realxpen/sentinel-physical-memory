@@ -1,12 +1,11 @@
 import { createNebiusNemotronAdapter } from '../src/ai/nebius'
 import { AskBuildingService } from '../src/memory/ask-building'
-import type { EnvironmentalMemory } from '../src/domain/sentinel'
-import { getRuntimeEnvironmentalMemoryRepository, reconcileRepositorySnapshot } from '../src/memory/repository'
+import { getMemoryPersistenceMode, getRuntimeEnvironmentalMemoryRepository } from './_memory-repository'
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown }
 type Response = { status(code: number): Response; json(body: unknown): void }
 
-const MAX_BODY_BYTES = 2 * 1024 * 1024
+const MAX_BODY_BYTES = 64 * 1024
 const MAX_QUESTION_LENGTH = 1000
 
 export default async function handler(req: Request, res: Response) {
@@ -19,12 +18,9 @@ export default async function handler(req: Request, res: Response) {
 
   try {
     const rawSize = Buffer.byteLength(JSON.stringify(req.body ?? {}), 'utf8')
-    if (rawSize > MAX_BODY_BYTES) return res.status(413).json({ error: 'PAYLOAD_TOO_LARGE', message: 'Ask request exceeds 2 MB' })
+    if (rawSize > MAX_BODY_BYTES) return res.status(413).json({ error: 'PAYLOAD_TOO_LARGE', message: 'Ask request exceeds 64 KB' })
     const body = parseBody(req.body)
     const repository = getRuntimeEnvironmentalMemoryRepository()
-
-    // Transitional Phase 2 bridge only. Durable repository becomes authoritative in Phase 3.
-    await reconcileRepositorySnapshot(repository, body.memory)
 
     const adapter = createNebiusNemotronAdapter(apiKey, {
       baseUrl: process.env.NEBIUS_TOKEN_FACTORY_BASE_URL,
@@ -32,28 +28,19 @@ export default async function handler(req: Request, res: Response) {
     })
     const service = new AskBuildingService(repository, adapter)
     const answer = await service.ask({ environmentId: body.environmentId, question: body.question, stateId: body.stateId })
-    return res.status(200).json(answer)
+    return res.status(200).json({ ...answer, persistence: getMemoryPersistenceMode() })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown ask error'
     return res.status(400).json({ error: 'ASK_FAILED', message })
   }
 }
 
-function parseBody(value: unknown): { environmentId: string; question: string; stateId?: string; memory?: EnvironmentalMemory } {
+function parseBody(value: unknown): { environmentId: string; question: string; stateId?: string } {
   if (!isRecord(value)) throw new Error('Request body must be a JSON object')
   const environmentId = requiredString(value.environmentId, 'environmentId')
   const question = requiredString(value.question, 'question')
   if (question.length > MAX_QUESTION_LENGTH) throw new Error(`question must be ${MAX_QUESTION_LENGTH} characters or fewer`)
-  return { environmentId, question, stateId: optionalString(value.stateId), memory: parseOptionalMemory(value.memory, environmentId) }
-}
-
-function parseOptionalMemory(value: unknown, environmentId: string): EnvironmentalMemory | undefined {
-  if (value === undefined || value === null) return undefined
-  if (!isRecord(value)) throw new Error('memory must be an environmental memory object')
-  const memory = value as unknown as EnvironmentalMemory
-  if (!isRecord(memory.environment) || memory.environment.id !== environmentId) throw new Error('memory.environment.id must match environmentId')
-  if (!Array.isArray(memory.states) || !Array.isArray(memory.objects) || !Array.isArray(memory.issues) || !Array.isArray(memory.observations) || !Array.isArray(memory.evidence) || !Array.isArray(memory.relations) || !Array.isArray(memory.sources) || !Array.isArray(memory.diffs)) throw new Error('memory is missing required collections')
-  return memory
+  return { environmentId, question, stateId: optionalString(value.stateId) }
 }
 
 function requiredString(value: unknown, path: string): string { if (typeof value !== 'string' || !value.trim()) throw new Error(`${path} must be a non-empty string`); return value.trim() }

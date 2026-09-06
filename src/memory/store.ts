@@ -1,4 +1,4 @@
-import type { EnvironmentalDiff, EnvironmentalMemory, EnvironmentalState, Environment, EnvironmentRelation, Evidence, Issue, Observation, ScanSource, SpatialObject, PerceptionResult } from '../domain/sentinel'
+import type { EnvironmentalDiff, EnvironmentalMemory, EnvironmentalState, EnvironmentalStateSnapshot, Environment, EnvironmentRelation, Evidence, Issue, Observation, ScanSource, SpatialObject, PerceptionResult } from '../domain/sentinel'
 import { EnvironmentalDiffEngine, type DiffEngine } from './diff-engine'
 
 export interface MemoryIds { state: () => string; object: () => string; issue: () => string; relation: () => string; evidence: () => string; diff: () => string }
@@ -25,21 +25,34 @@ export class EnvironmentalMemoryStore {
     this.diffEngine = deps.diffEngine ?? new EnvironmentalDiffEngine({ now: this.now })
   }
 
-  /** Restore a serialized memory and rebuild immutable historical snapshots for diffing. */
+  /** Restore serialized memory and rebuild the immutable snapshot index used by historical diff/retrieval. */
   hydrate(memory: EnvironmentalMemory): void {
     const copy = this.clone(memory)
-    this.memories.set(copy.environment.id, copy)
+    const persistedSnapshots = Array.isArray(copy.snapshots) ? copy.snapshots : []
+    const normalizedSnapshots: EnvironmentalStateSnapshot[] = []
+
     for (const state of copy.states) {
-      this.snapshots.set(state.id, {
-        objects: copy.objects.filter((item) => state.objectIds.includes(item.id)).map((item) => this.clone(item)),
-        issues: copy.issues.filter((item) => state.issueIds.includes(item.id)).map((item) => this.clone(item)),
-      })
+      const persisted = persistedSnapshots.find((snapshot) => snapshot.stateId === state.id && snapshot.environmentId === copy.environment.id)
+      const snapshot: EnvironmentalStateSnapshot = persisted
+        ? this.clone(persisted)
+        : {
+            stateId: state.id,
+            environmentId: copy.environment.id,
+            objects: copy.objects.filter((item) => state.objectIds.includes(item.id)).map((item) => this.clone(item)),
+            issues: copy.issues.filter((item) => state.issueIds.includes(item.id)).map((item) => this.clone(item)),
+          }
+
+      normalizedSnapshots.push(snapshot)
+      this.snapshots.set(state.id, { objects: this.clone(snapshot.objects), issues: this.clone(snapshot.issues) })
     }
+
+    copy.snapshots = normalizedSnapshots
+    this.memories.set(copy.environment.id, copy)
   }
 
   createEnvironment(environment: Environment): EnvironmentalMemory {
     if (this.memories.has(environment.id)) throw new Error(`Environment ${environment.id} already exists`)
-    const memory: EnvironmentalMemory = { environment: { ...environment, stateIds: [...environment.stateIds], roomIds: [...environment.roomIds], objectIds: [...environment.objectIds], issueIds: [...environment.issueIds] }, states: [], objects: [], issues: [], observations: [], evidence: [], relations: [], sources: [], diffs: [] }
+    const memory: EnvironmentalMemory = { environment: { ...environment, stateIds: [...environment.stateIds], roomIds: [...environment.roomIds], objectIds: [...environment.objectIds], issueIds: [...environment.issueIds] }, states: [], snapshots: [], objects: [], issues: [], observations: [], evidence: [], relations: [], sources: [], diffs: [] }
     this.memories.set(environment.id, memory)
     return this.clone(memory)
   }
@@ -58,7 +71,11 @@ export class EnvironmentalMemoryStore {
     memory.observations.push(...perception.observations.map((item) => ({ ...item, evidenceIds: [...item.evidenceIds] })))
     const state: EnvironmentalState = { id: this.ids.state(), environmentId, capturedAt, sourceIds: [source.id], objectIds: objects.map((item) => item.id), issueIds: issues.map((item) => item.id), relationIds: relations.map((item) => item.id), summary: summary ?? this.defaultSummary(objects, issues, relations), version: memory.states.length + 1 }
     memory.states.push(state)
-    this.snapshots.set(state.id, { objects: this.clone(objects), issues: this.clone(issues) })
+
+    const snapshot: EnvironmentalStateSnapshot = { stateId: state.id, environmentId, objects: this.clone(objects), issues: this.clone(issues) }
+    this.snapshots.set(state.id, { objects: this.clone(snapshot.objects), issues: this.clone(snapshot.issues) })
+    memory.snapshots = [...memory.snapshots.filter((item) => item.stateId !== state.id), this.clone(snapshot)]
+
     memory.environment.currentStateId = state.id
     memory.environment.stateIds.push(state.id)
     memory.environment.updatedAt = capturedAt

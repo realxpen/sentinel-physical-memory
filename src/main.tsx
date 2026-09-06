@@ -1,4 +1,4 @@
-import { StrictMode, useRef, useState, type FormEvent } from 'react'
+import { StrictMode, useEffect, useRef, useState, type FormEvent } from 'react'
 import { createRoot } from 'react-dom/client'
 import './styles.css'
 import './integration.css'
@@ -20,7 +20,15 @@ interface ScanResponse {
   memory: EnvironmentalMemory
 }
 
+interface MemoryResponse {
+  memory: EnvironmentalMemory | null
+  persistence: 'supabase' | 'volatile'
+  message?: string
+}
+
 type View = 'memory' | 'observe' | 'changes'
+
+const DEMO_ENVIRONMENT_ID = 'office-demo'
 
 const previewChanges = [
   { mark: '+', type: 'Added', detail: 'New conditions appear here after a second observation.' },
@@ -52,6 +60,27 @@ function App() {
   const isWorking = status.startsWith('Observing') || status.startsWith('Understanding') || status.startsWith('Remembering')
   const latestDiff = result?.diff ?? memory?.diffs.at(-1)
 
+  useEffect(() => {
+    let cancelled = false
+
+    async function restoreEnvironmentalMemory() {
+      try {
+        const response = await fetch(`/api/memory?environmentId=${encodeURIComponent(DEMO_ENVIRONMENT_ID)}`, { headers: { Accept: 'application/json' } })
+        const payload = await response.json() as MemoryResponse
+        if (!response.ok) throw new Error(payload.message ?? 'Unable to restore environmental memory')
+        if (!cancelled && payload.memory) {
+          setMemory(payload.memory)
+          setStatus(payload.persistence === 'supabase' ? 'Remembered environment restored' : 'Volatile environment restored')
+        }
+      } catch {
+        if (!cancelled) setStatus('Ready to observe')
+      }
+    }
+
+    void restoreEnvironmentalMemory()
+    return () => { cancelled = true }
+  }, [])
+
   async function handleVideo(file: File) {
     setError('')
     setResult(null)
@@ -69,11 +98,10 @@ function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          environmentId: 'office-demo',
-          source: { id: id('source'), environmentId: 'office-demo', capturedAt: new Date().toISOString() },
+          environmentId: DEMO_ENVIRONMENT_ID,
+          source: { id: id('source'), environmentId: DEMO_ENVIRONMENT_ID, capturedAt: new Date().toISOString() },
           media: { kind: 'video', uri: `https://local.sentinel/media/${encodeURIComponent(file.name)}`, mimeType: file.type, durationMs: ingestion.durationMs, sizeBytes: file.size },
           extractedFrames: ingestion.frames,
-          memory,
         }),
       })
 
@@ -105,7 +133,7 @@ function App() {
       const response = await fetch('/api/ask-building', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ environmentId: memory.environment.id, question: trimmed, stateId: memory.environment.currentStateId, memory }),
+        body: JSON.stringify({ environmentId: memory.environment.id, question: trimmed, stateId: memory.environment.currentStateId }),
       })
       const payload = await response.json() as AskBuildingResponse & { message?: string }
       if (!response.ok) throw new Error(payload.message ?? 'Ask request failed')

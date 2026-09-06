@@ -23,8 +23,11 @@ export class AskBuildingService {
     if (!state) throw new Error(`State ${stateId} not found`)
     const normalized = question.toLowerCase()
     const tokens = normalized.split(/[^a-z0-9]+/).filter((token) => token.length >= 3)
-    const objects = memory.objects.filter((object) => state.objectIds.includes(object.id)).sort((a, b) => this.relevance(b, tokens) - this.relevance(a, tokens))
-    const issues = memory.issues.filter((issue) => state.issueIds.includes(issue.id)).sort((a, b) => this.relevance(b, tokens) - this.relevance(a, tokens))
+    const snapshot = memory.snapshots.find((item) => item.stateId === state.id)
+    const stateObjects = snapshot?.objects ?? memory.objects.filter((object) => state.objectIds.includes(object.id))
+    const stateIssues = snapshot?.issues ?? memory.issues.filter((issue) => state.issueIds.includes(issue.id))
+    const objects = [...stateObjects].sort((a, b) => this.relevance(b, tokens) - this.relevance(a, tokens))
+    const issues = [...stateIssues].sort((a, b) => this.relevance(b, tokens) - this.relevance(a, tokens))
     const evidenceIds = new Set([...objects.flatMap((item) => item.evidenceIds), ...issues.flatMap((item) => item.evidenceIds)])
     const evidence = memory.evidence.filter((item) => evidenceIds.has(item.id))
     const previousState = memory.states.find((item) => item.version === state.version - 1)
@@ -53,9 +56,10 @@ export class AskBuildingService {
 
   private validateEvidence(answer: AskBuildingResponse, memory: EnvironmentalMemory, stateId: string): AskBuildingResponse {
     const state = memory.states.find((item) => item.id === stateId)
+    const snapshot = memory.snapshots.find((item) => item.stateId === stateId)
     const validEvidence = new Set(memory.evidence.map((item) => item.id))
-    const validObjects = new Set(memory.objects.filter((item) => state?.objectIds.includes(item.id)).map((item) => item.id))
-    const validIssues = new Set(memory.issues.filter((item) => state?.issueIds.includes(item.id)).map((item) => item.id))
+    const validObjects = new Set((snapshot?.objects ?? memory.objects.filter((item) => state?.objectIds.includes(item.id))).map((item) => item.id))
+    const validIssues = new Set((snapshot?.issues ?? memory.issues.filter((item) => state?.issueIds.includes(item.id))).map((item) => item.id))
     return { ...answer, stateId, evidenceIds: answer.evidenceIds.filter((id) => validEvidence.has(id)), relatedObjectIds: answer.relatedObjectIds.filter((id) => validObjects.has(id)), relatedIssueIds: answer.relatedIssueIds.filter((id) => validIssues.has(id)) }
   }
 }
