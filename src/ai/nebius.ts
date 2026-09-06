@@ -32,7 +32,7 @@ export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapte
   async infer(request: ModelInferenceRequest): Promise<PerceptionResult> {
     const content = await this.buildContent(request.prompt, request.artifacts)
     const response = await this.requestCompletion(this.systemPrompt(request.role), content)
-    return this.parsePerceptionResult(this.extractText(response))
+    return this.parsePerceptionResult(this.extractText(response), request)
   }
 
   async reason(request: ReasoningInferenceRequest): Promise<AskBuildingResponse> {
@@ -78,7 +78,7 @@ export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapte
 
   private systemPrompt(role: ModelInferenceRequest['role']): string { return ['You are SENTINEL, a physical-environment perception system.', `Current role: ${role}.`, 'Return ONLY valid JSON matching the SENTINEL PerceptionResult schema.', 'Never invent an object, issue, location, measurement, or evidence source.', 'Use confidence values from 0 to 1.', 'Every observation and object must include evidenceIds that reference evidence entries.', 'Evidence must be grounded in the supplied frame artifacts.'].join(' ') }
   private extractText(response: ChatCompletionResponse): string { const content = response.choices?.[0]?.message?.content; if (typeof content === 'string') return content; if (Array.isArray(content)) return content.map((part) => part.text ?? '').join(''); throw new ModelAdapterError({ code: 'EMPTY_MODEL_RESPONSE', message: 'Nebius returned no model content', retryable: true }) }
-  private parsePerceptionResult(text: string): PerceptionResult { let value: unknown; try { value = JSON.parse(extractJson(text)) } catch { throw new ModelAdapterError({ code: 'INVALID_MODEL_JSON', message: 'Nemotron returned invalid JSON', retryable: false }) } try { return validatePerception(value) } catch (error) { if (error instanceof PerceptionValidationError) throw new ModelAdapterError({ code: error.code, message: error.message, retryable: false }); throw error } }
+  private parsePerceptionResult(text: string, request: ModelInferenceRequest): PerceptionResult { let value: unknown; try { value = JSON.parse(extractJson(text)) } catch { throw new ModelAdapterError({ code: 'INVALID_MODEL_JSON', message: 'Vision model returned invalid JSON', retryable: false }) } const sourceId = extractScanSourceId(request.prompt); if (sourceId && isRecord(value)) value = { ...value, sourceId }; try { return validatePerception(value) } catch (error) { if (error instanceof PerceptionValidationError) throw new ModelAdapterError({ code: error.code, message: error.message, retryable: false }); throw error } }
   private parseReasoningResult(text: string, request: ReasoningInferenceRequest): AskBuildingResponse { let value: unknown; try { value = JSON.parse(extractJson(text)) } catch { throw new ModelAdapterError({ code: 'INVALID_REASONING_JSON', message: 'Nemotron returned invalid reasoning JSON', retryable: false }) }
     if (!isRecord(value) || typeof value.answer !== 'string' || typeof value.confidence !== 'number' || typeof value.stateId !== 'string' || !isStringArray(value.evidenceIds) || !isStringArray(value.relatedObjectIds) || !isStringArray(value.relatedIssueIds)) throw new ModelAdapterError({ code: 'INVALID_REASONING_SCHEMA', message: 'Nemotron reasoning response did not match the AskBuildingResponse schema', retryable: false })
     if (value.stateId !== request.request.stateId && !request.context.includes(`STATE_ID ${value.stateId}`)) throw new ModelAdapterError({ code: 'INVALID_REASONING_STATE', message: 'Reasoning response referenced a state outside the supplied context', retryable: false })
@@ -91,6 +91,7 @@ function resolveBaseUrl(value?: string): string {
   if (!configured || configured === LEGACY_GLOBAL_BASE_URL) return DEFAULT_BASE_URL
   return configured
 }
+function extractScanSourceId(prompt: string): string | undefined { const match = prompt.match(/The scan source id is\s+([^\n.]+)\.?/i); return match?.[1]?.trim() || undefined }
 function extractJson(text: string): string { const fenced = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i); if (fenced) return fenced[1]; const start = text.indexOf('{'); const end = text.lastIndexOf('}'); return start >= 0 && end > start ? text.slice(start, end + 1) : text.trim() }
 function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value) }
 function isStringArray(value: unknown): value is string[] { return Array.isArray(value) && value.every((item) => typeof item === 'string') }
