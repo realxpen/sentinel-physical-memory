@@ -1,95 +1,60 @@
 # Phase 3 — Persistent Environmental Memory
 
 Date: 2026-09-06
-Status: **ENGINEERING IMPLEMENTED — REMOTE DATABASE VERIFICATION PENDING**
+Status: **NEON MIGRATION IMPLEMENTED — REMOTE VERIFICATION PENDING**
 
 ## Goal
 
 Make environmental memory server-authoritative and durable across browser reloads and serverless cold starts without changing the locked SENTINEL product loop.
 
-## What Phase 3 implements in code
+## Active implementation
 
-1. `SupabaseEnvironmentalMemoryRepository` implements `EnvironmentalMemoryRepository` using server-side PostgREST RPC calls.
-2. Runtime repository selection lives in `server/memory-repository.ts`; Supabase secrets never enter browser/Vite code.
-3. `/api/scan` no longer accepts client-carried environmental memory as persistence input.
-4. `/api/ask-building` no longer accepts client-carried memory; it reads the authoritative repository.
-5. `GET /api/memory?environmentId=...` restores server memory after a reload.
-6. The React shell restores `office-demo` memory on mount and sends only scan/question inputs back to the API.
-7. `.env.example` documents `SUPABASE_URL` + modern `SUPABASE_SECRET_KEY`, with legacy service-role fallback only for compatibility.
-8. `infrastructure/supabase/phase-3-environmental-memory.sql` defines the persistent schema and server-only RPC surface.
+1. `NeonEnvironmentalMemoryRepository` implements `EnvironmentalMemoryRepository` using Neon's serverless Postgres driver.
+2. Runtime repository selection lives in `server/memory-repository.ts`; database credentials never enter browser/Vite code.
+3. `DATABASE_URL` is the only active Phase 3 persistence credential contract.
+4. `/api/scan` and `/api/ask-building` read/write the server-authoritative repository.
+5. `GET /api/memory?environmentId=...` restores memory after reload.
+6. `infrastructure/neon/phase-3-environmental-memory.sql` defines the active durable schema.
+7. A least-privilege `sentinel_app` login role is used for runtime access and receives function execution only.
 
-## Historical correctness fix
+## Historical correctness
 
-Phase 3 adds `EnvironmentalStateSnapshot` to the domain and persists snapshots inside `EnvironmentalMemory`.
+`EnvironmentalMemory` contains immutable `EnvironmentalStateSnapshot` records. Normalized objects/issues may evolve, but a historical state must never inherit later values after a cold start.
 
-Normalized objects/issues may evolve as current memory changes, but a historical state must not inherit a later object's new position/status after a cold start. Each accepted state therefore retains immutable object/issue values.
-
-`EnvironmentalMemoryStore.hydrate()` prefers persisted state snapshots. A legacy reconstruction fallback remains only for old serialized memory created before Phase 3.
-
-`AskBuildingService` reads the selected state's snapshot rather than today's normalized entity values when answering a historical question.
+`EnvironmentalMemoryStore.hydrate()` prefers persisted snapshots, and historical Ask/Diff paths use those state snapshots.
 
 ## Database shape
 
-The SQL uses a non-exposed `sentinel_private` schema containing:
+The private `sentinel_private` schema contains environments, aggregate memories, states, objects, observations, issues, evidence, relations, diffs and sources. State rows include immutable `snapshot` JSONB.
 
-- `sentinel_environments`
-- `sentinel_environmental_memories`
-- `sentinel_states` with immutable `snapshot` JSONB
-- `sentinel_objects`
-- `sentinel_observations`
-- `sentinel_issues`
-- `sentinel_evidence`
-- `sentinel_relations`
-- `sentinel_diffs`
-- `sentinel_sources`
+The aggregate memory document gives deterministic reads. Normalized records preserve queryability/audit structure. A single Postgres function writes the canonical aggregate plus normalized records atomically.
 
-The aggregate memory document gives deterministic repository reads. Normalized records preserve queryability/audit structure and a clean path for later specialized retrieval. A single RPC writes both inside one database transaction.
+## Security
 
-## Database security
-
-- persistent tables live in `sentinel_private`;
+- tables stay in `sentinel_private`;
 - RLS is enabled as defense in depth;
-- public/anon/authenticated table access is revoked;
-- only `public.sentinel_get_environmental_memory(text)` and `public.sentinel_save_environmental_memory(jsonb)` are exposed as RPC functions;
-- both use `SECURITY DEFINER`, an empty `search_path`, revoked default public execution, and service-role-only execution;
-- modern `sb_secret_*` credentials remain server-only and are sent as `apikey` rather than exposed in browser code.
+- `sentinel_app` has no direct table privileges;
+- `sentinel_app` can execute only the locked get/save functions;
+- functions use `SECURITY DEFINER`, empty `search_path`, and fully qualified table references;
+- no database credential is exposed through `VITE_*`.
 
-## Runtime modes
+## Provider switch
 
-### `supabase`
+The earlier Supabase implementation is superseded because the connected free Supabase organization is actively occupied by MONIFlow and Hustle. Those projects remain untouched. DEC-005 records the provider switch to the dedicated SENTINEL Neon project while retaining the same Postgres/domain architecture.
 
-Selected only when both server variables exist:
-
-- `SUPABASE_URL`
-- `SUPABASE_SECRET_KEY` (preferred) or `SUPABASE_SERVICE_ROLE_KEY` (legacy fallback)
-
-This is the required hackathon durable-memory mode.
-
-### `volatile`
-
-If no Supabase variables exist, local/server development falls back to `InMemoryEnvironmentalMemoryRepository`. API responses identify this mode. It does **not** satisfy the Phase 3 durability gate.
-
-A partially configured Supabase setup fails explicitly instead of silently falling back.
-
-## Remote activation pending
-
-The connected Supabase account has no dedicated SENTINEL project. Existing Personal OS and MONIFlow projects are intentionally untouched.
+## Remaining remote gate
 
 Before Phase 3 can be marked complete:
 
-1. provision/select a dedicated SENTINEL Supabase project;
-2. apply `infrastructure/supabase/phase-3-environmental-memory.sql`;
-3. configure Vercel `SUPABASE_URL` and `SUPABASE_SECRET_KEY`;
-4. run Scan A and confirm database persistence;
-5. reload/fresh invocation and confirm `/api/memory` restores identical state/evidence/snapshots;
-6. run Scan B and confirm State v1 remains immutable after a database round-trip;
-7. confirm Reality Diff compares persisted historical snapshots;
-8. run Supabase security/performance advisors and resolve actionable findings.
-
-## Phase 3 gate
+1. apply the Neon schema to the dedicated SENTINEL database;
+2. configure Vercel `DATABASE_URL` with the `sentinel_app` connection;
+3. confirm the deployed API reports `neon` persistence;
+4. persist Scan A / equivalent environmental memory fixture;
+5. restore it through a fresh invocation;
+6. persist State v2 and prove State v1's snapshot remains unchanged;
+7. confirm the persisted diff still compares the correct state snapshots;
+8. verify the runtime role cannot directly read private tables.
 
 Engineering implementation: **MET**.
 
-Vercel build/deployment compilation: **MET**.
-
-Remote durability/cold-start verification: **PENDING dedicated SENTINEL Supabase project activation**.
+Remote durability/cold-start verification: **PENDING**.

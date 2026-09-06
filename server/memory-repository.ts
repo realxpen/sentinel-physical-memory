@@ -1,7 +1,7 @@
 import { InMemoryEnvironmentalMemoryRepository, type EnvironmentalMemoryRepository } from '../src/memory/repository'
-import { SupabaseEnvironmentalMemoryRepository } from '../src/memory/supabase-repository'
+import { NeonEnvironmentalMemoryRepository } from './neon-memory-repository'
 
-export type MemoryPersistenceMode = 'supabase' | 'volatile'
+export type MemoryPersistenceMode = 'neon' | 'volatile'
 
 let repository: EnvironmentalMemoryRepository | undefined
 let persistenceMode: MemoryPersistenceMode | undefined
@@ -9,16 +9,11 @@ let persistenceMode: MemoryPersistenceMode | undefined
 export function getRuntimeEnvironmentalMemoryRepository(): EnvironmentalMemoryRepository {
   if (repository) return repository
 
-  const url = process.env.SUPABASE_URL?.trim()
-  const secretKey = (process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY)?.trim()
+  const databaseUrl = process.env.DATABASE_URL?.trim()
 
-  if ((url && !secretKey) || (!url && secretKey)) {
-    throw new Error('Persistent memory is partially configured: set both SUPABASE_URL and SUPABASE_SECRET_KEY')
-  }
-
-  if (url && secretKey) {
-    repository = new SupabaseEnvironmentalMemoryRepository(url, secretKey)
-    persistenceMode = 'supabase'
+  if (databaseUrl) {
+    repository = new NeonEnvironmentalMemoryRepository(databaseUrl)
+    persistenceMode = 'neon'
     return repository
   }
 

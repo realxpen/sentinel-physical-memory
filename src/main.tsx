@@ -22,7 +22,7 @@ interface ScanResponse {
 
 interface MemoryResponse {
   memory: EnvironmentalMemory | null
-  persistence: 'supabase' | 'volatile'
+  persistence: 'neon' | 'volatile'
   message?: string
 }
 
@@ -70,7 +70,7 @@ function App() {
         if (!response.ok) throw new Error(payload.message ?? 'Unable to restore environmental memory')
         if (!cancelled && payload.memory) {
           setMemory(payload.memory)
-          setStatus(payload.persistence === 'supabase' ? 'Remembered environment restored' : 'Volatile environment restored')
+          setStatus(payload.persistence === 'neon' ? 'Remembered environment restored' : 'Volatile environment restored')
         }
       } catch {
         if (!cancelled) setStatus('Ready to observe')
