@@ -1,9 +1,9 @@
-import type { PerceptionResult } from '../domain/sentinel'
-import { validatePerceptionForScan } from '../ai/perception-schema'
-import type { ModelAdapter } from '../ai/model'
-import { EnvironmentalMemoryStore } from '../memory/store'
-import { InMemoryEnvironmentalMemoryRepository, type EnvironmentalMemoryRepository } from '../memory/repository'
-import type { ScanArtifact, ScanError, ScanFrame, ScanInput, ScanProgress, ScanResult } from './types'
+import type { PerceptionResult } from '../domain/sentinel.js'
+import { validatePerceptionForScan } from '../ai/perception-schema.js'
+import type { ModelAdapter } from '../ai/model.js'
+import { EnvironmentalMemoryStore } from '../memory/store.js'
+import { InMemoryEnvironmentalMemoryRepository, type EnvironmentalMemoryRepository } from '../memory/repository.js'
+import type { ScanArtifact, ScanError, ScanFrame, ScanInput, ScanProgress, ScanResult } from './types.js'
 
 export interface ScanPipelineDependencies {
   now?: () => Date

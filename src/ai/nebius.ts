@@ -1,7 +1,7 @@
-import type { AskBuildingResponse, PerceptionResult } from '../domain/sentinel'
-import type { ScanArtifact } from '../scan/types'
-import { validatePerception, PerceptionValidationError } from './perception-schema'
-import { ModelAdapterError, type ArtifactResolver, type ModelAdapter, type ModelInferenceRequest, type ReasoningInferenceRequest, type ReasoningModelAdapter } from './model'
+import type { AskBuildingResponse, PerceptionResult } from '../domain/sentinel.js'
+import type { ScanArtifact } from '../scan/types.js'
+import { validatePerception, PerceptionValidationError } from './perception-schema.js'
+import { ModelAdapterError, type ArtifactResolver, type ModelAdapter, type ModelInferenceRequest, type ReasoningInferenceRequest, type ReasoningModelAdapter } from './model.js'
 
 const DEFAULT_BASE_URL = 'https://api.tokenfactory.nebius.com/v1'
 const DEFAULT_MODEL = 'nvidia/nemotron-3-nano-omni'

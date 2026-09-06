@@ -1,5 +1,5 @@
-import type { EnvironmentalDiff, EnvironmentalMemory, EnvironmentalState, EnvironmentalStateSnapshot, Environment, EnvironmentRelation, Evidence, Issue, Observation, ScanSource, SpatialObject, PerceptionResult } from '../domain/sentinel'
-import { EnvironmentalDiffEngine, type DiffEngine } from './diff-engine'
+import type { EnvironmentalDiff, EnvironmentalMemory, EnvironmentalState, EnvironmentalStateSnapshot, Environment, EnvironmentRelation, Evidence, Issue, Observation, ScanSource, SpatialObject, PerceptionResult } from '../domain/sentinel.js'
+import { EnvironmentalDiffEngine, type DiffEngine } from './diff-engine.js'
 
 export interface MemoryIds { state: () => string; object: () => string; issue: () => string; relation: () => string; evidence: () => string; diff: () => string }
 export interface MemoryStoreDependencies { now?: () => Date; ids?: Partial<MemoryIds>; diffEngine?: DiffEngine }

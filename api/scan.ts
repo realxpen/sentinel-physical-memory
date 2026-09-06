@@ -1,7 +1,7 @@
-import { createNebiusNemotronAdapter } from '../src/ai/nebius'
-import type { ScanArtifact, ScanFrame, ScanInput } from '../src/scan/types'
-import { ScanPipeline } from '../src/scan/pipeline'
-import { getMemoryPersistenceMode, getRuntimeEnvironmentalMemoryRepository } from '../server/memory-repository'
+import { createNebiusNemotronAdapter } from '../src/ai/nebius.js'
+import type { ScanArtifact, ScanFrame, ScanInput } from '../src/scan/types.js'
+import { ScanPipeline } from '../src/scan/pipeline.js'
+import { getMemoryPersistenceMode, getRuntimeEnvironmentalMemoryRepository } from '../server/memory-repository.js'
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown }
 type Response = { status(code: number): Response; json(body: unknown): void }
