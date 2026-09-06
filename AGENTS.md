@@ -1,69 +1,97 @@
 # SENTINEL Agent Instructions
 
+## Read this first
+
+Before changing SENTINEL, read in this order:
+
+1. `AGENTS.md`
+2. `PROJECT_STATE.md`
+3. `Knowledge/Product/mvp.md`
+4. The relevant documents under `Knowledge/`
+5. Existing implementation only after the product/decision context is clear
+
+`PROJECT_STATE.md` is the live execution checkpoint. `Knowledge/` is the canonical project knowledge layer. `Raw/` preserves unprocessed source material and `Archive/` holds superseded project documents. Existing `docs/` material remains reference history until deliberately archived; when it conflicts with `Knowledge/`, the newer explicit decision in `Knowledge/Decisions/` wins.
+
 ## Product north star
 
 SENTINEL is **AI memory for the physical world**. The MVP must prove the closed loop:
 
-`SCAN → UNDERSTAND → REMEMBER → ASK → REASON → ACT → RESCAN → VERIFY`
+`OBSERVE → UNDERSTAND → REMEMBER → ASK → REASON → ACT → RESCAN → VERIFY`
+
+The central proof is not object detection. It is **persistent environmental memory + change verification**.
 
 ## Non-negotiable product constraints
 
-- Preserve the persistent environmental-memory concept.
-- Change detection and verification are first-class capabilities, not optional reporting screens.
+- Primary hackathon user: facility / operations manager.
+- Reference environment: one controlled office.
+- Persistent environmental memory is first-class.
+- Reality Diff / change detection is first-class.
+- Verification is first-class.
 - Prefer evidence-backed observations over unsupported claims.
-- Clearly distinguish observed facts, model inferences, and recommendations.
-- Do not claim professional engineering, medical, legal, or safety certification from visual inference.
-- Keep the hackathon MVP focused on a controlled office environment.
-- Do not expand into a contractor marketplace, payments, robotics, IoT fleet, or full facility-management SaaS before the core loop works.
+- Distinguish `observed`, `inferred`, and `recommended` content.
+- Do not claim professional engineering or safety certification from visual inference.
+- Do not expand into contractor marketplaces, payments, robotics, IoT fleets, full BIM, complex auth, or enterprise SaaS before the core loop is reliable.
 
 ## Locked UI/UX direction
 
-The product design direction is **Living Spatial Intelligence** and is documented in `docs/product/uiux-direction.md`. Treat that document as the design contract unless the project owner explicitly changes it.
+The design contract is **Living Spatial Intelligence**.
 
-The interface personality is **Quiet. Alive. Precise.**
+Personality: **Quiet. Alive. Precise.**
 
-Non-negotiable visual/product rules:
+- Live observation/reasoning: near-black cinematic state with restrained luminous emerald intelligence cues.
+- Memory/history: light editorial state where appropriate.
+- The environment is the visual center; avoid generic SaaS dashboard density.
+- Primary navigation: **Memory / Observe / Changes**.
+- `Ask this environment` is contextual, not a standalone chat product.
+- Prefer `Observe environment`, `Conditions`, `What changed`, `This space is now remembered`, and `Verified` when accurate.
+- Reality Diff is the signature visual experience.
+- Do not fabricate detected events for visual completeness. Static examples must be explicitly labelled as previews/demo data.
+- Preserve responsive behavior and `prefers-reduced-motion`.
 
-- Live observation and active reasoning use a near-black cinematic state with restrained luminous emerald intelligence cues.
-- Environmental memory/history uses the light editorial state where appropriate.
-- The environment is the visual center of the product; do not regress to a generic SaaS dashboard with dense metric cards and permanent chrome.
-- Primary navigation is **Memory / Observe / Changes**. `Ask this environment` is contextual and should not become a generic standalone chat page.
-- Use **Observe environment**, **Conditions**, **What changed**, and memory-oriented product language instead of generic upload/issue/report terminology when accurate.
-- **Reality Diff** is the signature change-comparison experience and verification remains first-class.
-- Recognition overlays should be restrained; avoid noisy object-detection bounding boxes unless evidence requires them.
-- Large editorial typography, negative space, cinematic environmental imagery, contextual translucent layers, and deliberate motion define the visual language.
-- Green means active intelligence, recognition, relationship or verified success; do not use neon green decoratively on every surface.
-- Preserve `prefers-reduced-motion` support.
-- Do not fabricate detected events for visual completeness. Static examples must be explicitly labelled as demo/interaction previews.
+See `Knowledge/UX/design-direction.md` and `Knowledge/UX/information-architecture.md`.
 
 ## NVIDIA / Nebius requirements
 
-The final application must make a real runtime call to Nebius Token Factory or run on Nebius AI Cloud and use at least one NVIDIA open-source model. Model usage should be central to the product architecture.
+The final submission must make a real runtime call to Nebius Token Factory or run on Nebius AI Cloud and use at least one NVIDIA open-source model.
 
-Preferred model responsibilities:
+Current implementation already contains a real Token Factory adapter. Preserve that path while improving model specialization.
 
-- Nano Omni: multimodal perception.
-- Nano: fast specialist analysis.
-- Super: orchestration and agentic reasoning.
-- Ultra: difficult long-horizon reasoning when justified.
+Preferred responsibilities:
 
-Do not fabricate model outputs in production paths. Mock/demo fixtures are allowed only where explicitly identified as demo data and must not obscure the real inference path.
+- Nemotron 3 Nano Omni: multimodal perception.
+- Nemotron 3 Nano: fast specialist analysis.
+- Nemotron 3 Super: orchestration and reasoning.
+- Nemotron 3 Ultra: difficult long-horizon reasoning only when justified.
+
+Never fabricate production model output. Mock fixtures are allowed only when explicitly labelled and must not replace the real inference path.
 
 ## Engineering principles
 
 - Build the smallest end-to-end vertical slice first.
-- Keep components replaceable and interfaces explicit.
-- Validate risky assumptions early, especially multimodal inference, state persistence, and scan-to-scan comparison.
-- Favor deterministic structured schemas for environmental state.
-- Store evidence references for important claims.
-- Avoid unnecessary dependencies.
-- Keep secrets out of source control; use environment variables and documented `.env.example` files.
-- Add tests for parsing, state comparison, confidence handling, and agent/tool contracts.
+- Keep provider, persistence, diff, and reasoning contracts replaceable.
+- Treat persistence, multimodal inference, and scan-to-scan matching as high-risk assumptions to validate early.
+- Use deterministic structured schemas for environmental state.
+- Important claims retain evidence references.
+- Historical states must be immutable snapshots.
+- API handlers orchestrate; domain modules own domain behavior.
+- Keep secrets in environment variables and maintain `.env.example`.
+- Add tests as new domain behavior is hardened.
+- Do not silently introduce dependencies or architecture that the MVP does not need.
+
+## AED knowledge protocol
+
+When meaningful project knowledge changes:
+
+`Capture → Organize → Validate → Apply → Test → Learn → Update → Reuse`
+
+Update the appropriate `Knowledge/` document and then update `PROJECT_STATE.md` if execution state, risks, decisions, or the next action changed.
 
 ## Git discipline
 
-Use small, descriptive commits. Avoid mixing unrelated changes. Every milestone should leave the repository runnable.
+Use small, descriptive commits. Do not mix unrelated implementation work. Every milestone should leave the repository runnable.
 
 ## Demo discipline
 
-The eventual demo must make the central insight obvious quickly: **SENTINEL does not just see a room; it remembers the room and knows when it changes.**
+The judge takeaway must be obvious:
+
+> **SENTINEL does not just see a room; it remembers the room and knows when it changes.**
