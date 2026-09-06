@@ -14,7 +14,7 @@ Hackathon track: **Best Apps and Agents**.
 
 ## Current phase
 
-**Phase 3 — Persistent Environmental Memory: NEON DATABASE VERIFIED / VERCEL RUNTIME ACTIVATION PENDING**
+**Phase 3 — Persistent Environmental Memory: NEON DATABASE VERIFIED / CURRENT-SOURCE VERCEL RUNTIME ACTIVATION PENDING**
 
 ## Phase 3 verified now
 
@@ -25,16 +25,36 @@ Hackathon track: **Best Apps and Agents**.
 - Canonical aggregate + normalized persistence works.
 - Immutable State A / State B snapshots survive database round-trips.
 - The database rejects an attempted rewrite of an already persisted historical snapshot.
-- The Neon migration commit passed the connected Vercel build check.
+- The Neon migration/runtime-hardening source passes GitHub CI.
 - MONIFlow and Hustle remain untouched in Supabase.
+
+## Production verification record
+
+A production diagnostic was rerun after the manual Vercel redeploy on 2026-09-06.
+
+Observed production behavior:
+
+- `/` returns HTTP 200;
+- `/api/health` returns HTTP 404 even though `api/health.ts` exists on current `main`;
+- `/api/memory` returns Vercel `FUNCTION_INVOCATION_FAILED` before the SENTINEL handler can return application JSON;
+- therefore the successful manual redeploy promoted/rebuilt an older successful deployment snapshot rather than the current runtime-hardening source tree.
+
+The current source tree already contains:
+
+- lazy Neon loading inside the server persistence path;
+- Node 22 runtime pinning;
+- `/api/health` runtime probe;
+- repaired GitHub CI configuration.
+
+A new commit is intentionally being used to force Vercel to build the current source tree instead of redeploying the stale deployment snapshot.
 
 ## Phase 3 remaining gate
 
-The connected Vercel integration available in this ChatGPT session does not expose environment-variable writes. Before Phase 3 can be marked complete:
+Before Phase 3 can be marked complete:
 
-1. add the Neon server connection as `DATABASE_URL` in the SENTINEL Vercel project (Production, and Preview if desired);
-2. redeploy or trigger a new production deployment;
-3. confirm `/api/memory?environmentId=office-demo` reports `persistence: "neon"`;
+1. deploy the current `main` source tree to Production;
+2. confirm `/api/health` returns HTTP 200 with `status: "ok"` and `persistenceConfigured: true`;
+3. confirm `/api/memory?environmentId=phase3-verification` reports `persistence: "neon"` and restores the persisted two-state verification memory;
 4. run the real Observe path for Scan A and confirm persistent database memory;
 5. reload/fresh invocation and confirm the same state/evidence/snapshots restore without client resubmission;
 6. run Scan B and verify Reality Diff uses the persisted immutable snapshots.
@@ -100,7 +120,7 @@ Security note: the API-created `sentinel_app` login inherits Neon's platform rol
 
 ## Highest-priority gaps
 
-1. **Finish Phase 3 Vercel runtime activation and real Scan A/B proof** — current gate blocker.
+1. **Finish Phase 3 current-source Vercel runtime activation and real Scan A/B proof** — current gate blocker.
 2. Observation pipeline hardening — real phone video reliability.
 3. Condition model quality — observation vs interpretation semantics.
 4. Environmental state history UX/query hardening.
@@ -127,7 +147,7 @@ Security note: the API-created `sentinel_app` login inherits Neon's platform rol
 - [x] Phase 0 — Repo knowledge system and project state
 - [x] Phase 1 — Freeze the MVP contract
 - [x] Phase 2 — Core architecture cleanup
-- [ ] Phase 3 — Persistent Environmental Memory (**database verified; Vercel runtime activation pending**)
+- [ ] Phase 3 — Persistent Environmental Memory (**database verified; current-source Vercel runtime activation pending**)
 - [ ] Phase 4 — Observation pipeline hardening
 - [ ] Phase 5 — Perception quality and condition model
 - [ ] Phase 6 — Environmental state history
@@ -150,4 +170,4 @@ Engineering implementation: **MET**.
 
 Neon database durability + historical-integrity proof: **MET**.
 
-Vercel runtime / real Scan A → reload → Scan B proof: **PENDING**.
+Current-source Vercel runtime / real Scan A → reload → Scan B proof: **PENDING**.
