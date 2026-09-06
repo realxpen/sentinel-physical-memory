@@ -27,9 +27,10 @@ export default async function handler(req: Request, res: Response) {
     const ids = data
       .map((item) => isRecord(item) && typeof item.id === 'string' ? item.id : undefined)
       .filter((id): id is string => Boolean(id))
+      .sort()
     const nemotron = ids.filter((id) => /nemotron/i.test(id))
 
-    return res.status(200).json({ baseUrl, totalModels: ids.length, nemotron })
+    return res.status(200).json({ baseUrl, totalModels: ids.length, models: ids, nemotron })
   } catch (error) {
     return res.status(500).json({ error: 'MODEL_CATALOG_FAILED', baseUrl, message: error instanceof Error ? error.message : 'Unknown error' })
   }
