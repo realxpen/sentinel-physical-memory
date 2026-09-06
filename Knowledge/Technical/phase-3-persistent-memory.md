@@ -9,8 +9,8 @@ Make environmental memory server-authoritative and durable across browser reload
 
 ## What Phase 3 implements in code
 
-1. `SupabaseEnvironmentalMemoryRepository` implements the existing `EnvironmentalMemoryRepository` contract using server-side PostgREST RPC calls.
-2. Runtime repository selection lives only in `api/_memory-repository.ts`; Supabase secrets never enter browser/Vite code.
+1. `SupabaseEnvironmentalMemoryRepository` implements `EnvironmentalMemoryRepository` using server-side PostgREST RPC calls.
+2. Runtime repository selection lives in `server/memory-repository.ts`; Supabase secrets never enter browser/Vite code.
 3. `/api/scan` no longer accepts client-carried environmental memory as persistence input.
 4. `/api/ask-building` no longer accepts client-carried memory; it reads the authoritative repository.
 5. `GET /api/memory?environmentId=...` restores server memory after a reload.
@@ -22,15 +22,11 @@ Make environmental memory server-authoritative and durable across browser reload
 
 Phase 3 adds `EnvironmentalStateSnapshot` to the domain and persists snapshots inside `EnvironmentalMemory`.
 
-Why this is required:
+Normalized objects/issues may evolve as current memory changes, but a historical state must not inherit a later object's new position/status after a cold start. Each accepted state therefore retains immutable object/issue values.
 
-- normalized `SpatialObject` / `Issue` records are allowed to evolve as current memory changes;
-- a historical state must not inherit a later object's new position/status after a cold start;
-- therefore each accepted state retains an immutable object/issue snapshot.
+`EnvironmentalMemoryStore.hydrate()` prefers persisted state snapshots. A legacy reconstruction fallback remains only for old serialized memory created before Phase 3.
 
-`EnvironmentalMemoryStore.hydrate()` now prefers persisted state snapshots. A legacy snapshot reconstruction fallback remains only for old serialized memories created before this phase.
-
-`AskBuildingService` also reads the selected state's immutable snapshot rather than blindly using today's normalized object/issue record for a historical question.
+`AskBuildingService` reads the selected state's snapshot rather than today's normalized entity values when answering a historical question.
 
 ## Database shape
 
@@ -38,7 +34,7 @@ The SQL uses a non-exposed `sentinel_private` schema containing:
 
 - `sentinel_environments`
 - `sentinel_environmental_memories`
-- `sentinel_states` (including immutable `snapshot` JSONB)
+- `sentinel_states` with immutable `snapshot` JSONB
 - `sentinel_objects`
 - `sentinel_observations`
 - `sentinel_issues`
@@ -47,17 +43,16 @@ The SQL uses a non-exposed `sentinel_private` schema containing:
 - `sentinel_diffs`
 - `sentinel_sources`
 
-The canonical aggregate memory document makes repository reads simple and deterministic. The normalized records preserve queryability, history/audit structure, and a clean path for later specialized retrieval.
+The aggregate memory document gives deterministic repository reads. Normalized records preserve queryability/audit structure and a clean path for later specialized retrieval. A single RPC writes both inside one database transaction.
 
 ## Database security
 
-- tables live in `sentinel_private`, not the exposed public data schema;
-- Row Level Security is enabled as defense in depth;
+- persistent tables live in `sentinel_private`;
+- RLS is enabled as defense in depth;
 - public/anon/authenticated table access is revoked;
 - only `public.sentinel_get_environmental_memory(text)` and `public.sentinel_save_environmental_memory(jsonb)` are exposed as RPC functions;
-- both are `SECURITY DEFINER`, use an empty `search_path`, revoke default public execution, and grant execution only to `service_role`;
-- server code supports modern `sb_secret_*` keys without sending them as Bearer JWTs;
-- no Supabase secret is exposed in `VITE_*` variables.
+- both use `SECURITY DEFINER`, an empty `search_path`, revoked default public execution, and service-role-only execution;
+- modern `sb_secret_*` credentials remain server-only and are sent as `apikey` rather than exposed in browser code.
 
 ## Runtime modes
 
@@ -72,28 +67,29 @@ This is the required hackathon durable-memory mode.
 
 ### `volatile`
 
-If no Supabase variables exist, the server uses the in-memory repository so local development can continue. API responses identify this mode; it does **not** satisfy the Phase 3 durability gate.
+If no Supabase variables exist, local/server development falls back to `InMemoryEnvironmentalMemoryRepository`. API responses identify this mode. It does **not** satisfy the Phase 3 durability gate.
 
-A partially configured Supabase setup fails explicitly rather than silently falling back.
+A partially configured Supabase setup fails explicitly instead of silently falling back.
 
-## Provisioning state
+## Remote activation pending
 
-The connected Supabase account currently contains Personal OS and MONIFlow projects, but no dedicated SENTINEL project. This phase deliberately does not write SENTINEL tables into an unrelated project.
+The connected Supabase account has no dedicated SENTINEL project. Existing Personal OS and MONIFlow projects are intentionally untouched.
 
-Therefore the following remain pending before Phase 3 can be marked fully complete:
+Before Phase 3 can be marked complete:
 
 1. provision/select a dedicated SENTINEL Supabase project;
 2. apply `infrastructure/supabase/phase-3-environmental-memory.sql`;
-3. configure `SUPABASE_URL` and `SUPABASE_SECRET_KEY` in Vercel;
-4. run Scan A and confirm database write;
-5. reload/new invocation and confirm `/api/memory` restores exactly the same state/evidence/snapshot;
-6. run Scan B and confirm historical snapshot correctness + diff after database round-trip;
-7. run Supabase security/performance advisors and fix actionable findings.
+3. configure Vercel `SUPABASE_URL` and `SUPABASE_SECRET_KEY`;
+4. run Scan A and confirm database persistence;
+5. reload/fresh invocation and confirm `/api/memory` restores identical state/evidence/snapshots;
+6. run Scan B and confirm State v1 remains immutable after a database round-trip;
+7. confirm Reality Diff compares persisted historical snapshots;
+8. run Supabase security/performance advisors and resolve actionable findings.
 
 ## Phase 3 gate
 
 Engineering implementation: **MET**.
 
-Remote durability/cold-start verification: **PENDING dedicated SENTINEL Supabase project activation**.
+Vercel build/deployment compilation: **MET**.
 
-Do not mark Phase 3 complete or start relying on database persistence in the demo until the remote verification list above passes.
+Remote durability/cold-start verification: **PENDING dedicated SENTINEL Supabase project activation**.

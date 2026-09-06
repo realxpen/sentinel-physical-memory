@@ -19,7 +19,7 @@ Hackathon track: **Best Apps and Agents**.
 Phase 3 code now provides:
 
 - `SupabaseEnvironmentalMemoryRepository`
-- server-only repository configuration in `api/_memory-repository.ts`
+- server-only repository configuration in `server/memory-repository.ts`
 - persistent/volatile runtime mode reporting
 - server-authoritative scan and Ask paths
 - `GET /api/memory` reload restoration
@@ -28,6 +28,8 @@ Phase 3 code now provides:
 - snapshot-aware historical Ask/Diff hydration
 - Supabase/Postgres schema + atomic save/read RPC design
 - server-only Supabase environment-variable contract
+
+The Phase 3 implementation builds successfully on the connected Vercel Git deployment.
 
 ## Phase 3 activation gate
 
@@ -54,7 +56,7 @@ Before Phase 3 can be marked complete:
 - Primary views: Memory / Observe / Changes.
 - Browser-side video frame extraction.
 - Contextual Ask and Reality Diff presentation exist.
-- Frontend now requests authoritative memory from `/api/memory` on mount.
+- Frontend requests authoritative memory from `/api/memory` on mount.
 - Scan/Ask requests no longer send full environmental memory back to the server.
 
 ### Scan / observation
@@ -93,7 +95,7 @@ Before Phase 3 can be marked complete:
 - `ChangeType` includes `uncertain`.
 - Missing prior observations do not automatically prove removal/resolution.
 - `AskBuildingService` reads through the async memory repository.
-- Historical Ask now uses the selected state's immutable snapshot.
+- Historical Ask uses the selected state's immutable snapshot.
 
 ### Action / verification
 
@@ -151,6 +153,6 @@ See `Knowledge/Decisions/`.
 
 ## Current exit check
 
-The codebase can now use Supabase/Postgres as the authoritative environmental-memory repository without the browser carrying memory between requests. Immutable state snapshots are part of the persisted contract.
+The codebase can use Supabase/Postgres as the authoritative environmental-memory repository without the browser carrying memory between requests. Immutable state snapshots are part of the persisted contract, and the Vercel build passes.
 
 The Phase 3 engineering exit condition is met; the **runtime durability exit condition remains pending** until a dedicated database is provisioned and verified.
