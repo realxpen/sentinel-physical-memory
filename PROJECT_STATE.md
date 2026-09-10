@@ -1,6 +1,6 @@
 # SENTINEL Project State
 
-Last updated: 2026-09-06
+Last updated: 2026-09-10
 
 ## North star
 
@@ -14,7 +14,7 @@ Hackathon track: **Best Apps and Agents**.
 
 ## Current phase
 
-**Phase 4 — Observation Pipeline Hardening: IMPLEMENTATION ACTIVE / PRODUCTION RE-VERIFICATION PENDING**
+**Phase 4 — Observation Pipeline Hardening: IMPLEMENTATION ACTIVE / PRODUCTION RE-VERIFICATION + REAL-PHONE GATE PENDING**
 
 ## Phase 3 — COMPLETE
 
@@ -60,7 +60,12 @@ Implemented now:
 - `/api/scan` request body safety budget reduced to 4 MB;
 - server-side MIME, duration, frame-count, frame-order, data-URL and per-frame size validation;
 - explicit 413 / 415 / 422 errors for malformed observation requests;
-- trusted nested scan identity normalization at the Nebius adapter boundary.
+- trusted nested scan identity normalization at the Nebius adapter boundary;
+- fresh-clone local env loading from `.env.local` / `.env` without exposing secrets;
+- `.nvmrc` pinning local development to Node 22;
+- IPv4-first DNS ordering for local runtime only, preserving deployed Vercel networking;
+- short bounded retry for transient Neon network failures;
+- health diagnostics now report local DNS result order.
 
 ### Phase 4 verification so far
 
@@ -79,10 +84,27 @@ A valid 30-second, 8-frame request reached real Nebius and exposed one provider-
 
 Commit `7afc36d` (`fix: normalize trusted scan identity for multi-frame perception`) fixes that at the trusted metadata boundary and passes GitHub CI.
 
+Fresh-clone local runtime verification on 2026-09-10:
+
+- Node `v22.23.2` — **PASS**
+- `.env.local` loaded — **PASS**
+- `/api/health`: persistence + Nebius configuration detected — **PASS**
+- direct Neon SQL succeeds with IPv4-first ordering — **PASS**
+- `/api/memory?environmentId=office-demo`: `persistence: neon` — **PASS**
+- initial local Neon `ETIMEDOUT` exposed a network-address ordering issue; repo now handles local IPv4 preference and bounded transient retries.
+
+Current hardening commits:
+
+- `7bb5615` — local IPv4-first Neon runtime
+- `7e30a08` — transient Neon network retry
+- `939916e` — DNS preference health diagnostic
+- GitHub CI on `939916e`: **PASS**
+
 Current blocker:
 
-- Vercel rejected deployment of `7afc36d` because the project hit its build-rate limit.
-- Therefore the valid 8-frame production contract has **not yet been rerun against the identity fix**.
+- Vercel is rejecting the latest builds because the project hit its build-rate limit.
+- Therefore the valid 8-frame production contract has **not yet been rerun against the latest main**.
+- The next local gate is a real 30–60 second phone walkthrough through the browser Observe flow.
 
 Canonical Phase 4 record: `Knowledge/Technical/phase-4-observation-pipeline.md`.
 
@@ -140,7 +162,7 @@ Canonical Phase 4 record: `Knowledge/Technical/phase-4-observation-pipeline.md`.
 
 Before Phase 4 can be marked complete:
 
-1. get the latest `main` containing `7afc36d` deployed successfully to production;
+1. get the latest `main` containing the identity + local runtime hardening deployed successfully to production;
 2. rerun `.github/workflows/phase4-observation-contract.yml` and pass the valid 8-frame request with HTTP 200 + `persistence: neon`;
 3. run multiple normal 30–60 second phone walkthroughs through the actual browser path;
 4. verify those videos consistently produce roughly 8–12 useful frames under the payload budget;
@@ -199,6 +221,8 @@ Phase 3: **COMPLETE**.
 Phase 4 engineering implementation: **SUBSTANTIALLY MET**.
 
 Phase 4 production rejection guards: **MET**.
+
+Phase 4 local runtime + Neon persistence path: **MET**.
 
 Phase 4 valid 8-frame production path after identity fix: **PENDING DEPLOYMENT**.
 
