@@ -1,5 +1,6 @@
 import { InMemoryEnvironmentalMemoryRepository, type EnvironmentalMemoryRepository } from '../src/memory/repository.js'
 import { NeonEnvironmentalMemoryRepository } from './neon-memory-repository.js'
+import { ensureRuntimeEnvLoaded } from './runtime-env.js'
 
 export type MemoryPersistenceMode = 'neon' | 'volatile'
 
@@ -9,6 +10,7 @@ let persistenceMode: MemoryPersistenceMode | undefined
 export function getRuntimeEnvironmentalMemoryRepository(): EnvironmentalMemoryRepository {
   if (repository) return repository
 
+  ensureRuntimeEnvLoaded()
   const databaseUrl = process.env.DATABASE_URL?.trim()
 
   if (databaseUrl) {
