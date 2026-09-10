@@ -1,7 +1,7 @@
 # Phase 4 — Observation Pipeline Hardening
 
 Date: 2026-09-10
-Status: **IMPLEMENTATION ACTIVE — PRODUCTION RE-VERIFICATION + REAL-PHONE GATE PENDING**
+Status: **IMPLEMENTATION ACTIVE — NEBIUS AUTH + PRODUCTION RE-VERIFICATION + REAL-PHONE GATE PENDING**
 
 ## Goal
 
@@ -55,7 +55,7 @@ The original phone video stays in the browser. SENTINEL sends only selected evid
 - unique frame IDs;
 - timestamp ordering;
 - timestamps must remain inside the declared video duration;
-- explicit 413 / 415 / 422 request errors for size, media and evidence-contract failures;
+- explicit 413 / 415 / 422 errors for size, media and evidence-contract failures;
 - sanitized `SENTINEL_SCAN_REJECTED` / `SENTINEL_SCAN_FAILED` terminal diagnostics for local debugging without logging credentials.
 
 These guards make malformed or oversized walkthroughs fail in SENTINEL instead of falling through to opaque platform failures.
@@ -83,34 +83,48 @@ Fresh-clone local testing on Ubuntu exposed two infrastructure/runtime issues wi
 
 The runtime now:
 
-- loads non-empty server-side values from `.env.local` / `.env` for local execution when they are not already supplied by the process;
+- makes `.env.local` authoritative for SENTINEL's local server-only runtime keys while deployed Vercel keeps platform-injected values authoritative;
 - pins local development to Node 22 with `.nvmrc`;
 - prefers IPv4-first DNS ordering only outside deployed Vercel runtimes;
-- exposes the local DNS choice in `/api/health` without exposing credentials;
+- exposes safe DB host/source diagnostics in `/api/health` without exposing credentials;
 - retries only transient Neon network failures (`ETIMEDOUT`, connection reset/refused, temporary DNS/network-unreachable failures) up to three attempts with short backoff;
 - provides `npm run dev:local`, which sources nvm when available, forces Node 22, enables IPv4-first DNS, and launches Vercel on the local port;
 - preserves production Vercel networking behavior;
 - keeps `.env.local`, `.env`, `.vercel`, `node_modules` and `dist` out of Git.
 
-Local proof on 2026-09-10:
+Local Neon proof on 2026-09-10:
 
 - Node `v22.23.2` direct test — PASS;
 - `.env.local` loaded — PASS;
 - `/api/health` reported `persistenceConfigured: true`, `nebiusConfigured: true`, and `dnsResultOrder: ipv4first` — PASS;
 - direct Neon SQL `select 1 as ok` succeeds when IPv4 is preferred — PASS;
 - `/api/memory?environmentId=office-demo` returned `persistence: neon` — PASS;
-- `memory: null` is expected for an environment with no stored state yet;
-- a first real browser Observe attempt reached the scan stage but returned `Scan request failed`; exact cause was not visible in the original UI/logs, so the server now emits structured scan diagnostics and accepts filename-derived MIME metadata for retest.
+- `memory: null` is expected for an environment with no stored state yet.
 
-Hardening commits:
+Hardening commits include:
 
 - `7bb5615` — `fix: prefer ipv4 for local neon runtime`
 - `7e30a08` — `fix: retry transient neon network timeouts`
 - `939916e` — `chore: expose local dns preference in health`
-- `7d455bc` — `chore: add pinned local vercel dev command`
-- `e0fb431` — `chore: force node 22 for local vercel runtime`
+- `7d455bc` / `e0fb431` — local Node 22 Vercel launcher work
 - `fce9e08` — `fix: harden local phone video scan diagnostics`
-- GitHub CI on `fce9e08`: **PASS**
+- `7ce7ceb` / `7b685f8` — local `.env.local` authority + safe DB diagnostics
+
+## Local Nebius authentication checkpoint
+
+A real browser phone-video Observe attempt now passes browser ingestion and reaches the Nebius inference request. The current failure is an explicit Token Factory authentication response:
+
+`401 {"detail":"Couldn't authenticate. Reason: Unable authenticate"}`
+
+This proves the remaining local failure is no longer video extraction, scan request validation, or Neon persistence. `NEBIUS_API_KEY` is present but the key currently loaded from local runtime configuration is not accepted by Token Factory.
+
+The repo now:
+
+- records the safe source of `NEBIUS_API_KEY` in `/api/health` without exposing the key;
+- exposes the configured Token Factory base URL safely;
+- provides `npm run check:nebius`, which calls Token Factory `/models` with the configured key and prints only authentication status/model count, never the credential.
+
+A valid Token Factory key must be restored/generated and placed in `.env.local` before the real-phone Phase 4 gate can continue.
 
 ## Verification status
 
@@ -123,9 +137,9 @@ Engineering commit:
 Production contract workflow:
 
 - `.github/workflows/phase4-observation-contract.yml`
-- unsupported video MIME → **415 `UNSUPPORTED_MEDIA_TYPE` — PASS**
-- too-short walkthrough → **422 `VIDEO_TOO_SHORT` — PASS**
-- too-few evidence frames → **422 `TOO_FEW_FRAMES` — PASS**
+- unsupported video MIME → 415 `UNSUPPORTED_MEDIA_TYPE` — **PASS**
+- too-short walkthrough → 422 `VIDEO_TOO_SHORT` — **PASS**
+- too-few evidence frames → 422 `TOO_FEW_FRAMES` — **PASS**
 - valid 30-second / 8-frame request → reached real Nebius, then exposed nested evidence source-identity drift.
 
 Identity fix:
@@ -139,12 +153,13 @@ Identity fix:
 
 Phase 4 must not be marked complete until all of the following are true:
 
-1. deploy the latest `main` containing the identity and runtime hardening fixes;
-2. rerun the Phase 4 production observation contract and receive HTTP 200 for the valid 8-frame walkthrough request with `persistence: neon`;
-3. rerun the real browser phone walkthrough locally using `npm run dev:local` and inspect structured scan diagnostics if it does not complete;
-4. run multiple normal 30–60 second phone walkthroughs through the actual browser ingestion path;
-5. confirm those walkthroughs consistently produce roughly 8–12 useful frames within the request budget;
-6. confirm dark, duplicate-heavy, unsupported or otherwise poor walkthroughs fail with actionable user-facing guidance rather than fabricated environmental memory.
+1. restore a valid local Token Factory API key and pass `npm run check:nebius`;
+2. rerun the real browser phone walkthrough locally and receive a successful `/api/scan` result persisted to Neon;
+3. deploy the latest `main` containing the identity and runtime hardening fixes;
+4. rerun the Phase 4 production observation contract and receive HTTP 200 for the valid 8-frame walkthrough request with `persistence: neon`;
+5. run multiple normal 30–60 second phone walkthroughs through the actual browser ingestion path;
+6. confirm those walkthroughs consistently produce roughly 8–12 useful frames within the request budget;
+7. confirm dark, duplicate-heavy, unsupported or otherwise poor walkthroughs fail with actionable user-facing guidance rather than fabricated environmental memory.
 
 ## Non-goals
 
