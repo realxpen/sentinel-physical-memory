@@ -16,6 +16,8 @@ export default function handler(req: Request, res: Response) {
     localEnvFilesLoaded: diagnostics.loadedFiles,
     databaseUrlSource: diagnostics.databaseUrlSource,
     databaseHost: diagnostics.databaseHost,
+    nebiusApiKeySource: diagnostics.nebiusApiKeySource,
+    nebiusBaseUrl: diagnostics.nebiusBaseUrl,
     dnsResultOrder: diagnostics.dnsResultOrder,
     node: process.version,
   })
