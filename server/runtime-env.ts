@@ -1,3 +1,4 @@
+import { setDefaultResultOrder } from 'node:dns'
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
@@ -5,10 +6,12 @@ export interface RuntimeEnvDiagnostics {
   loadedFiles: string[]
   databaseUrlConfigured: boolean
   nebiusApiKeyConfigured: boolean
+  dnsResultOrder: 'system' | 'ipv4first'
 }
 
 let loaded = false
 let loadedFiles: string[] = []
+let dnsResultOrder: RuntimeEnvDiagnostics['dnsResultOrder'] = 'system'
 
 /**
  * Vercel injects environment variables in deployed functions. For local clones,
@@ -16,10 +19,20 @@ let loadedFiles: string[] = []
  * behave consistently without requiring the shell to `source` secrets first.
  * Existing non-empty process variables always win; blank injected values may be
  * filled from .env.local/.env.
+ *
+ * Some local networks advertise an IPv6 route that Node can resolve but cannot
+ * actually use to reach Neon. Prefer IPv4 first only outside deployed Vercel
+ * runtimes. This preserves production networking while making local Neon access
+ * deterministic without requiring NODE_OPTIONS on every command.
  */
 export function ensureRuntimeEnvLoaded(): void {
   if (loaded) return
   loaded = true
+
+  if (!process.env.VERCEL_ENV) {
+    setDefaultResultOrder('ipv4first')
+    dnsResultOrder = 'ipv4first'
+  }
 
   const files = ['.env.local', '.env']
   for (const filename of files) {
@@ -49,6 +62,7 @@ export function getRuntimeEnvDiagnostics(): RuntimeEnvDiagnostics {
     loadedFiles: [...loadedFiles],
     databaseUrlConfigured: Boolean(process.env.DATABASE_URL?.trim()),
     nebiusApiKeyConfigured: Boolean(process.env.NEBIUS_API_KEY?.trim()),
+    dnsResultOrder,
   }
 }
 
