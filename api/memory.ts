@@ -1,3 +1,5 @@
+import '../server/runtime-env.js'
+
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; query?: Record<string, string | string[] | undefined> }
 type Response = { status(code: number): Response; json(body: unknown): void; setHeader?(name: string, value: string): void }
 
