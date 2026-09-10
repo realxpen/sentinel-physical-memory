@@ -7,18 +7,30 @@ export interface RuntimeEnvDiagnostics {
   databaseUrlConfigured: boolean
   nebiusApiKeyConfigured: boolean
   dnsResultOrder: 'system' | 'ipv4first'
+  databaseHost?: string
+  databaseUrlSource: 'process' | '.env.local' | '.env' | 'missing'
 }
+
+const LOCAL_AUTHORITATIVE_KEYS = new Set([
+  'DATABASE_URL',
+  'NEBIUS_API_KEY',
+  'NEBIUS_TOKEN_FACTORY_BASE_URL',
+  'NEBIUS_PERCEPTION_MODEL',
+  'NEBIUS_NEMOTRON_REASONING_MODEL',
+  'SENTINEL_ALLOWED_ORIGIN',
+])
 
 let loaded = false
 let loadedFiles: string[] = []
 let dnsResultOrder: RuntimeEnvDiagnostics['dnsResultOrder'] = 'system'
+let databaseUrlSource: RuntimeEnvDiagnostics['databaseUrlSource'] = 'missing'
 
 /**
- * Vercel injects environment variables in deployed functions. For local clones,
- * also load repository-local .env files so `vercel dev` and direct API execution
- * behave consistently without requiring the shell to `source` secrets first.
- * Existing non-empty process variables always win; blank injected values may be
- * filled from .env.local/.env.
+ * Deployed Vercel functions keep platform-injected environment variables as the
+ * source of truth. During local execution, repository-local .env.local is
+ * authoritative for SENTINEL's server-only runtime settings. This avoids a
+ * linked `vercel dev` project silently overriding a proven local DATABASE_URL
+ * with a stale Development/Preview value.
  *
  * Some local networks advertise an IPv6 route that Node can resolve but cannot
  * actually use to reach Neon. Prefer IPv4 first only outside deployed Vercel
@@ -29,12 +41,15 @@ export function ensureRuntimeEnvLoaded(): void {
   if (loaded) return
   loaded = true
 
-  if (!process.env.VERCEL_ENV) {
+  const isLocalRuntime = !process.env.VERCEL_ENV
+  if (isLocalRuntime) {
     setDefaultResultOrder('ipv4first')
     dnsResultOrder = 'ipv4first'
   }
 
-  const files = ['.env.local', '.env']
+  if (process.env.DATABASE_URL?.trim()) databaseUrlSource = 'process'
+
+  const files = ['.env.local', '.env'] as const
   for (const filename of files) {
     const path = resolve(process.cwd(), filename)
     if (!existsSync(path)) continue
@@ -48,8 +63,14 @@ export function ensureRuntimeEnvLoaded(): void {
       if (!match) continue
 
       const [, key, rawValue] = match
-      if (process.env[key]?.trim()) continue
-      process.env[key] = unwrapEnvValue(rawValue)
+      const value = unwrapEnvValue(rawValue)
+      if (!value.trim()) continue
+
+      const localOverride = isLocalRuntime && LOCAL_AUTHORITATIVE_KEYS.has(key)
+      if (!localOverride && process.env[key]?.trim()) continue
+
+      process.env[key] = value
+      if (key === 'DATABASE_URL') databaseUrlSource = filename
     }
 
     loadedFiles.push(filename)
@@ -63,6 +84,17 @@ export function getRuntimeEnvDiagnostics(): RuntimeEnvDiagnostics {
     databaseUrlConfigured: Boolean(process.env.DATABASE_URL?.trim()),
     nebiusApiKeyConfigured: Boolean(process.env.NEBIUS_API_KEY?.trim()),
     dnsResultOrder,
+    databaseHost: safeDatabaseHost(process.env.DATABASE_URL),
+    databaseUrlSource,
+  }
+}
+
+function safeDatabaseHost(value: string | undefined): string | undefined {
+  if (!value?.trim()) return undefined
+  try {
+    return new URL(value.trim()).hostname
+  } catch {
+    return 'invalid-postgres-url'
   }
 }
 
