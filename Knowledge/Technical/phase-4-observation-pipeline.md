@@ -51,10 +51,12 @@ The original phone video stays in the browser. SENTINEL sends only selected evid
 - per-frame data URL budget: 700 KB;
 - accepted image evidence: JPEG, PNG, WebP;
 - accepted video metadata MIME: MP4, MOV/M4V, WebM;
+- server MIME fallback from the media filename when a browser omits `File.type`;
 - unique frame IDs;
 - timestamp ordering;
 - timestamps must remain inside the declared video duration;
-- explicit 413 / 415 / 422 request errors for size, media and evidence-contract failures.
+- explicit 413 / 415 / 422 request errors for size, media and evidence-contract failures;
+- sanitized `SENTINEL_SCAN_REJECTED` / `SENTINEL_SCAN_FAILED` terminal diagnostics for local debugging without logging credentials.
 
 These guards make malformed or oversized walkthroughs fail in SENTINEL instead of falling through to opaque platform failures.
 
@@ -77,7 +79,7 @@ Semantic content remains model-generated and strictly validated: object/observat
 Fresh-clone local testing on Ubuntu exposed two infrastructure/runtime issues without changing the Phase 3 persistence contract:
 
 1. `.env.local` could exist while a local serverless process did not receive a usable `DATABASE_URL`.
-2. On one local network, Node 22 could resolve Neon through an address path that timed out even though direct IPv4 HTTPS access succeeded.
+2. On one local network, Node could resolve Neon through an address path that timed out even though direct IPv4 HTTPS access succeeded.
 
 The runtime now:
 
@@ -86,24 +88,29 @@ The runtime now:
 - prefers IPv4-first DNS ordering only outside deployed Vercel runtimes;
 - exposes the local DNS choice in `/api/health` without exposing credentials;
 - retries only transient Neon network failures (`ETIMEDOUT`, connection reset/refused, temporary DNS/network-unreachable failures) up to three attempts with short backoff;
+- provides `npm run dev:local`, which sources nvm when available, forces Node 22, enables IPv4-first DNS, and launches Vercel on the local port;
 - preserves production Vercel networking behavior;
 - keeps `.env.local`, `.env`, `.vercel`, `node_modules` and `dist` out of Git.
 
 Local proof on 2026-09-10:
 
-- Node `v22.23.2` — PASS;
+- Node `v22.23.2` direct test — PASS;
 - `.env.local` loaded — PASS;
-- `/api/health` reported `persistenceConfigured: true` and `nebiusConfigured: true` — PASS;
+- `/api/health` reported `persistenceConfigured: true`, `nebiusConfigured: true`, and `dnsResultOrder: ipv4first` — PASS;
 - direct Neon SQL `select 1 as ok` succeeds when IPv4 is preferred — PASS;
 - `/api/memory?environmentId=office-demo` returned `persistence: neon` — PASS;
-- `memory: null` is expected for an environment with no stored state yet.
+- `memory: null` is expected for an environment with no stored state yet;
+- a first real browser Observe attempt reached the scan stage but returned `Scan request failed`; exact cause was not visible in the original UI/logs, so the server now emits structured scan diagnostics and accepts filename-derived MIME metadata for retest.
 
 Hardening commits:
 
 - `7bb5615` — `fix: prefer ipv4 for local neon runtime`
 - `7e30a08` — `fix: retry transient neon network timeouts`
 - `939916e` — `chore: expose local dns preference in health`
-- GitHub CI on `939916e`: **PASS**
+- `7d455bc` — `chore: add pinned local vercel dev command`
+- `e0fb431` — `chore: force node 22 for local vercel runtime`
+- `fce9e08` — `fix: harden local phone video scan diagnostics`
+- GitHub CI on `fce9e08`: **PASS**
 
 ## Verification status
 
@@ -134,9 +141,10 @@ Phase 4 must not be marked complete until all of the following are true:
 
 1. deploy the latest `main` containing the identity and runtime hardening fixes;
 2. rerun the Phase 4 production observation contract and receive HTTP 200 for the valid 8-frame walkthrough request with `persistence: neon`;
-3. run multiple normal 30–60 second phone walkthroughs through the actual browser ingestion path;
-4. confirm those walkthroughs consistently produce roughly 8–12 useful frames within the request budget;
-5. confirm dark, duplicate-heavy, unsupported or otherwise poor walkthroughs fail with actionable user-facing guidance rather than fabricated environmental memory.
+3. rerun the real browser phone walkthrough locally using `npm run dev:local` and inspect structured scan diagnostics if it does not complete;
+4. run multiple normal 30–60 second phone walkthroughs through the actual browser ingestion path;
+5. confirm those walkthroughs consistently produce roughly 8–12 useful frames within the request budget;
+6. confirm dark, duplicate-heavy, unsupported or otherwise poor walkthroughs fail with actionable user-facing guidance rather than fabricated environmental memory.
 
 ## Non-goals
 
