@@ -9,6 +9,8 @@ export interface RuntimeEnvDiagnostics {
   dnsResultOrder: 'system' | 'ipv4first'
   databaseHost?: string
   databaseUrlSource: 'process' | '.env.local' | '.env' | 'missing'
+  nebiusApiKeySource: 'process' | '.env.local' | '.env' | 'missing'
+  nebiusBaseUrl?: string
 }
 
 const LOCAL_AUTHORITATIVE_KEYS = new Set([
@@ -24,13 +26,14 @@ let loaded = false
 let loadedFiles: string[] = []
 let dnsResultOrder: RuntimeEnvDiagnostics['dnsResultOrder'] = 'system'
 let databaseUrlSource: RuntimeEnvDiagnostics['databaseUrlSource'] = 'missing'
+let nebiusApiKeySource: RuntimeEnvDiagnostics['nebiusApiKeySource'] = 'missing'
 
 /**
  * Deployed Vercel functions keep platform-injected environment variables as the
  * source of truth. During local execution, repository-local .env.local is
  * authoritative for SENTINEL's server-only runtime settings. This avoids a
  * linked `vercel dev` project silently overriding a proven local DATABASE_URL
- * with a stale Development/Preview value.
+ * or NEBIUS_API_KEY with stale Development/Preview values.
  *
  * Some local networks advertise an IPv6 route that Node can resolve but cannot
  * actually use to reach Neon. Prefer IPv4 first only outside deployed Vercel
@@ -48,6 +51,7 @@ export function ensureRuntimeEnvLoaded(): void {
   }
 
   if (process.env.DATABASE_URL?.trim()) databaseUrlSource = 'process'
+  if (process.env.NEBIUS_API_KEY?.trim()) nebiusApiKeySource = 'process'
 
   const files = ['.env.local', '.env'] as const
   for (const filename of files) {
@@ -71,6 +75,7 @@ export function ensureRuntimeEnvLoaded(): void {
 
       process.env[key] = value
       if (key === 'DATABASE_URL') databaseUrlSource = filename
+      if (key === 'NEBIUS_API_KEY') nebiusApiKeySource = filename
     }
 
     loadedFiles.push(filename)
@@ -86,6 +91,8 @@ export function getRuntimeEnvDiagnostics(): RuntimeEnvDiagnostics {
     dnsResultOrder,
     databaseHost: safeDatabaseHost(process.env.DATABASE_URL),
     databaseUrlSource,
+    nebiusApiKeySource,
+    nebiusBaseUrl: safeHttpOrigin(process.env.NEBIUS_TOKEN_FACTORY_BASE_URL),
   }
 }
 
@@ -95,6 +102,16 @@ function safeDatabaseHost(value: string | undefined): string | undefined {
     return new URL(value.trim()).hostname
   } catch {
     return 'invalid-postgres-url'
+  }
+}
+
+function safeHttpOrigin(value: string | undefined): string | undefined {
+  if (!value?.trim()) return undefined
+  try {
+    const url = new URL(value.trim())
+    return `${url.protocol}//${url.host}${url.pathname.replace(/\/$/, '')}`
+  } catch {
+    return 'invalid-url'
   }
 }
 
