@@ -1,7 +1,7 @@
 # Phase 4 — Observation Pipeline Hardening
 
-Date: 2026-09-06
-Status: **IMPLEMENTATION ACTIVE — PRODUCTION RE-VERIFICATION PENDING**
+Date: 2026-09-10
+Status: **IMPLEMENTATION ACTIVE — PRODUCTION RE-VERIFICATION + REAL-PHONE GATE PENDING**
 
 ## Goal
 
@@ -72,6 +72,39 @@ That field is not visual inference. It is trusted scan metadata supplied by SENT
 
 Semantic content remains model-generated and strictly validated: object/observation meaning, evidence IDs, categories, confidence, relationships and environmental consistency are not fabricated to make a scan pass.
 
+## Local Neon runtime hardening
+
+Fresh-clone local testing on Ubuntu exposed two infrastructure/runtime issues without changing the Phase 3 persistence contract:
+
+1. `.env.local` could exist while a local serverless process did not receive a usable `DATABASE_URL`.
+2. On one local network, Node 22 could resolve Neon through an address path that timed out even though direct IPv4 HTTPS access succeeded.
+
+The runtime now:
+
+- loads non-empty server-side values from `.env.local` / `.env` for local execution when they are not already supplied by the process;
+- pins local development to Node 22 with `.nvmrc`;
+- prefers IPv4-first DNS ordering only outside deployed Vercel runtimes;
+- exposes the local DNS choice in `/api/health` without exposing credentials;
+- retries only transient Neon network failures (`ETIMEDOUT`, connection reset/refused, temporary DNS/network-unreachable failures) up to three attempts with short backoff;
+- preserves production Vercel networking behavior;
+- keeps `.env.local`, `.env`, `.vercel`, `node_modules` and `dist` out of Git.
+
+Local proof on 2026-09-10:
+
+- Node `v22.23.2` — PASS;
+- `.env.local` loaded — PASS;
+- `/api/health` reported `persistenceConfigured: true` and `nebiusConfigured: true` — PASS;
+- direct Neon SQL `select 1 as ok` succeeds when IPv4 is preferred — PASS;
+- `/api/memory?environmentId=office-demo` returned `persistence: neon` — PASS;
+- `memory: null` is expected for an environment with no stored state yet.
+
+Hardening commits:
+
+- `7bb5615` — `fix: prefer ipv4 for local neon runtime`
+- `7e30a08` — `fix: retry transient neon network timeouts`
+- `939916e` — `chore: expose local dns preference in health`
+- GitHub CI on `939916e`: **PASS**
+
 ## Verification status
 
 Engineering commit:
@@ -92,13 +125,14 @@ Identity fix:
 
 - `7afc36d` — `fix: normalize trusted scan identity for multi-frame perception`
 - GitHub CI: **PASS**
-- Vercel: **deployment blocked by build-rate limit**, so the production valid-video contract has not yet been rerun against this fix.
+- later commits include the identity fix and local runtime hardening;
+- Vercel is currently rejecting new builds because the project hit its build-rate limit, so the production valid-video contract has not yet been rerun against the latest main.
 
 ## Remaining Phase 4 exit gate
 
 Phase 4 must not be marked complete until all of the following are true:
 
-1. deploy `7afc36d` or a later main commit containing the identity fix;
+1. deploy the latest `main` containing the identity and runtime hardening fixes;
 2. rerun the Phase 4 production observation contract and receive HTTP 200 for the valid 8-frame walkthrough request with `persistence: neon`;
 3. run multiple normal 30–60 second phone walkthroughs through the actual browser ingestion path;
 4. confirm those walkthroughs consistently produce roughly 8–12 useful frames within the request budget;
@@ -108,7 +142,7 @@ Phase 4 must not be marked complete until all of the following are true:
 
 Phase 4 does not change:
 
-- Neon memory persistence;
+- Neon memory persistence semantics;
 - immutable state snapshots;
 - Diff semantics;
 - condition/diagnosis semantics (Phase 5);
