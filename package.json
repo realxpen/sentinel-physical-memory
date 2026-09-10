@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "vite",
     "dev:local": "bash ./scripts/dev-local.sh",
+    "check:nebius": "node ./scripts/check-nebius.mjs",
     "build": "tsc -b && vite build",
     "preview": "vite preview"
   },
