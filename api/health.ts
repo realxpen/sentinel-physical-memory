@@ -14,6 +14,7 @@ export default function handler(req: Request, res: Response) {
     nebiusConfigured: diagnostics.nebiusApiKeyConfigured,
     runtimeEnvironment: process.env.VERCEL_ENV ?? 'local',
     localEnvFilesLoaded: diagnostics.loadedFiles,
+    dnsResultOrder: diagnostics.dnsResultOrder,
     node: process.version,
   })
 }
