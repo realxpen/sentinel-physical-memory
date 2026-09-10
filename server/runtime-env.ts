@@ -14,7 +14,8 @@ let loadedFiles: string[] = []
  * Vercel injects environment variables in deployed functions. For local clones,
  * also load repository-local .env files so `vercel dev` and direct API execution
  * behave consistently without requiring the shell to `source` secrets first.
- * Existing process variables always win.
+ * Existing non-empty process variables always win; blank injected values may be
+ * filled from .env.local/.env.
  */
 export function ensureRuntimeEnvLoaded(): void {
   if (loaded) return
@@ -34,7 +35,7 @@ export function ensureRuntimeEnvLoaded(): void {
       if (!match) continue
 
       const [, key, rawValue] = match
-      if (process.env[key] !== undefined) continue
+      if (process.env[key]?.trim()) continue
       process.env[key] = unwrapEnvValue(rawValue)
     }
 
