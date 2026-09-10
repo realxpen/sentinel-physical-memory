@@ -77,9 +77,11 @@ export default async function handler(req: Request, res: Response) {
     })
   } catch (error) {
     if (error instanceof ScanRequestError) {
+      console.warn('SENTINEL_SCAN_REJECTED', { code: error.code, message: error.message })
       return res.status(error.status).json({ error: error.code, message: error.message })
     }
     const message = error instanceof Error ? error.message : 'Unknown scan error'
+    console.error('SENTINEL_SCAN_FAILED', summarizeError(error))
     return res.status(400).json({ error: 'SCAN_FAILED', message })
   }
 }
@@ -94,7 +96,7 @@ function parseScanInput(value: unknown): ScanInput {
   const kind = media.kind
   if (kind !== 'image' && kind !== 'video') throw new ScanRequestError(400, 'INVALID_MEDIA', 'media.kind must be image or video')
   const uri = requiredString(media.uri, 'media.uri')
-  const mimeType = requiredString(media.mimeType, 'media.mimeType').toLowerCase()
+  const mimeType = resolveMediaMimeType(media.mimeType, uri, kind)
   const durationMs = optionalNumber(media.durationMs)
   const sizeBytes = optionalNumber(media.sizeBytes)
 
@@ -165,6 +167,43 @@ function parseFrames(value: unknown, durationMs: number): ScanFrame[] {
 
     return { frameId, timestampMs, uri }
   })
+}
+
+function resolveMediaMimeType(value: unknown, uri: string, kind: 'image' | 'video'): string {
+  if (typeof value === 'string' && value.trim()) return value.trim().toLowerCase()
+
+  const lowerUri = decodeURIComponent(uri.split('?')[0] ?? uri).toLowerCase()
+  if (kind === 'video') {
+    if (lowerUri.endsWith('.mp4')) return 'video/mp4'
+    if (lowerUri.endsWith('.mov')) return 'video/quicktime'
+    if (lowerUri.endsWith('.m4v')) return 'video/x-m4v'
+    if (lowerUri.endsWith('.webm')) return 'video/webm'
+  }
+  if (kind === 'image') {
+    if (lowerUri.endsWith('.jpg') || lowerUri.endsWith('.jpeg')) return 'image/jpeg'
+    if (lowerUri.endsWith('.png')) return 'image/png'
+    if (lowerUri.endsWith('.webp')) return 'image/webp'
+  }
+
+  throw new ScanRequestError(400, 'INVALID_MEDIA', 'media.mimeType is required when the media filename does not identify a supported format')
+}
+
+function summarizeError(error: unknown): Record<string, unknown> {
+  if (!(error instanceof Error)) return { message: String(error) }
+  const result: Record<string, unknown> = { name: error.name, message: error.message }
+  const candidate = error as Error & { code?: unknown; cause?: unknown; sourceError?: unknown }
+  if (typeof candidate.code === 'string') result.code = candidate.code
+
+  const cause = candidate.cause ?? candidate.sourceError
+  if (cause instanceof Error) {
+    result.cause = { name: cause.name, message: cause.message, code: typeof (cause as Error & { code?: unknown }).code === 'string' ? (cause as Error & { code?: string }).code : undefined }
+  } else if (isRecord(cause)) {
+    result.cause = {
+      code: typeof cause.code === 'string' ? cause.code : undefined,
+      message: typeof cause.message === 'string' ? cause.message : undefined,
+    }
+  }
+  return result
 }
 
 function dataUrlMime(uri: string): string | undefined {
