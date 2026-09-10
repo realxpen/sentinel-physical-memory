@@ -4,6 +4,17 @@ import type { EnvironmentalMemoryRepository } from '../src/memory/repository'
 type NeonFactory = typeof import('@neondatabase/serverless')['neon']
 type NeonSql = ReturnType<NeonFactory>
 
+const MAX_NETWORK_ATTEMPTS = 3
+const RETRY_DELAYS_MS = [250, 750]
+const TRANSIENT_NETWORK_CODES = new Set([
+  'ETIMEDOUT',
+  'ECONNRESET',
+  'ECONNREFUSED',
+  'EAI_AGAIN',
+  'ENETUNREACH',
+  'EHOSTUNREACH',
+])
+
 export class NeonEnvironmentalMemoryRepository implements EnvironmentalMemoryRepository {
   private readonly connectionString: string
   private sql?: NeonSql
@@ -21,10 +32,12 @@ export class NeonEnvironmentalMemoryRepository implements EnvironmentalMemoryRep
     const normalizedEnvironmentId = environmentId.trim()
     if (!normalizedEnvironmentId) throw new Error('environmentId is required')
 
-    const sql = await this.getSql()
-    const rows = await sql`
-      select sentinel_private.sentinel_get_environmental_memory(${normalizedEnvironmentId}) as memory
-    `
+    const rows = await this.withTransientNetworkRetry('read', async () => {
+      const sql = await this.getSql()
+      return sql`
+        select sentinel_private.sentinel_get_environmental_memory(${normalizedEnvironmentId}) as memory
+      `
+    })
 
     const value = (rows[0] as { memory?: unknown } | undefined)?.memory
     if (value === null || value === undefined) return undefined
@@ -32,10 +45,12 @@ export class NeonEnvironmentalMemoryRepository implements EnvironmentalMemoryRep
   }
 
   async save(memory: EnvironmentalMemory): Promise<void> {
-    const sql = await this.getSql()
-    await sql`
-      select sentinel_private.sentinel_save_environmental_memory(${JSON.stringify(memory)}::jsonb)
-    `
+    await this.withTransientNetworkRetry('save', async () => {
+      const sql = await this.getSql()
+      await sql`
+        select sentinel_private.sentinel_save_environmental_memory(${JSON.stringify(memory)}::jsonb)
+      `
+    })
   }
 
   private async getSql(): Promise<NeonSql> {
@@ -44,6 +59,25 @@ export class NeonEnvironmentalMemoryRepository implements EnvironmentalMemoryRep
       this.sql = neon(this.connectionString)
     }
     return this.sql
+  }
+
+  private async withTransientNetworkRetry<T>(operation: 'read' | 'save', task: () => Promise<T>): Promise<T> {
+    let lastError: unknown
+
+    for (let attempt = 1; attempt <= MAX_NETWORK_ATTEMPTS; attempt += 1) {
+      try {
+        return await task()
+      } catch (error) {
+        lastError = error
+        if (!isTransientNetworkError(error) || attempt === MAX_NETWORK_ATTEMPTS) throw error
+
+        const delayMs = RETRY_DELAYS_MS[attempt - 1] ?? RETRY_DELAYS_MS[RETRY_DELAYS_MS.length - 1]
+        console.warn('SENTINEL_NEON_TRANSIENT_RETRY', { operation, attempt, delayMs })
+        await delay(delayMs)
+      }
+    }
+
+    throw lastError
   }
 
   private parseMemory(value: unknown, environmentId: string): EnvironmentalMemory {
@@ -61,6 +95,39 @@ export class NeonEnvironmentalMemoryRepository implements EnvironmentalMemoryRep
       snapshots: Array.isArray(value.snapshots) ? value.snapshots as EnvironmentalMemory['snapshots'] : [],
     }
   }
+}
+
+function isTransientNetworkError(error: unknown): boolean {
+  const seen = new Set<unknown>()
+  const queue: unknown[] = [error]
+
+  while (queue.length > 0) {
+    const current = queue.shift()
+    if (current === null || current === undefined || seen.has(current)) continue
+    seen.add(current)
+
+    if (typeof current === 'string') {
+      if (current.includes('fetch failed') || current.includes('ETIMEDOUT')) return true
+      continue
+    }
+
+    if (current instanceof Error) {
+      if (current.message.includes('fetch failed') || current.message.includes('ETIMEDOUT')) return true
+      queue.push(current.cause)
+    }
+
+    if (isRecord(current)) {
+      const code = current.code
+      if (typeof code === 'string' && TRANSIENT_NETWORK_CODES.has(code)) return true
+      queue.push(current.cause, current.sourceError)
+    }
+  }
+
+  return false
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
