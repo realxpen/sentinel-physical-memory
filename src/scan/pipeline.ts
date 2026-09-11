@@ -14,6 +14,7 @@ export interface ScanPipelineDependencies {
 }
 
 const defaultId = (prefix: string) => `${prefix}_${crypto.randomUUID()}`
+const MAX_PERCEPTION_IMAGE_FRAMES = 10
 
 export class ScanPipeline {
   private readonly now: () => Date
@@ -87,7 +88,31 @@ export class ScanPipeline {
   }
 
   private validate(input: ScanInput) { if (!input.environmentId) throw this.error('INVALID_ENVIRONMENT', 'environmentId is required'); if (!input.source?.id) throw this.error('INVALID_SOURCE', 'source.id is required'); if (!input.media.uri) throw this.error('INVALID_MEDIA', 'media.uri is required'); if (!input.media.mimeType) throw this.error('INVALID_MEDIA', 'media.mimeType is required'); if (input.media.kind === 'image' && input.media.durationMs !== undefined) throw this.error('INVALID_MEDIA', 'image media cannot declare durationMs'); if (input.media.kind === 'video' && !input.media.extractedFrames?.length) throw this.error('VIDEO_FRAMES_REQUIRED', 'Video media must provide extracted frames before perception') }
-  private sample(input: ScanInput): ScanFrame[] { if (input.media.kind === 'video' && input.media.extractedFrames?.length) { const max = Math.max(1, input.options?.maxFrames ?? input.media.extractedFrames.length); return input.media.extractedFrames.slice(0, max) } return [{ frameId: this.id('frame'), timestampMs: 0, uri: input.media.uri }] }
+
+  private sample(input: ScanInput): ScanFrame[] {
+    if (input.media.kind !== 'video' || !input.media.extractedFrames?.length) {
+      return [{ frameId: this.id('frame'), timestampMs: 0, uri: input.media.uri }]
+    }
+
+    const available = input.media.extractedFrames
+    const requestedMax = Math.max(1, input.options?.maxFrames ?? available.length)
+    const max = Math.min(requestedMax, MAX_PERCEPTION_IMAGE_FRAMES)
+    const eligible = available.slice(0, requestedMax)
+
+    if (eligible.length <= max) return eligible
+    if (max === 1) return [eligible[0]]
+
+    // Nebius currently accepts at most 10 images in one multimodal prompt.
+    // Preserve the whole walkthrough by evenly sampling across the selected
+    // browser evidence instead of simply truncating the last frames.
+    const chosenIndexes = new Set<number>()
+    for (let index = 0; index < max; index += 1) {
+      chosenIndexes.add(Math.round(index * (eligible.length - 1) / (max - 1)))
+    }
+
+    return [...chosenIndexes].sort((a, b) => a - b).map((index) => eligible[index])
+  }
+
   private createArtifacts(frames: ScanFrame[], input: ScanInput): ScanArtifact[] { const artifacts: ScanArtifact[] = frames.map((frame) => ({ artifactId: this.id('artifact'), frameId: frame.frameId, kind: 'frame', uri: frame.uri })); if (input.options?.preserveAudio && input.media.kind === 'video') artifacts.push({ artifactId: this.id('artifact'), kind: 'audio', uri: input.media.uri }); artifacts.push({ artifactId: this.id('artifact'), kind: 'metadata', uri: input.media.uri }); return artifacts }
   private emit(scanId: string, stage: ScanProgress['stage'], progress: number, message: string) { this.onProgress?.({ scanId, stage, progress, message }) }
   private error(code: string, message: string): ScanError { return Object.assign(new Error(message), { code, recoverable: false }) }
