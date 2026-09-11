@@ -64,11 +64,45 @@ export class EnvironmentalMemoryStore {
     this.assertPerceptionIdentity(environmentId, source.id, perception)
     const capturedAt = source.capturedAt || this.now().toISOString()
     this.upsertSource(memory, source)
-    this.upsertEvidence(memory, perception.evidence)
-    const objects = perception.objects.map((item) => this.upsertObject(memory, item, capturedAt))
-    const issues = this.upsertIssues(memory, perception.observations, capturedAt)
-    const relations = perception.relations.map((item) => this.upsertRelation(memory, item))
-    memory.observations.push(...perception.observations.map((item) => ({ ...item, evidenceIds: [...item.evidenceIds] })))
+
+    // Model IDs are scan-local aliases, not durable primary keys. Temporal provenance
+    // is also request-owned: a vision model cannot know when the source was captured.
+    const evidenceIdMap = new Map(perception.evidence.map((item) => [item.id, sourceScopedId(source.id, 'evidence', item.id)]))
+    const remapEvidenceIds = (ids: string[]) => ids.map((id) => evidenceIdMap.get(id) ?? id)
+
+    const evidence = perception.evidence.map((item) => ({
+      ...item,
+      id: evidenceIdMap.get(item.id) ?? sourceScopedId(source.id, 'evidence', item.id),
+      sourceId: source.id,
+      capturedAt,
+    }))
+    this.upsertEvidence(memory, evidence)
+
+    const normalizedObjects = perception.objects.map((item) => ({ ...item, evidenceIds: remapEvidenceIds(item.evidenceIds) }))
+    const objects = normalizedObjects.map((item) => this.upsertObject(memory, item, capturedAt))
+    const objectIdMap = new Map(perception.objects.map((item, index) => [item.id, objects[index].id]))
+
+    const observations = perception.observations.map((item) => ({
+      ...item,
+      id: sourceScopedId(source.id, 'observation', item.id),
+      environmentId,
+      sourceId: source.id,
+      capturedAt,
+      evidenceIds: remapEvidenceIds(item.evidenceIds),
+    }))
+    const issues = this.upsertIssues(memory, observations, capturedAt)
+
+    const normalizedRelations = perception.relations.map((item) => ({
+      ...item,
+      id: sourceScopedId(source.id, 'relation', item.id),
+      environmentId,
+      fromId: objectIdMap.get(item.fromId) ?? item.fromId,
+      toId: objectIdMap.get(item.toId) ?? item.toId,
+      evidenceIds: remapEvidenceIds(item.evidenceIds),
+    }))
+    const relations = normalizedRelations.map((item) => this.upsertRelation(memory, item))
+    memory.observations.push(...observations.map((item) => ({ ...item, evidenceIds: [...item.evidenceIds] })))
+
     const state: EnvironmentalState = { id: this.ids.state(), environmentId, capturedAt, sourceIds: [source.id], objectIds: objects.map((item) => item.id), issueIds: issues.map((item) => item.id), relationIds: relations.map((item) => item.id), summary: summary ?? this.defaultSummary(objects, issues, relations), version: memory.states.length + 1 }
     memory.states.push(state)
 
@@ -100,7 +134,11 @@ export class EnvironmentalMemoryStore {
 
   private upsertObject(memory: EnvironmentalMemory, incoming: SpatialObject, capturedAt: string): SpatialObject {
     const existing = memory.objects.find((item) => item.name.toLowerCase() === incoming.name.toLowerCase() && item.category === incoming.category)
-    if (!existing) { const created = { ...incoming, id: incoming.id || this.ids.object(), firstSeenAt: incoming.firstSeenAt || capturedAt, lastSeenAt: capturedAt, evidenceIds: [...incoming.evidenceIds] }; memory.objects.push(created); return created }
+    if (!existing) {
+      const created = { ...incoming, id: this.ids.object(), firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: [...incoming.evidenceIds] }
+      memory.objects.push(created)
+      return created
+    }
     existing.description = incoming.description ?? existing.description; existing.position = incoming.position ?? existing.position; existing.boundingBox = incoming.boundingBox ?? existing.boundingBox; existing.state = incoming.state ?? existing.state; existing.confidence = incoming.confidence; existing.lastSeenAt = capturedAt; existing.evidenceIds = unique([...existing.evidenceIds, ...incoming.evidenceIds]); return existing
   }
 
@@ -109,7 +147,7 @@ export class EnvironmentalMemoryStore {
     return detected.map((observation) => { const existing = memory.issues.find((item) => item.title.toLowerCase() === observation.label.toLowerCase()); if (existing) { existing.lastObservedAt = capturedAt; existing.confidence = Math.max(existing.confidence, observation.confidence); existing.evidenceIds = unique([...existing.evidenceIds, ...observation.evidenceIds]); return existing } const issue: Issue = { id: this.ids.issue(), environmentId: observation.environmentId, type: 'unknown', title: observation.label, description: observation.description, severity: 'medium', status: 'open', confidence: observation.confidence, objectIds: [], roomId: observation.position?.roomId, evidenceIds: [...observation.evidenceIds], firstDetectedAt: capturedAt, lastObservedAt: capturedAt }; memory.issues.push(issue); return issue })
   }
 
-  private upsertRelation(memory: EnvironmentalMemory, incoming: EnvironmentRelation): EnvironmentRelation { const existing = memory.relations.find((item) => item.fromId === incoming.fromId && item.toId === incoming.toId && item.type === incoming.type); if (existing) { existing.confidence = Math.max(existing.confidence, incoming.confidence); existing.evidenceIds = unique([...existing.evidenceIds, ...incoming.evidenceIds]); return existing } const relation = { ...incoming, id: incoming.id || this.ids.relation(), evidenceIds: [...incoming.evidenceIds] }; memory.relations.push(relation); return relation }
+  private upsertRelation(memory: EnvironmentalMemory, incoming: EnvironmentRelation): EnvironmentRelation { const existing = memory.relations.find((item) => item.fromId === incoming.fromId && item.toId === incoming.toId && item.type === incoming.type); if (existing) { existing.confidence = Math.max(existing.confidence, incoming.confidence); existing.evidenceIds = unique([...existing.evidenceIds, ...incoming.evidenceIds]); return existing } const relation = { ...incoming, id: this.ids.relation(), evidenceIds: [...incoming.evidenceIds] }; memory.relations.push(relation); return relation }
   private upsertEvidence(memory: EnvironmentalMemory, evidence: Evidence[]): void { for (const incoming of evidence) { const existing = memory.evidence.find((item) => item.id === incoming.id); if (existing) Object.assign(existing, incoming); else memory.evidence.push({ ...incoming, id: incoming.id || this.ids.evidence(), boundingBox: incoming.boundingBox ? { ...incoming.boundingBox } : undefined }) } }
   private upsertSource(memory: EnvironmentalMemory, source: ScanSource): void { if (!memory.sources.some((item) => item.id === source.id)) memory.sources.push({ ...source, metadata: source.metadata ? { ...source.metadata } : undefined }) }
   private require(environmentId: string): EnvironmentalMemory { const memory = this.memories.get(environmentId); if (!memory) throw new Error(`Environment ${environmentId} not found`); return memory }
@@ -118,4 +156,5 @@ export class EnvironmentalMemoryStore {
   private defaultSummary(objects: SpatialObject[], issues: Issue[], relations: EnvironmentRelation[]): string { return `${objects.length} object(s), ${issues.length} issue(s), ${relations.length} relation(s) recorded.` }
   private clone<T>(value: T): T { return structuredClone(value) }
 }
+function sourceScopedId(sourceId: string, kind: string, rawId: string): string { return `${sourceId}:${kind}:${rawId}` }
 function unique(values: string[]): string[] { return [...new Set(values)] }
