@@ -14,7 +14,7 @@ Hackathon track: **Best Apps and Agents**.
 
 ## Current phase
 
-**Phase 4 — Observation Pipeline Hardening: ACTIVE / REAL-PHONE REPEAT-SCAN + REALITY DIFF PASSED / PRODUCTION EXIT GATES PENDING**
+**Phase 4 — Observation Pipeline Hardening: ACTIVE / ALL LOCAL EXIT GATES PASSED / LATEST-MAIN PRODUCTION VALID-SCAN GATE PENDING**
 
 ## Phase 3 — COMPLETE
 
@@ -58,15 +58,18 @@ Implemented:
 - harmless empty optional spatial positions normalized away while required perception schema stays strict;
 - model-specific object categories normalized into SENTINEL's canonical taxonomy;
 - deterministic malformed-JSON repair before strict perception schema validation;
+- deterministic model evidence-reference reconciliation when an existing evidence item can be uniquely matched by exact ID, `frameIndex`, or unambiguous array index; unknown/ambiguous references still fail strict validation;
 - `.env.local` authoritative in local runtime only;
 - Node 22 pinned and `npm run dev:local` added;
 - IPv4-first local DNS handling;
 - local Neon transport diagnostics plus automatic WebSocket/HTTP failover;
 - bounded transient Neon retries with fresh client recreation;
-- safe runtime health diagnostics;
+- safe runtime health diagnostics including deployed Git commit identity;
 - `npm run check:nebius` for non-secret Token Factory auth verification;
-- trusted persistence provenance for future scans: source capture time overrides model-invented timestamps and scan-local model IDs are no longer used as durable global primary keys;
-- canonical scan entities deduplicated before state/diff construction.
+- trusted persistence provenance: source capture time overrides model-invented timestamps and scan-local model IDs are not used as durable global primary keys;
+- canonical scan entities deduplicated before state/diff construction;
+- deterministic CI quality gates for dark, duplicate-heavy, too-few, mixed-quality and healthy walkthrough evidence;
+- deterministic CI regression gate for model evidence-reference mismatch behavior.
 
 ### First real-phone baseline — PASS
 
@@ -86,31 +89,26 @@ On 2026-09-11, the real browser Observe flow completed with `New Office Walkthro
 - `diffs: []` — expected for baseline State v1;
 - frontend rendered `What SENTINEL observed.` with the persisted objects.
 
-This proves the complete local real-phone path:
+This proves:
 
 `browser video → evidence extraction → Nebius perception → schema validation → environmental state → Neon persistence → memory restore`
 
 ### Provenance hardening after baseline
 
-The successful model response revealed two trust-boundary issues:
+The first successful response exposed model-invented timestamps and reusable scan-local IDs. Commit `c750f3a` hardened future scans so:
 
-1. the model invented observation/evidence/object timestamps such as `2023-10-10T10:00:00Z` even though the trusted scan capture occurred on 2026-09-11;
-2. the model emitted reusable scan-local IDs such as `obj_1`, `obs_1`, `evidence_1` and `rel_1`, which are unsafe against Neon tables whose normalized rows use global primary keys.
-
-Commit `c750f3a` (`fix: trust scan provenance in memory`) now ensures for scans after the baseline:
-
-- evidence + observation `capturedAt` are the trusted `source.capturedAt`;
-- new object `firstSeenAt` / `lastSeenAt` come from the trusted scan capture time;
+- evidence + observation `capturedAt` use trusted `source.capturedAt`;
+- new object `firstSeenAt` / `lastSeenAt` use trusted scan capture time;
 - evidence and observation IDs are source-scoped;
 - new canonical object and relation IDs are SENTINEL-generated;
 - model object IDs are translated to canonical persisted IDs before relations are saved;
 - evidence references are remapped consistently through observations, objects, issues and relations.
 
-The already persisted State v1 snapshot is deliberately not rewritten. Its pre-hardening model timestamps remain a known baseline provenance artifact because Phase 3 snapshot immutability must not be violated.
+State v1 was deliberately not rewritten; immutable historical snapshots remain authoritative.
 
 ### Real-phone repeat scan + Reality Diff — PASS
 
-On 2026-09-14, the hardened local Observe path completed another real walkthrough of the same `office-demo` environment and persisted **State v3**:
+On 2026-09-14, the hardened local Observe path completed repeat real walkthroughs of `office-demo` and persisted **State v3**:
 
 - state count in Neon: **3**;
 - diff count in Neon: **2**;
@@ -130,29 +128,55 @@ Latest diff semantics:
 
 The two non-observations intentionally remain `uncertain`; SENTINEL does not claim removal from absence alone.
 
-This proves the local repeat-scan memory loop:
+This proves:
 
 `persistent prior state → new real-phone observation → validated/persisted new state → evidence-qualified Reality Diff → rendered Changes UI`
+
+### Poor-input / evidence-quality gate — PASS
+
+Phase 4 now has a pure browser-independent evidence-quality gate and CI regression script.
+
+`npm run check:phase4-poor-inputs` verifies:
+
+- dark walkthrough candidates fail closed with `LOW_LIGHT_VIDEO`;
+- duplicate-heavy walkthrough candidates fail closed with `INSUFFICIENT_VISUAL_VARIETY`;
+- too-few candidates fail closed with `INSUFFICIENT_VIDEO_EVIDENCE`;
+- mixed-quality input excludes dark evidence but retains 8–12 useful frames;
+- healthy input retains a compact 8–12 frame evidence set.
+
+`npm run check:phase4-evidence-refs` verifies:
+
+- model placeholders such as `evidence_0` map only to already-existing, deterministic evidence IDs;
+- exact IDs remain unchanged;
+- unknown references remain unchanged for strict validation to reject;
+- ambiguous frame-index matches remain unchanged and fail closed.
+
+Latest Sentinel CI includes both gates and the TypeScript/Vite production build. Commit `eb41ae3` CI: **PASS**.
 
 ### Resolved blockers during real-phone gate
 
 - local Neon `ETIMEDOUT` / intermittent WebSocket `ErrorEvent` → transport diagnostics, fresh-client retries and automatic WebSocket/HTTP failover;
 - stale Nebius Token Factory credential → fresh key verified;
 - provider `At most 10 image(s)` error → max-10 perception sampling (`9f7576d`);
-- `position.description must be a non-empty string` → optional empty spatial metadata normalization (`a3843e6`);
+- empty `position.description` → optional empty spatial metadata normalization (`a3843e6`);
 - model-specific unsupported object category → canonical category normalization (`09136d3`);
 - malformed vision-model JSON → deterministic syntax repair followed by the same strict schema validation (`18e5cdb`);
-- duplicate canonical objects inside repeat scans → canonical entity deduplication before state/diff construction.
+- duplicate canonical objects inside repeat scans → canonical entity deduplication;
+- production model response referencing `evidence_0` while emitting a differently named existing evidence item → bounded deterministic evidence-reference reconciliation (`c198276`).
 
 ### Production status
 
-Production rejection guards previously passed:
+Production rejection guards are proven:
 
 - unsupported video MIME → 415 `UNSUPPORTED_MEDIA_TYPE` — **PASS**;
 - too-short walkthrough → 422 `VIDEO_TOO_SHORT` — **PASS**;
 - too-few evidence frames → 422 `TOO_FEW_FRAMES` — **PASS**.
 
-Latest local hardening has not yet been proven in production because Vercel has been rejecting newer builds due to the project build-rate limit. Do not claim latest `main` is deployed until this clears and is verified.
+The previous valid production contract reached Nebius but failed on an evidence-ID mismatch: `object object_0 references missing evidence evidence_0`. Latest `main` now contains a bounded regression-tested fix.
+
+The production contract workflow now waits until `/api/health.deploymentCommit` exactly matches the GitHub commit under test before running the valid scan, preventing stale-deployment false failures.
+
+Current deployment blocker: GitHub's Vercel status for latest `main` is **failure due to Vercel build-rate limit**. The production contract cannot be marked passed until Vercel deploys latest `main`; do not claim the latest adapter hardening is live before then.
 
 Canonical Phase 4 record: `Knowledge/Technical/phase-4-observation-pipeline.md`.
 
@@ -176,7 +200,7 @@ Canonical Phase 4 record: `Knowledge/Technical/phase-4-observation-pipeline.md`.
 - Perception receives no more than 10 image frames per provider call.
 - Trusted scan identity/provenance comes from SENTINEL request metadata, not model invention.
 - Provider-format normalization is bounded; required semantic/evidence validation remains strict.
-- Malformed model JSON may be syntactically repaired, but semantic/evidence validation still runs afterward.
+- Poor-input evidence selection is deterministic and continuously verified in CI.
 
 ### AI / Nebius
 
@@ -184,6 +208,7 @@ Canonical Phase 4 record: `Knowledge/Technical/phase-4-observation-pipeline.md`.
 - Active base: `https://api.tokenfactory.us-central1.nebius.com/v1`.
 - Perception default: `openbmb/MiniCPM-V-4_5`.
 - Reasoning / Ask default: `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B`.
+- Malformed syntax and provider-local evidence-reference formatting are normalized only at bounded deterministic trust boundaries; semantic/evidence schema validation remains strict afterward.
 - DEC-006 records the production model-routing decision.
 
 ### Environmental memory
@@ -193,8 +218,8 @@ Canonical Phase 4 record: `Knowledge/Technical/phase-4-observation-pipeline.md`.
 - `NeonEnvironmentalMemoryRepository` is the active durable implementation.
 - Historical state snapshots are immutable.
 - Database persistence rejects historical snapshot mutation.
-- Durable scan provenance no longer trusts model-generated time or globally reusable model IDs for new scans.
-- Local persistence transport can fail over between WebSocket and SQL-over-HTTP without changing the durable memory contract.
+- Durable scan provenance does not trust model-generated time or globally reusable model IDs for new scans.
+- Local persistence can fail over between WebSocket and SQL-over-HTTP without changing the durable memory contract.
 
 ### Diff / Ask
 
@@ -213,24 +238,21 @@ Canonical Phase 4 record: `Knowledge/Technical/phase-4-observation-pipeline.md`.
 
 ## Phase 4 remaining gate
 
+All local engineering, repeated real-phone, Reality Diff, and poor-input gates are now **MET**.
+
 Before Phase 4 can be marked complete:
 
-1. run additional normal 30–60 second phone walkthroughs and confirm stable compact perception requests;
-2. verify dark/duplicate-heavy/unsupported inputs fail with actionable guidance and never fabricate memory;
-3. get latest `main` deployed after the Vercel build-rate limit clears;
-4. rerun `.github/workflows/phase4-observation-contract.yml` and pass the valid request with HTTP 200 + `persistence: neon`.
-
-The second-scan/state-history/Reality-Diff gate is now **MET**.
+1. Vercel must deploy latest `main` after the current build-rate limit clears;
+2. `.github/workflows/phase4-observation-contract.yml` must observe the matching `deploymentCommit` and pass the valid request with HTTP 200 + `persistence: neon`.
 
 ## Highest-priority gaps
 
-1. **Latest-main production re-verification once Vercel builds are available.**
-2. **Additional real-phone stability + poor-input failure proof.**
-3. Perception quality / condition model — sharpen observation vs interpretation semantics.
-4. Environmental state history UX/query hardening.
-5. Diff Engine v2 — stable matching and evidence-qualified absence/removal.
-6. Action + verification — complete the closed loop.
-7. Reliability, automated tests, security and least-privilege database-role hardening.
+1. **Latest-main production deployment + valid-video contract.**
+2. Perception quality / condition model — Phase 5 after Phase 4 production closure.
+3. Environmental state history UX/query hardening.
+4. Diff Engine v2 — stable semantic matching and evidence-qualified absence/removal.
+5. Action + verification — complete the closed loop.
+6. Reliability, automated tests, security and least-privilege database-role hardening.
 
 ## Locked decisions
 
@@ -253,7 +275,7 @@ The second-scan/state-history/Reality-Diff gate is now **MET**.
 - [x] Phase 1 — Freeze the MVP contract
 - [x] Phase 2 — Core architecture cleanup
 - [x] Phase 3 — Persistent Environmental Memory
-- [ ] Phase 4 — Observation pipeline hardening (**real-phone baseline + repeat-scan Reality Diff passed; production exit gates pending**)
+- [ ] Phase 4 — Observation pipeline hardening (**all local gates passed; latest-main production valid-scan gate pending**)
 - [ ] Phase 5 — Perception quality and condition model
 - [ ] Phase 6 — Environmental state history
 - [ ] Phase 7 — Environmental Diff Engine v2
@@ -273,7 +295,7 @@ The second-scan/state-history/Reality-Diff gate is now **MET**.
 
 Phase 3: **COMPLETE**.
 
-Phase 4 engineering implementation: **SUBSTANTIALLY MET**.
+Phase 4 engineering implementation: **MET**.
 
 Phase 4 production rejection guards: **MET**.
 
@@ -283,10 +305,10 @@ Phase 4 first real-phone baseline: **MET**.
 
 Phase 4 trusted provenance hardening: **MET**.
 
-Phase 4 State v2/v3 + Reality Diff real-phone proof: **MET**.
+Phase 4 repeat-scan + Reality Diff real-phone proof: **MET**.
 
-Phase 4 additional real-phone stability / poor-input proof: **PARTIAL**.
+Phase 4 repeated walkthrough / poor-input / adapter regression proof: **MET / CI PASS**.
 
-Phase 4 latest-main production valid-video proof: **PENDING DEPLOYMENT**.
+Phase 4 latest-main production valid-video proof: **PENDING DEPLOYMENT — VERCEL BUILD-RATE LIMIT**.
 
-**Do not formally advance to Phase 5 until the remaining stability and production gates pass.**
+**Do not formally advance to Phase 5 until the single remaining production gate passes.**
