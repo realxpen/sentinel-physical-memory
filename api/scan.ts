@@ -16,6 +16,9 @@ const MAX_FRAME_DATA_URL_BYTES = 700 * 1024
 const ALLOWED_IMAGE_MIME = new Set(['image/jpeg', 'image/png', 'image/webp'])
 const ALLOWED_VIDEO_MIME = new Set(['video/mp4', 'video/webm', 'video/quicktime', 'video/x-m4v'])
 const DEFAULT_PERCEPTION_MODEL = 'openbmb/MiniCPM-V-4_5'
+const DEFAULT_PERCEPTION_TIMEOUT_MS = 120_000
+const MIN_PERCEPTION_TIMEOUT_MS = 30_000
+const MAX_PERCEPTION_TIMEOUT_MS = 180_000
 
 class ScanRequestError extends Error {
   readonly status: number
@@ -48,6 +51,7 @@ export default async function handler(req: Request, res: Response) {
     const adapter = createNebiusNemotronAdapter(apiKey, {
       baseUrl: process.env.NEBIUS_TOKEN_FACTORY_BASE_URL,
       model: process.env.NEBIUS_PERCEPTION_MODEL?.trim() || DEFAULT_PERCEPTION_MODEL,
+      timeoutMs: resolvePerceptionTimeout(process.env.NEBIUS_PERCEPTION_TIMEOUT_MS),
       artifactResolver: {
         resolve: async (artifact: ScanArtifact) => ({
           artifactId: artifact.artifactId,
@@ -186,6 +190,13 @@ function resolveMediaMimeType(value: unknown, uri: string, kind: 'image' | 'vide
   }
 
   throw new ScanRequestError(400, 'INVALID_MEDIA', 'media.mimeType is required when the media filename does not identify a supported format')
+}
+
+function resolvePerceptionTimeout(value: string | undefined): number {
+  if (!value?.trim()) return DEFAULT_PERCEPTION_TIMEOUT_MS
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) return DEFAULT_PERCEPTION_TIMEOUT_MS
+  return Math.min(MAX_PERCEPTION_TIMEOUT_MS, Math.max(MIN_PERCEPTION_TIMEOUT_MS, Math.round(parsed)))
 }
 
 function summarizeError(error: unknown): Record<string, unknown> {
