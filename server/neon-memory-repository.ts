@@ -5,10 +5,11 @@ type NeonFactory = typeof import('@neondatabase/serverless')['neon']
 type NeonSql = ReturnType<NeonFactory>
 type NeonPool = InstanceType<typeof import('@neondatabase/serverless')['Pool']>
 
-export type NeonTransport = 'http' | 'websocket'
+export type NeonTransport = 'http' | 'websocket' | 'auto'
+type ConcreteNeonTransport = Exclude<NeonTransport, 'auto'>
 
-const MAX_NETWORK_ATTEMPTS = 3
-const RETRY_DELAYS_MS = [500, 1500]
+const MAX_NETWORK_ATTEMPTS = 2
+const RETRY_DELAYS_MS = [500]
 const TRANSIENT_NETWORK_CODES = new Set([
   'ETIMEDOUT',
   'ECONNRESET',
@@ -24,6 +25,7 @@ export class NeonEnvironmentalMemoryRepository implements EnvironmentalMemoryRep
   private readonly transport: NeonTransport
   private sql?: NeonSql
   private pool?: NeonPool
+  private lastSuccessfulTransport?: ConcreteNeonTransport
 
   constructor(connectionString: string, options: { transport?: NeonTransport } = {}) {
     const normalized = connectionString.trim()
@@ -39,20 +41,8 @@ export class NeonEnvironmentalMemoryRepository implements EnvironmentalMemoryRep
     const normalizedEnvironmentId = environmentId.trim()
     if (!normalizedEnvironmentId) throw new Error('environmentId is required')
 
-    const rows = await this.withTransientNetworkRetry('read', async () => {
-      if (this.transport === 'websocket') {
-        const pool = await this.getPool()
-        const result = await pool.query(
-          'select sentinel_private.sentinel_get_environmental_memory($1) as memory',
-          [normalizedEnvironmentId],
-        )
-        return result.rows
-      }
-
-      const sql = await this.getSql()
-      return sql`
-        select sentinel_private.sentinel_get_environmental_memory(${normalizedEnvironmentId}) as memory
-      `
+    const rows = await this.withTransportFallback('read', async (transport) => {
+      return this.readRows(transport, normalizedEnvironmentId)
     })
 
     const value = (rows[0] as { memory?: unknown } | undefined)?.memory
@@ -61,21 +51,130 @@ export class NeonEnvironmentalMemoryRepository implements EnvironmentalMemoryRep
   }
 
   async save(memory: EnvironmentalMemory): Promise<void> {
-    await this.withTransientNetworkRetry('save', async () => {
-      if (this.transport === 'websocket') {
-        const pool = await this.getPool()
-        await pool.query(
-          'select sentinel_private.sentinel_save_environmental_memory($1::jsonb)',
-          [JSON.stringify(memory)],
-        )
-        return
-      }
+    const transports = this.transportOrder()
+    let lastError: unknown
 
-      const sql = await this.getSql()
-      await sql`
-        select sentinel_private.sentinel_save_environmental_memory(${JSON.stringify(memory)}::jsonb)
-      `
-    })
+    for (let index = 0; index < transports.length; index += 1) {
+      const transport = transports[index]
+      try {
+        await this.withTransientNetworkRetry('save', transport, async () => {
+          await this.saveViaTransport(transport, memory)
+        })
+        this.lastSuccessfulTransport = transport
+        return
+      } catch (error) {
+        lastError = error
+        if (!isTransientNetworkError(error) || index === transports.length - 1) throw error
+
+        const fallback = transports[index + 1]
+        console.warn('SENTINEL_NEON_TRANSPORT_FALLBACK', {
+          operation: 'save',
+          from: transport,
+          to: fallback,
+        })
+
+        await this.resetClient(transport)
+
+        // A write can succeed at Neon while the client loses the response. Before
+        // replaying the save on another transport, check whether the target state
+        // is already present. This keeps transport failover safe for durable scans.
+        try {
+          const rows = await this.withTransientNetworkRetry('read', fallback, async () => {
+            return this.readRows(fallback, memory.environment.id)
+          })
+          const value = (rows[0] as { memory?: unknown } | undefined)?.memory
+          if (memoryContainsState(value, memory.environment.currentStateId)) {
+            this.lastSuccessfulTransport = fallback
+            console.warn('SENTINEL_NEON_SAVE_CONFIRMED_AFTER_NETWORK_ERROR', {
+              transport: fallback,
+              stateId: memory.environment.currentStateId,
+            })
+            return
+          }
+        } catch (confirmError) {
+          if (!isTransientNetworkError(confirmError)) throw confirmError
+        }
+      }
+    }
+
+    throw lastError
+  }
+
+  getLastSuccessfulTransport(): ConcreteNeonTransport | undefined {
+    return this.lastSuccessfulTransport
+  }
+
+  private async withTransportFallback<T>(
+    operation: 'read' | 'save',
+    task: (transport: ConcreteNeonTransport) => Promise<T>,
+  ): Promise<T> {
+    const transports = this.transportOrder()
+    let lastError: unknown
+
+    for (let index = 0; index < transports.length; index += 1) {
+      const transport = transports[index]
+      try {
+        const result = await this.withTransientNetworkRetry(operation, transport, () => task(transport))
+        this.lastSuccessfulTransport = transport
+        return result
+      } catch (error) {
+        lastError = error
+        if (!isTransientNetworkError(error) || index === transports.length - 1) throw error
+
+        const fallback = transports[index + 1]
+        console.warn('SENTINEL_NEON_TRANSPORT_FALLBACK', {
+          operation,
+          from: transport,
+          to: fallback,
+        })
+        await this.resetClient(transport)
+      }
+    }
+
+    throw lastError
+  }
+
+  private transportOrder(): ConcreteNeonTransport[] {
+    if (this.transport === 'http') return ['http']
+    if (this.transport === 'websocket') return ['websocket']
+
+    // Prefer the transport that most recently succeeded in this process. On a
+    // fresh local runtime, prefer WebSocket because it has proven more reliable
+    // than SQL-over-HTTP on the user's current network.
+    if (this.lastSuccessfulTransport === 'http') return ['http', 'websocket']
+    return ['websocket', 'http']
+  }
+
+  private async readRows(transport: ConcreteNeonTransport, environmentId: string): Promise<unknown[]> {
+    if (transport === 'websocket') {
+      const pool = await this.getPool()
+      const result = await pool.query(
+        'select sentinel_private.sentinel_get_environmental_memory($1) as memory',
+        [environmentId],
+      )
+      return result.rows
+    }
+
+    const sql = await this.getSql()
+    return sql`
+      select sentinel_private.sentinel_get_environmental_memory(${environmentId}) as memory
+    `
+  }
+
+  private async saveViaTransport(transport: ConcreteNeonTransport, memory: EnvironmentalMemory): Promise<void> {
+    if (transport === 'websocket') {
+      const pool = await this.getPool()
+      await pool.query(
+        'select sentinel_private.sentinel_save_environmental_memory($1::jsonb)',
+        [JSON.stringify(memory)],
+      )
+      return
+    }
+
+    const sql = await this.getSql()
+    await sql`
+      select sentinel_private.sentinel_save_environmental_memory(${JSON.stringify(memory)}::jsonb)
+    `
   }
 
   private async getSql(): Promise<NeonSql> {
@@ -89,8 +188,6 @@ export class NeonEnvironmentalMemoryRepository implements EnvironmentalMemoryRep
   private async getPool(): Promise<NeonPool> {
     if (!this.pool) {
       const { Pool, neonConfig } = await import('@neondatabase/serverless')
-      // Pool normally uses WebSockets. Keep this explicit so a future driver
-      // default cannot silently route local persistence back through fetch.
       neonConfig.poolQueryViaFetch = false
       const pool = new Pool({
         connectionString: this.connectionString,
@@ -106,16 +203,20 @@ export class NeonEnvironmentalMemoryRepository implements EnvironmentalMemoryRep
     return this.pool
   }
 
-  private async resetClient(): Promise<void> {
-    this.sql = undefined
-    if (this.pool) {
+  private async resetClient(transport?: ConcreteNeonTransport): Promise<void> {
+    if (!transport || transport === 'http') this.sql = undefined
+    if ((!transport || transport === 'websocket') && this.pool) {
       const pool = this.pool
       this.pool = undefined
       await pool.end().catch(() => undefined)
     }
   }
 
-  private async withTransientNetworkRetry<T>(operation: 'read' | 'save', task: () => Promise<T>): Promise<T> {
+  private async withTransientNetworkRetry<T>(
+    operation: 'read' | 'save',
+    transport: ConcreteNeonTransport,
+    task: () => Promise<T>,
+  ): Promise<T> {
     let lastError: unknown
 
     for (let attempt = 1; attempt <= MAX_NETWORK_ATTEMPTS; attempt += 1) {
@@ -125,10 +226,9 @@ export class NeonEnvironmentalMemoryRepository implements EnvironmentalMemoryRep
         lastError = error
         if (!isTransientNetworkError(error) || attempt === MAX_NETWORK_ATTEMPTS) throw error
 
-        await this.resetClient()
-
+        await this.resetClient(transport)
         const delayMs = RETRY_DELAYS_MS[attempt - 1] ?? RETRY_DELAYS_MS[RETRY_DELAYS_MS.length - 1]
-        console.warn('SENTINEL_NEON_TRANSIENT_RETRY', { operation, transport: this.transport, attempt, delayMs })
+        console.warn('SENTINEL_NEON_TRANSIENT_RETRY', { operation, transport, attempt, delayMs })
         await delay(delayMs)
       }
     }
@@ -153,6 +253,11 @@ export class NeonEnvironmentalMemoryRepository implements EnvironmentalMemoryRep
   }
 }
 
+function memoryContainsState(value: unknown, stateId: string | undefined): boolean {
+  if (!stateId || !isRecord(value) || !Array.isArray(value.states)) return false
+  return value.states.some((state) => isRecord(state) && state.id === stateId)
+}
+
 function isTransientNetworkError(error: unknown): boolean {
   const seen = new Set<unknown>()
   const queue: unknown[] = [error]
@@ -174,8 +279,10 @@ function isTransientNetworkError(error: unknown): boolean {
 
     if (isRecord(current)) {
       const code = current.code
+      const type = current.type
       if (typeof code === 'string' && TRANSIENT_NETWORK_CODES.has(code)) return true
-      queue.push(current.cause, current.sourceError)
+      if (type === 'error' || type === 'close') return true
+      queue.push(current.cause, current.sourceError, current.error)
     }
   }
 
@@ -183,7 +290,7 @@ function isTransientNetworkError(error: unknown): boolean {
 }
 
 function isTransientMessage(message: string): boolean {
-  return /fetch failed|ETIMEDOUT|connection terminated|connection closed|websocket.*closed|socket hang up/i.test(message)
+  return /fetch failed|ETIMEDOUT|network error|non-101|connection terminated|connection closed|websocket.*closed|socket hang up/i.test(message)
 }
 
 function delay(ms: number): Promise<void> {
