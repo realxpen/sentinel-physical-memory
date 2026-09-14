@@ -11,6 +11,7 @@
     "dev:local": "bash ./scripts/dev-local.sh",
     "check:neon": "node ./scripts/check-neon.mjs",
     "check:nebius": "node ./scripts/check-nebius.mjs",
+    "check:phase4-poor-inputs": "node --experimental-strip-types ./scripts/check-phase4-poor-inputs.mjs",
     "build": "tsc -b && vite build",
     "preview": "vite preview"
   },
