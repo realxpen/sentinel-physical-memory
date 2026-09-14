@@ -6,10 +6,6 @@ import { resolve } from 'node:path'
 const REQUIRED_DNS_OPTION = '--dns-result-order=ipv4first'
 const RESPAWN_GUARD = 'SENTINEL_NEON_CHECK_RESPAWNED'
 
-// Node/undici can resolve network routes before a runtime call to
-// setDefaultResultOrder() takes effect. The local SENTINEL dev launcher already
-// starts Node with NODE_OPTIONS; make the standalone Neon diagnostic do the same
-// so it exercises the exact networking mode used by `npm run dev:local`.
 if (process.env[RESPAWN_GUARD] !== '1' && !hasNodeOption(REQUIRED_DNS_OPTION)) {
   const nodeOptions = [process.env.NODE_OPTIONS?.trim(), REQUIRED_DNS_OPTION].filter(Boolean).join(' ')
   const child = spawnSync(process.execPath, [process.argv[1]], {
@@ -41,12 +37,21 @@ try {
 }
 
 try {
-  const { neon } = await import('@neondatabase/serverless')
   const rows = await withRetry(async () => {
-    // Recreate the HTTP query client for every attempt. A timed-out undici
-    // connection must not poison all subsequent retry attempts.
-    const sql = neon(connectionString)
-    return sql`select 1 as ok`
+    const { Pool, neonConfig } = await import('@neondatabase/serverless')
+    neonConfig.poolQueryViaFetch = false
+    const pool = new Pool({
+      connectionString,
+      max: 1,
+      idleTimeoutMillis: 5_000,
+      connectionTimeoutMillis: 15_000,
+    })
+    try {
+      const result = await pool.query('select 1 as ok')
+      return result.rows
+    } finally {
+      await pool.end().catch(() => undefined)
+    }
   })
   const ok = rows?.[0]?.ok === 1 || rows?.[0]?.ok === '1'
   if (!ok) throw new Error('Unexpected database response')
@@ -55,12 +60,14 @@ try {
   console.log(`Node: ${process.version}`)
   console.log(`DNS result order: ${getDefaultResultOrder()}`)
   console.log(`Process DNS option: ${hasNodeOption(REQUIRED_DNS_OPTION) ? 'ipv4first' : 'missing'}`)
+  console.log('Transport: websocket')
   console.log(`Database host: ${databaseHost}`)
 } catch (error) {
   console.error('SENTINEL Neon check: FAIL')
   console.error(`Node: ${process.version}`)
   console.error(`DNS result order: ${getDefaultResultOrder()}`)
   console.error(`Process DNS option: ${hasNodeOption(REQUIRED_DNS_OPTION) ? 'ipv4first' : 'missing'}`)
+  console.error('Transport: websocket')
   console.error(`Database host: ${databaseHost}`)
   console.error(`Error: ${safeErrorSummary(error)}`)
   process.exit(1)
@@ -123,11 +130,11 @@ function isTransientNetworkError(error) {
     if (!current || seen.has(current)) continue
     seen.add(current)
     if (typeof current === 'string') {
-      if (current.includes('fetch failed') || current.includes('ETIMEDOUT')) return true
+      if (isTransientMessage(current)) return true
       continue
     }
     if (current instanceof Error) {
-      if (current.message.includes('fetch failed') || current.message.includes('ETIMEDOUT')) return true
+      if (isTransientMessage(current.message)) return true
       queue.push(current.cause)
     }
     if (typeof current === 'object') {
@@ -136,6 +143,10 @@ function isTransientNetworkError(error) {
     }
   }
   return false
+}
+
+function isTransientMessage(message) {
+  return /fetch failed|ETIMEDOUT|connection terminated|connection closed|websocket.*closed|socket hang up/i.test(message)
 }
 
 function safeErrorSummary(error) {
