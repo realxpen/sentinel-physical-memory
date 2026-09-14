@@ -18,5 +18,7 @@ jobs:
           node-version: 22
       - name: Install dependencies
         run: npm install
+      - name: Verify Phase 4 poor-input quality gate
+        run: npm run check:phase4-poor-inputs
       - name: Build
         run: npm run build
