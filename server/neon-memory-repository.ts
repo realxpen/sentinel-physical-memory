@@ -3,6 +3,9 @@ import type { EnvironmentalMemoryRepository } from '../src/memory/repository'
 
 type NeonFactory = typeof import('@neondatabase/serverless')['neon']
 type NeonSql = ReturnType<NeonFactory>
+type NeonPool = InstanceType<typeof import('@neondatabase/serverless')['Pool']>
+
+export type NeonTransport = 'http' | 'websocket'
 
 const MAX_NETWORK_ATTEMPTS = 3
 const RETRY_DELAYS_MS = [500, 1500]
@@ -18,15 +21,18 @@ const TRANSIENT_NETWORK_CODES = new Set([
 
 export class NeonEnvironmentalMemoryRepository implements EnvironmentalMemoryRepository {
   private readonly connectionString: string
+  private readonly transport: NeonTransport
   private sql?: NeonSql
+  private pool?: NeonPool
 
-  constructor(connectionString: string) {
+  constructor(connectionString: string, options: { transport?: NeonTransport } = {}) {
     const normalized = connectionString.trim()
     if (!/^postgres(?:ql)?:\/\//i.test(normalized)) {
       throw new Error('DATABASE_URL must be a PostgreSQL connection string')
     }
 
     this.connectionString = normalized
+    this.transport = options.transport ?? 'http'
   }
 
   async get(environmentId: string): Promise<EnvironmentalMemory | undefined> {
@@ -34,6 +40,15 @@ export class NeonEnvironmentalMemoryRepository implements EnvironmentalMemoryRep
     if (!normalizedEnvironmentId) throw new Error('environmentId is required')
 
     const rows = await this.withTransientNetworkRetry('read', async () => {
+      if (this.transport === 'websocket') {
+        const pool = await this.getPool()
+        const result = await pool.query(
+          'select sentinel_private.sentinel_get_environmental_memory($1) as memory',
+          [normalizedEnvironmentId],
+        )
+        return result.rows
+      }
+
       const sql = await this.getSql()
       return sql`
         select sentinel_private.sentinel_get_environmental_memory(${normalizedEnvironmentId}) as memory
@@ -47,6 +62,15 @@ export class NeonEnvironmentalMemoryRepository implements EnvironmentalMemoryRep
 
   async save(memory: EnvironmentalMemory): Promise<void> {
     await this.withTransientNetworkRetry('save', async () => {
+      if (this.transport === 'websocket') {
+        const pool = await this.getPool()
+        await pool.query(
+          'select sentinel_private.sentinel_save_environmental_memory($1::jsonb)',
+          [JSON.stringify(memory)],
+        )
+        return
+      }
+
       const sql = await this.getSql()
       await sql`
         select sentinel_private.sentinel_save_environmental_memory(${JSON.stringify(memory)}::jsonb)
@@ -62,6 +86,35 @@ export class NeonEnvironmentalMemoryRepository implements EnvironmentalMemoryRep
     return this.sql
   }
 
+  private async getPool(): Promise<NeonPool> {
+    if (!this.pool) {
+      const { Pool, neonConfig } = await import('@neondatabase/serverless')
+      // Pool normally uses WebSockets. Keep this explicit so a future driver
+      // default cannot silently route local persistence back through fetch.
+      neonConfig.poolQueryViaFetch = false
+      const pool = new Pool({
+        connectionString: this.connectionString,
+        max: 2,
+        idleTimeoutMillis: 30_000,
+        connectionTimeoutMillis: 15_000,
+      })
+      pool.on('error', (error) => {
+        console.warn('SENTINEL_NEON_POOL_ERROR', { message: error.message })
+      })
+      this.pool = pool
+    }
+    return this.pool
+  }
+
+  private async resetClient(): Promise<void> {
+    this.sql = undefined
+    if (this.pool) {
+      const pool = this.pool
+      this.pool = undefined
+      await pool.end().catch(() => undefined)
+    }
+  }
+
   private async withTransientNetworkRetry<T>(operation: 'read' | 'save', task: () => Promise<T>): Promise<T> {
     let lastError: unknown
 
@@ -72,13 +125,10 @@ export class NeonEnvironmentalMemoryRepository implements EnvironmentalMemoryRep
         lastError = error
         if (!isTransientNetworkError(error) || attempt === MAX_NETWORK_ATTEMPTS) throw error
 
-        // Rebuild the Neon HTTP client after a transport failure. Reusing the
-        // same client can keep a failed undici connection/path alive across all
-        // retry attempts on unstable local networks.
-        this.sql = undefined
+        await this.resetClient()
 
         const delayMs = RETRY_DELAYS_MS[attempt - 1] ?? RETRY_DELAYS_MS[RETRY_DELAYS_MS.length - 1]
-        console.warn('SENTINEL_NEON_TRANSIENT_RETRY', { operation, attempt, delayMs })
+        console.warn('SENTINEL_NEON_TRANSIENT_RETRY', { operation, transport: this.transport, attempt, delayMs })
         await delay(delayMs)
       }
     }
@@ -113,12 +163,12 @@ function isTransientNetworkError(error: unknown): boolean {
     seen.add(current)
 
     if (typeof current === 'string') {
-      if (current.includes('fetch failed') || current.includes('ETIMEDOUT')) return true
+      if (isTransientMessage(current)) return true
       continue
     }
 
     if (current instanceof Error) {
-      if (current.message.includes('fetch failed') || current.message.includes('ETIMEDOUT')) return true
+      if (isTransientMessage(current.message)) return true
       queue.push(current.cause)
     }
 
@@ -130,6 +180,10 @@ function isTransientNetworkError(error: unknown): boolean {
   }
 
   return false
+}
+
+function isTransientMessage(message: string): boolean {
+  return /fetch failed|ETIMEDOUT|connection terminated|connection closed|websocket.*closed|socket hang up/i.test(message)
 }
 
 function delay(ms: number): Promise<void> {
