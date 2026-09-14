@@ -6,6 +6,45 @@ import { ModelAdapterError, type ArtifactResolver, type ModelAdapter, type Model
 const DEFAULT_BASE_URL = 'https://api.tokenfactory.us-central1.nebius.com/v1'
 const LEGACY_GLOBAL_BASE_URL = 'https://api.tokenfactory.nebius.com/v1'
 const DEFAULT_MODEL = 'nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B'
+const SENTINEL_OBJECT_CATEGORIES = new Set([
+  'room',
+  'door',
+  'window',
+  'furniture',
+  'equipment',
+  'electrical',
+  'hvac',
+  'safety',
+  'signage',
+  'document',
+  'person',
+  'obstruction',
+  'other',
+])
+const OBJECT_CATEGORY_ALIASES: Record<string, string> = {
+  chair: 'furniture',
+  chairs: 'furniture',
+  sofa: 'furniture',
+  sofas: 'furniture',
+  couch: 'furniture',
+  couches: 'furniture',
+  desk: 'furniture',
+  desks: 'furniture',
+  table: 'furniture',
+  tables: 'furniture',
+  locker: 'furniture',
+  lockers: 'furniture',
+  cabinet: 'furniture',
+  cabinets: 'furniture',
+  shelf: 'furniture',
+  shelves: 'furniture',
+  logo: 'signage',
+  sign: 'signage',
+  display: 'equipment',
+  monitor: 'equipment',
+  screen: 'equipment',
+  appliance: 'equipment',
+}
 interface NebiusAdapterOptions { apiKey: string; baseUrl?: string; model?: string; fetchImpl?: typeof fetch; artifactResolver?: ArtifactResolver; timeoutMs?: number }
 interface ChatCompletionResponse { choices?: Array<{ message?: { content?: string | Array<{ type?: string; text?: string }> } }> }
 
@@ -85,6 +124,7 @@ export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapte
       'All five top-level fields are required. Use an empty array when there are no supported items.',
       'Observation item fields: id, environmentId, sourceId, modality (image|video|audio|document|sensor), capturedAt, label, description, confidence (0..1), optional position, evidenceIds (string[]).',
       'Object item fields: id, environmentId, category (room|door|window|furniture|equipment|electrical|hvac|safety|signage|document|person|obstruction|other), name, optional description, optional position, optional boundingBox, optional state, confidence (0..1), firstSeenAt, lastSeenAt, evidenceIds (string[]).',
+      'Use only the listed canonical object categories. Put specific labels such as chair, sofa, desk, locker, logo, screen, or monitor in name/description rather than category.',
       'Relation item fields: id, environmentId, fromId, toId, type (contains|located_in|adjacent_to|near|attached_to|part_of|has_issue|requires_action|supports), confidence (0..1), evidenceIds (string[]).',
       'Evidence item fields: id, type (frame|image|audio|document|observation|previous_state), sourceId, capturedAt, optional frameIndex, optional timestampMs, optional uri, optional excerpt, optional boundingBox, optional confidence, description.',
       'Never invent an object, condition, location, measurement, relationship, or evidence source.',
@@ -104,7 +144,7 @@ export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapte
         ...value,
         ...(sourceId ? { sourceId } : {}),
         observations: normalizeIdentityArray(value.observations, sourceId, environmentId, true),
-        objects: normalizeIdentityArray(value.objects, undefined, environmentId, false),
+        objects: normalizeObjectArray(value.objects, environmentId),
         relations: normalizeIdentityArray(value.relations, undefined, environmentId, false),
         evidence: normalizeIdentityArray(value.evidence, sourceId, undefined, false),
       }
@@ -134,6 +174,18 @@ function normalizeIdentityArray(value: unknown, sourceId?: string, environmentId
       ...(ensureObservationModality && item.modality === undefined ? { modality: 'video' } : {}),
     }
   })
+}
+function normalizeObjectArray(value: unknown, environmentId?: string): unknown[] {
+  return normalizeIdentityArray(value, undefined, environmentId, false).map((item) => {
+    if (!isRecord(item)) return item
+    return { ...item, category: normalizeObjectCategory(item.category) }
+  })
+}
+function normalizeObjectCategory(value: unknown): string {
+  if (typeof value !== 'string') return 'other'
+  const normalized = value.trim().toLowerCase().replace(/[\s-]+/g, '_')
+  if (SENTINEL_OBJECT_CATEGORIES.has(normalized)) return normalized
+  return OBJECT_CATEGORY_ALIASES[normalized] ?? 'other'
 }
 function extractScanSourceId(prompt: string): string | undefined { const match = prompt.match(/The scan source id is\s+([^\n.]+)\.?/i); return match?.[1]?.trim() || undefined }
 function extractScanEnvironmentId(prompt: string): string | undefined { const match = prompt.match(/for environment\s+([^\n.]+)\.?/i); return match?.[1]?.trim() || undefined }
