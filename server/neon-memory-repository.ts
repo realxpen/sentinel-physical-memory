@@ -5,7 +5,7 @@ type NeonFactory = typeof import('@neondatabase/serverless')['neon']
 type NeonSql = ReturnType<NeonFactory>
 
 const MAX_NETWORK_ATTEMPTS = 3
-const RETRY_DELAYS_MS = [250, 750]
+const RETRY_DELAYS_MS = [500, 1500]
 const TRANSIENT_NETWORK_CODES = new Set([
   'ETIMEDOUT',
   'ECONNRESET',
@@ -13,6 +13,7 @@ const TRANSIENT_NETWORK_CODES = new Set([
   'EAI_AGAIN',
   'ENETUNREACH',
   'EHOSTUNREACH',
+  'UND_ERR_SOCKET',
 ])
 
 export class NeonEnvironmentalMemoryRepository implements EnvironmentalMemoryRepository {
@@ -70,6 +71,11 @@ export class NeonEnvironmentalMemoryRepository implements EnvironmentalMemoryRep
       } catch (error) {
         lastError = error
         if (!isTransientNetworkError(error) || attempt === MAX_NETWORK_ATTEMPTS) throw error
+
+        // Rebuild the Neon HTTP client after a transport failure. Reusing the
+        // same client can keep a failed undici connection/path alive across all
+        // retry attempts on unstable local networks.
+        this.sql = undefined
 
         const delayMs = RETRY_DELAYS_MS[attempt - 1] ?? RETRY_DELAYS_MS[RETRY_DELAYS_MS.length - 1]
         console.warn('SENTINEL_NEON_TRANSIENT_RETRY', { operation, attempt, delayMs })
