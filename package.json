@@ -17,6 +17,7 @@
   "dependencies": {
     "@neondatabase/serverless": "latest",
     "@vitejs/plugin-react": "latest",
+    "jsonrepair": "^3.15.0",
     "vite": "latest",
     "typescript": "latest",
     "react": "latest",
