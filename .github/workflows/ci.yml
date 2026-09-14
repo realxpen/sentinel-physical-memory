@@ -20,5 +20,7 @@ jobs:
         run: npm install
       - name: Verify Phase 4 poor-input quality gate
         run: npm run check:phase4-poor-inputs
+      - name: Verify Phase 4 evidence-reference gate
+        run: npm run check:phase4-evidence-refs
       - name: Build
         run: npm run build
