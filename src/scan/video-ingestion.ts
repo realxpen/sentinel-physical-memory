@@ -62,15 +62,77 @@ export class VideoIngestionError extends Error {
   }
 }
 
-type CandidateFrame = {
+export type VideoCandidateFrame = {
   timestampMs: number
   brightness: number
   signature: Uint8Array
 }
 
+export interface VideoCandidateAssessment {
+  selected: VideoCandidateFrame[]
+  brightCandidateCount: number
+  lowLightFramesRejected: number
+  duplicateFramesRejected: number
+  averageBrightness: number
+}
+
 type EncodedFrames = {
   frames: ScanFrame[]
   encodedBytes: number
+}
+
+/**
+ * Pure Phase 4 evidence-quality gate.
+ *
+ * This intentionally has no browser dependencies so dark and duplicate-heavy
+ * walkthrough behavior can be verified deterministically in CI. It never
+ * fabricates evidence: if the candidate set cannot support enough reliable
+ * views, it fails before any frame is encoded or sent to inference.
+ */
+export function assessVideoCandidates(
+  candidates: readonly VideoCandidateFrame[],
+  durationMs: number,
+  options: Pick<VideoIngestionOptions, 'minFrames' | 'maxFrames' | 'lowLightThreshold' | 'duplicateThreshold'> = {},
+): VideoCandidateAssessment {
+  const minFrames = clampInteger(options.minFrames ?? DEFAULT_MIN_FRAMES, 4, 10)
+  const maxFrames = clampInteger(options.maxFrames ?? DEFAULT_MAX_FRAMES, minFrames, 12)
+  const lowLightThreshold = clamp(options.lowLightThreshold ?? DEFAULT_LOW_LIGHT_THRESHOLD, 0.05, 0.3)
+  const duplicateThreshold = clamp(options.duplicateThreshold ?? DEFAULT_DUPLICATE_THRESHOLD, 0.015, 0.12)
+
+  if (candidates.length < minFrames) {
+    throw new VideoIngestionError(
+      'INSUFFICIENT_VIDEO_EVIDENCE',
+      'SENTINEL could not inspect enough candidate frames to create a reliable observation.',
+    )
+  }
+
+  const brightCandidates = candidates.filter((candidate) => candidate.brightness >= lowLightThreshold)
+  const lowLightFramesRejected = candidates.length - brightCandidates.length
+  if (brightCandidates.length < minFrames) {
+    throw new VideoIngestionError(
+      'LOW_LIGHT_VIDEO',
+      'This walkthrough is too dark to produce enough reliable evidence. Add light and observe the space again.',
+    )
+  }
+
+  const selected = selectUsefulCandidates([...brightCandidates], durationMs, minFrames, maxFrames, duplicateThreshold)
+  if (selected.length < minFrames) {
+    throw new VideoIngestionError(
+      'INSUFFICIENT_VISUAL_VARIETY',
+      'SENTINEL could not find enough distinct views. Move naturally through the space and include different areas in the walkthrough.',
+    )
+  }
+
+  const averageBrightness = candidates.reduce((sum, candidate) => sum + candidate.brightness, 0) / candidates.length
+  const duplicateFramesRejected = Math.max(0, brightCandidates.length - selected.length)
+
+  return {
+    selected,
+    brightCandidateCount: brightCandidates.length,
+    lowLightFramesRejected,
+    duplicateFramesRejected,
+    averageBrightness,
+  }
 }
 
 /**
@@ -134,37 +196,24 @@ export async function ingestVideoFile(
     }
 
     const timestamps = selectCandidateTimestamps(durationMs, candidateFrames)
-    const candidates: CandidateFrame[] = []
+    const candidates: VideoCandidateFrame[] = []
     for (const timestampMs of timestamps) {
       await seek(video, timestampMs / 1000)
       candidates.push({ timestampMs, ...captureSignature(video) })
     }
 
-    const brightCandidates = candidates.filter((candidate) => candidate.brightness >= lowLightThreshold)
-    const lowLightFramesRejected = candidates.length - brightCandidates.length
-    if (brightCandidates.length < minFrames) {
-      throw new VideoIngestionError(
-        'LOW_LIGHT_VIDEO',
-        'This walkthrough is too dark to produce enough reliable evidence. Add light and observe the space again.',
-      )
-    }
-
-    const selected = selectUsefulCandidates(brightCandidates, durationMs, minFrames, maxFrames, duplicateThreshold)
-    if (selected.length < minFrames) {
-      throw new VideoIngestionError(
-        'INSUFFICIENT_VISUAL_VARIETY',
-        'SENTINEL could not find enough distinct views. Move naturally through the space and include different areas in the walkthrough.',
-      )
-    }
-
-    const encoded = await encodeSelectedFrames(video, selected, id, maxWidth, jpegQuality, maxEncodedBytes)
-    const averageBrightness = candidates.reduce((sum, candidate) => sum + candidate.brightness, 0) / candidates.length
+    const assessment = assessVideoCandidates(candidates, durationMs, {
+      minFrames,
+      maxFrames,
+      lowLightThreshold,
+      duplicateThreshold,
+    })
+    const encoded = await encodeSelectedFrames(video, assessment.selected, id, maxWidth, jpegQuality, maxEncodedBytes)
     const warnings: string[] = []
     const targetDuration = durationMs >= TARGET_DURATION_MIN_MS && durationMs <= TARGET_DURATION_MAX_MS
     if (!targetDuration) warnings.push('A 30–60 second walkthrough usually gives the most stable environmental coverage.')
-    if (lowLightFramesRejected > 0) warnings.push(`${lowLightFramesRejected} low-light candidate frame(s) were excluded.`)
-    const duplicateFramesRejected = Math.max(0, brightCandidates.length - selected.length)
-    if (duplicateFramesRejected > 0) warnings.push(`${duplicateFramesRejected} duplicate or low-novelty candidate frame(s) were excluded.`)
+    if (assessment.lowLightFramesRejected > 0) warnings.push(`${assessment.lowLightFramesRejected} low-light candidate frame(s) were excluded.`)
+    if (assessment.duplicateFramesRejected > 0) warnings.push(`${assessment.duplicateFramesRejected} duplicate or low-novelty candidate frame(s) were excluded.`)
 
     return {
       durationMs,
@@ -174,9 +223,9 @@ export async function ingestVideoFile(
         targetDuration,
         candidateFrameCount: candidates.length,
         selectedFrameCount: encoded.frames.length,
-        duplicateFramesRejected,
-        lowLightFramesRejected,
-        averageBrightness,
+        duplicateFramesRejected: assessment.duplicateFramesRejected,
+        lowLightFramesRejected: assessment.lowLightFramesRejected,
+        averageBrightness: assessment.averageBrightness,
         encodedBytes: encoded.encodedBytes,
         warnings,
       },
@@ -208,20 +257,20 @@ function selectCandidateTimestamps(durationMs: number, count: number): number[] 
 }
 
 function selectUsefulCandidates(
-  candidates: CandidateFrame[],
+  candidates: VideoCandidateFrame[],
   durationMs: number,
   minFrames: number,
   maxFrames: number,
   duplicateThreshold: number,
-): CandidateFrame[] {
-  const selected: CandidateFrame[] = [candidates[0]]
+): VideoCandidateFrame[] {
+  const selected: VideoCandidateFrame[] = [candidates[0]]
   const last = candidates[candidates.length - 1]
   if (last && last !== candidates[0] && signatureDifference(last.signature, candidates[0].signature) >= duplicateThreshold * 0.65) {
     selected.push(last)
   }
 
   while (selected.length < maxFrames) {
-    let best: CandidateFrame | undefined
+    let best: VideoCandidateFrame | undefined
     let bestScore = -1
     let bestNovelty = 0
 
@@ -248,7 +297,7 @@ function selectUsefulCandidates(
 
 async function encodeSelectedFrames(
   video: HTMLVideoElement,
-  selected: CandidateFrame[],
+  selected: VideoCandidateFrame[],
   id: (prefix: string) => string,
   maxWidth: number,
   initialQuality: number,
