@@ -1,6 +1,7 @@
 import { jsonrepair } from 'jsonrepair'
 import type { AskBuildingResponse, PerceptionResult } from '../domain/sentinel.js'
 import type { ScanArtifact } from '../scan/types.js'
+import { normalizePerceptionEvidenceReferences } from './perception-normalization.js'
 import { validatePerception, PerceptionValidationError } from './perception-schema.js'
 import { ModelAdapterError, type ArtifactResolver, type ModelAdapter, type ModelInferenceRequest, type ReasoningInferenceRequest, type ReasoningModelAdapter } from './model.js'
 
@@ -128,6 +129,7 @@ export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapte
       'Use only the listed canonical object categories. Put specific labels such as chair, sofa, desk, locker, logo, screen, or monitor in name/description rather than category.',
       'Relation item fields: id, environmentId, fromId, toId, type (contains|located_in|adjacent_to|near|attached_to|part_of|has_issue|requires_action|supports), confidence (0..1), evidenceIds (string[]).',
       'Evidence item fields: id, type (frame|image|audio|document|observation|previous_state), sourceId, capturedAt, optional frameIndex, optional timestampMs, optional uri, optional excerpt, optional boundingBox, optional confidence, description.',
+      'Every evidenceIds value must exactly match the id of an item in the evidence array.',
       'Never invent an object, condition, location, measurement, relationship, or evidence source.',
       'Every observation and object must reference evidenceIds that exist in the evidence array.',
       'Evidence must be grounded in the supplied frame artifacts.',
@@ -154,6 +156,14 @@ export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapte
         objects: normalizeObjectArray(value.objects, environmentId),
         relations: normalizeIdentityArray(value.relations, undefined, environmentId, false),
         evidence: normalizeIdentityArray(value.evidence, sourceId, undefined, false),
+      }
+      const evidenceNormalization = normalizePerceptionEvidenceReferences(value)
+      value = evidenceNormalization.value
+      if (evidenceNormalization.remappedReferences > 0) {
+        console.warn('SENTINEL_MODEL_EVIDENCE_REFERENCES_REPAIRED', {
+          model: this.model,
+          count: evidenceNormalization.remappedReferences,
+        })
       }
     }
     try { return validatePerception(value) } catch (error) { if (error instanceof PerceptionValidationError) throw new ModelAdapterError({ code: error.code, message: error.message, retryable: false }); throw error }
