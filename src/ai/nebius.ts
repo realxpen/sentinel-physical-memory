@@ -1,3 +1,4 @@
+import { jsonrepair } from 'jsonrepair'
 import type { AskBuildingResponse, PerceptionResult } from '../domain/sentinel.js'
 import type { ScanArtifact } from '../scan/types.js'
 import { validatePerception, PerceptionValidationError } from './perception-schema.js'
@@ -136,7 +137,13 @@ export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapte
   private extractText(response: ChatCompletionResponse): string { const content = response.choices?.[0]?.message?.content; if (typeof content === 'string') return content; if (Array.isArray(content)) return content.map((part) => part.text ?? '').join(''); throw new ModelAdapterError({ code: 'EMPTY_MODEL_RESPONSE', message: 'Nebius returned no model content', retryable: true }) }
   private parsePerceptionResult(text: string, request: ModelInferenceRequest): PerceptionResult {
     let value: unknown
-    try { value = JSON.parse(extractJson(text)) } catch { throw new ModelAdapterError({ code: 'INVALID_MODEL_JSON', message: 'Vision model returned invalid JSON', retryable: false }) }
+    try {
+      const parsed = parseModelJson(text)
+      value = parsed.value
+      if (parsed.repaired) console.warn('SENTINEL_MODEL_JSON_REPAIRED', { model: this.model, kind: 'perception', chars: text.length })
+    } catch {
+      throw new ModelAdapterError({ code: 'INVALID_MODEL_JSON', message: 'Vision model returned invalid JSON that could not be repaired safely', retryable: false })
+    }
     const sourceId = extractScanSourceId(request.prompt)
     const environmentId = extractScanEnvironmentId(request.prompt)
     if (isRecord(value)) {
@@ -151,7 +158,15 @@ export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapte
     }
     try { return validatePerception(value) } catch (error) { if (error instanceof PerceptionValidationError) throw new ModelAdapterError({ code: error.code, message: error.message, retryable: false }); throw error }
   }
-  private parseReasoningResult(text: string, request: ReasoningInferenceRequest): AskBuildingResponse { let value: unknown; try { value = JSON.parse(extractJson(text)) } catch { throw new ModelAdapterError({ code: 'INVALID_REASONING_JSON', message: 'Nemotron returned invalid reasoning JSON', retryable: false }) }
+  private parseReasoningResult(text: string, request: ReasoningInferenceRequest): AskBuildingResponse {
+    let value: unknown
+    try {
+      const parsed = parseModelJson(text)
+      value = parsed.value
+      if (parsed.repaired) console.warn('SENTINEL_MODEL_JSON_REPAIRED', { model: this.model, kind: 'reasoning', chars: text.length })
+    } catch {
+      throw new ModelAdapterError({ code: 'INVALID_REASONING_JSON', message: 'Nemotron returned invalid reasoning JSON that could not be repaired safely', retryable: false })
+    }
     if (!isRecord(value) || typeof value.answer !== 'string' || typeof value.confidence !== 'number' || typeof value.stateId !== 'string' || !isStringArray(value.evidenceIds) || !isStringArray(value.relatedObjectIds) || !isStringArray(value.relatedIssueIds)) throw new ModelAdapterError({ code: 'INVALID_REASONING_SCHEMA', message: 'Nemotron reasoning response did not match the AskBuildingResponse schema', retryable: false })
     if (value.stateId !== request.request.stateId && !request.context.includes(`STATE_ID ${value.stateId}`)) throw new ModelAdapterError({ code: 'INVALID_REASONING_STATE', message: 'Reasoning response referenced a state outside the supplied context', retryable: false })
     return { answer: value.answer, confidence: Math.max(0, Math.min(1, value.confidence)), stateId: value.stateId, evidenceIds: value.evidenceIds, relatedObjectIds: value.relatedObjectIds, relatedIssueIds: value.relatedIssueIds }
@@ -187,9 +202,25 @@ function normalizeObjectCategory(value: unknown): string {
   if (SENTINEL_OBJECT_CATEGORIES.has(normalized)) return normalized
   return OBJECT_CATEGORY_ALIASES[normalized] ?? 'other'
 }
+function parseModelJson(text: string): { value: unknown; repaired: boolean } {
+  const candidate = extractJson(text)
+  try {
+    return { value: JSON.parse(candidate), repaired: false }
+  } catch {
+    const repaired = jsonrepair(candidate)
+    return { value: JSON.parse(repaired), repaired: true }
+  }
+}
 function extractScanSourceId(prompt: string): string | undefined { const match = prompt.match(/The scan source id is\s+([^\n.]+)\.?/i); return match?.[1]?.trim() || undefined }
 function extractScanEnvironmentId(prompt: string): string | undefined { const match = prompt.match(/for environment\s+([^\n.]+)\.?/i); return match?.[1]?.trim() || undefined }
-function extractJson(text: string): string { const fenced = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i); if (fenced) return fenced[1]; const start = text.indexOf('{'); const end = text.lastIndexOf('}'); return start >= 0 && end > start ? text.slice(start, end + 1) : text.trim() }
+function extractJson(text: string): string {
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i)
+  if (fenced) return fenced[1]
+  const start = text.indexOf('{')
+  if (start < 0) return text.trim()
+  const end = text.lastIndexOf('}')
+  return end > start ? text.slice(start, end + 1) : text.slice(start)
+}
 function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value) }
 function isStringArray(value: unknown): value is string[] { return Array.isArray(value) && value.every((item) => typeof item === 'string') }
 export function createNebiusNemotronAdapter(apiKey: string, options: Omit<NebiusAdapterOptions, 'apiKey'> = {}) { return new NebiusNemotronAdapter({ apiKey, ...options }) }
