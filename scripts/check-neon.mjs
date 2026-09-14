@@ -1,6 +1,27 @@
+import { spawnSync } from 'node:child_process'
 import { setDefaultResultOrder, getDefaultResultOrder } from 'node:dns'
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+
+const REQUIRED_DNS_OPTION = '--dns-result-order=ipv4first'
+const RESPAWN_GUARD = 'SENTINEL_NEON_CHECK_RESPAWNED'
+
+// Node/undici can resolve network routes before a runtime call to
+// setDefaultResultOrder() takes effect. The local SENTINEL dev launcher already
+// starts Node with NODE_OPTIONS; make the standalone Neon diagnostic do the same
+// so it exercises the exact networking mode used by `npm run dev:local`.
+if (process.env[RESPAWN_GUARD] !== '1' && !hasNodeOption(REQUIRED_DNS_OPTION)) {
+  const nodeOptions = [process.env.NODE_OPTIONS?.trim(), REQUIRED_DNS_OPTION].filter(Boolean).join(' ')
+  const child = spawnSync(process.execPath, [process.argv[1]], {
+    stdio: 'inherit',
+    env: {
+      ...process.env,
+      NODE_OPTIONS: nodeOptions,
+      [RESPAWN_GUARD]: '1',
+    },
+  })
+  process.exit(child.status ?? 1)
+}
 
 setDefaultResultOrder('ipv4first')
 loadLocalEnv()
@@ -21,22 +42,49 @@ try {
 
 try {
   const { neon } = await import('@neondatabase/serverless')
-  const sql = neon(connectionString)
-  const rows = await sql`select 1 as ok`
+  const rows = await withRetry(async () => {
+    // Recreate the HTTP query client for every attempt. A timed-out undici
+    // connection must not poison all subsequent retry attempts.
+    const sql = neon(connectionString)
+    return sql`select 1 as ok`
+  })
   const ok = rows?.[0]?.ok === 1 || rows?.[0]?.ok === '1'
   if (!ok) throw new Error('Unexpected database response')
 
   console.log('SENTINEL Neon check: PASS')
   console.log(`Node: ${process.version}`)
   console.log(`DNS result order: ${getDefaultResultOrder()}`)
+  console.log(`Process DNS option: ${hasNodeOption(REQUIRED_DNS_OPTION) ? 'ipv4first' : 'missing'}`)
   console.log(`Database host: ${databaseHost}`)
 } catch (error) {
   console.error('SENTINEL Neon check: FAIL')
   console.error(`Node: ${process.version}`)
   console.error(`DNS result order: ${getDefaultResultOrder()}`)
+  console.error(`Process DNS option: ${hasNodeOption(REQUIRED_DNS_OPTION) ? 'ipv4first' : 'missing'}`)
   console.error(`Database host: ${databaseHost}`)
   console.error(`Error: ${safeErrorSummary(error)}`)
   process.exit(1)
+}
+
+async function withRetry(task) {
+  const delays = [500, 1500]
+  let lastError
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      return await task()
+    } catch (error) {
+      lastError = error
+      if (!isTransientNetworkError(error) || attempt === 3) throw error
+      const delayMs = delays[attempt - 1] ?? delays[delays.length - 1]
+      console.warn(`SENTINEL Neon check: transient network retry ${attempt}/2 in ${delayMs}ms`)
+      await new Promise((resolve) => setTimeout(resolve, delayMs))
+    }
+  }
+  throw lastError
+}
+
+function hasNodeOption(option) {
+  return (process.env.NODE_OPTIONS ?? '').split(/\s+/).includes(option)
 }
 
 function loadLocalEnv() {
@@ -66,15 +114,40 @@ function unwrap(value) {
   return trimmed
 }
 
+function isTransientNetworkError(error) {
+  const seen = new Set()
+  const queue = [error]
+  const codes = new Set(['ETIMEDOUT', 'ECONNRESET', 'ECONNREFUSED', 'EAI_AGAIN', 'ENETUNREACH', 'EHOSTUNREACH', 'UND_ERR_SOCKET'])
+  while (queue.length) {
+    const current = queue.shift()
+    if (!current || seen.has(current)) continue
+    seen.add(current)
+    if (typeof current === 'string') {
+      if (current.includes('fetch failed') || current.includes('ETIMEDOUT')) return true
+      continue
+    }
+    if (current instanceof Error) {
+      if (current.message.includes('fetch failed') || current.message.includes('ETIMEDOUT')) return true
+      queue.push(current.cause)
+    }
+    if (typeof current === 'object') {
+      if (typeof current.code === 'string' && codes.has(current.code)) return true
+      queue.push(current.cause, current.sourceError)
+    }
+  }
+  return false
+}
+
 function safeErrorSummary(error) {
   const parts = []
   const seen = new Set()
   let current = error
-  while (current && !seen.has(current) && parts.length < 4) {
+  while (current && !seen.has(current) && parts.length < 6) {
     seen.add(current)
     if (current instanceof Error && current.message) parts.push(current.message)
     if (typeof current === 'object' && current !== null && typeof current.code === 'string') parts.push(current.code)
-    current = typeof current === 'object' && current !== null ? current.cause : undefined
+    if (typeof current === 'object' && current !== null) current = current.cause ?? current.sourceError
+    else current = undefined
   }
   return [...new Set(parts)].join(' → ') || 'Unknown connectivity error'
 }
