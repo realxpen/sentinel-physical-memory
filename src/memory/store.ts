@@ -79,8 +79,9 @@ export class EnvironmentalMemoryStore {
     this.upsertEvidence(memory, evidence)
 
     const normalizedObjects = perception.objects.map((item) => ({ ...item, evidenceIds: remapEvidenceIds(item.evidenceIds) }))
-    const objects = normalizedObjects.map((item) => this.upsertObject(memory, item, capturedAt))
-    const objectIdMap = new Map(perception.objects.map((item, index) => [item.id, objects[index].id]))
+    const canonicalObjectsByInput = normalizedObjects.map((item) => this.upsertObject(memory, item, capturedAt))
+    const objectIdMap = new Map(perception.objects.map((item, index) => [item.id, canonicalObjectsByInput[index].id]))
+    const objects = uniqueById(canonicalObjectsByInput)
 
     const observations = perception.observations.map((item) => ({
       ...item,
@@ -90,7 +91,7 @@ export class EnvironmentalMemoryStore {
       capturedAt,
       evidenceIds: remapEvidenceIds(item.evidenceIds),
     }))
-    const issues = this.upsertIssues(memory, observations, capturedAt)
+    const issues = uniqueById(this.upsertIssues(memory, observations, capturedAt))
 
     const normalizedRelations = perception.relations.map((item) => ({
       ...item,
@@ -100,7 +101,7 @@ export class EnvironmentalMemoryStore {
       toId: objectIdMap.get(item.toId) ?? item.toId,
       evidenceIds: remapEvidenceIds(item.evidenceIds),
     }))
-    const relations = normalizedRelations.map((item) => this.upsertRelation(memory, item))
+    const relations = uniqueById(normalizedRelations.map((item) => this.upsertRelation(memory, item)))
     memory.observations.push(...observations.map((item) => ({ ...item, evidenceIds: [...item.evidenceIds] })))
 
     const state: EnvironmentalState = { id: this.ids.state(), environmentId, capturedAt, sourceIds: [source.id], objectIds: objects.map((item) => item.id), issueIds: issues.map((item) => item.id), relationIds: relations.map((item) => item.id), summary: summary ?? this.defaultSummary(objects, issues, relations), version: memory.states.length + 1 }
@@ -125,8 +126,8 @@ export class EnvironmentalMemoryStore {
     const fromSnapshot = this.snapshots.get(from.id); const toSnapshot = this.snapshots.get(to.id)
     if (!fromSnapshot || !toSnapshot) throw new Error('Historical snapshot unavailable for one or both states')
     const diff = this.diffEngine.compare(
-      { stateId: from.id, environmentId, objects: fromSnapshot.objects, issues: fromSnapshot.issues },
-      { stateId: to.id, environmentId, objects: toSnapshot.objects, issues: toSnapshot.issues },
+      { stateId: from.id, environmentId, objects: uniqueById(fromSnapshot.objects), issues: uniqueById(fromSnapshot.issues) },
+      { stateId: to.id, environmentId, objects: uniqueById(toSnapshot.objects), issues: uniqueById(toSnapshot.issues) },
     )
     memory.diffs = [...memory.diffs.filter((item) => !(item.fromStateId === from.id && item.toStateId === to.id)), diff]
     return this.clone(diff)
@@ -158,3 +159,4 @@ export class EnvironmentalMemoryStore {
 }
 function sourceScopedId(sourceId: string, kind: string, rawId: string): string { return `${sourceId}:${kind}:${rawId}` }
 function unique(values: string[]): string[] { return [...new Set(values)] }
+function uniqueById<T extends { id: string }>(values: T[]): T[] { const seen = new Set<string>(); return values.filter((value) => { if (seen.has(value.id)) return false; seen.add(value.id); return true }) }
