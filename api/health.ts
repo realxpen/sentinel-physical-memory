@@ -1,4 +1,5 @@
 import { getRuntimeEnvDiagnostics } from '../server/runtime-env.js'
+import { getRuntimeNeonTransport } from '../server/memory-repository.js'
 
 type Request = { method?: string }
 type Response = { status(code: number): Response; json(body: unknown): void; setHeader?(name: string, value: string): void }
@@ -11,6 +12,7 @@ export default function handler(req: Request, res: Response) {
   return res.status(200).json({
     status: 'ok',
     persistenceConfigured: diagnostics.databaseUrlConfigured,
+    persistenceTransport: diagnostics.databaseUrlConfigured ? getRuntimeNeonTransport() : undefined,
     nebiusConfigured: diagnostics.nebiusApiKeyConfigured,
     runtimeEnvironment: process.env.VERCEL_ENV ?? 'local',
     localEnvFilesLoaded: diagnostics.loadedFiles,
