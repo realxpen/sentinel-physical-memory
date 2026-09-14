@@ -4,8 +4,16 @@ on:
   push:
     branches: [main]
     paths:
+      - 'api/health.ts'
       - 'api/scan.ts'
+      - 'src/ai/nebius.ts'
+      - 'src/ai/perception-normalization.ts'
+      - 'src/ai/perception-schema.ts'
+      - 'src/scan/pipeline.ts'
       - 'src/scan/video-ingestion.ts'
+      - 'src/memory/store.ts'
+      - 'package.json'
+      - 'package-lock.json'
       - '.github/workflows/phase4-observation-contract.yml'
   workflow_dispatch:
 
@@ -31,6 +39,7 @@ jobs:
           import zlib
 
           base = os.environ['SENTINEL_BASE_URL'].rstrip('/')
+          expected_commit = os.environ.get('GITHUB_SHA', '').strip()
 
           def png_data_url(rect_x, tone):
               width = 96
@@ -55,14 +64,14 @@ jobs:
               )
               return 'data:image/png;base64,' + base64.b64encode(payload).decode('ascii')
 
-          def request_json(path, payload=None):
+          def request_json(path, payload=None, timeout=180):
               body = None if payload is None else json.dumps(payload).encode('utf-8')
               headers = {'Accept': 'application/json', 'User-Agent': 'sentinel-phase4-contract'}
               if body is not None:
                   headers['Content-Type'] = 'application/json'
               request = urllib.request.Request(base + path, data=body, method='POST' if body is not None else 'GET', headers=headers)
               try:
-                  with urllib.request.urlopen(request, timeout=120) as response:
+                  with urllib.request.urlopen(request, timeout=timeout) as response:
                       text = response.read().decode('utf-8', 'replace')
                       return response.status, json.loads(text)
               except urllib.error.HTTPError as error:
@@ -72,6 +81,8 @@ jobs:
                   except Exception:
                       parsed = {'raw': text}
                   return error.code, parsed
+              except Exception as error:
+                  return 0, {'networkError': f'{type(error).__name__}: {error}'}
 
           def video_payload(mime='video/mp4', duration=30000, frame_count=8, environment='phase4-contract'):
               frames = []
@@ -87,7 +98,7 @@ jobs:
                   'source': {
                       'id': 'source_phase4_contract',
                       'environmentId': environment,
-                      'capturedAt': '2026-09-06T16:00:00.000Z',
+                      'capturedAt': '2026-09-14T14:00:00.000Z',
                   },
                   'media': {
                       'kind': 'video',
@@ -99,29 +110,36 @@ jobs:
                   'extractedFrames': frames,
               }
 
-          print('Waiting for the hardened production contract...')
-          for attempt in range(24):
-              status, payload = request_json('/api/scan', video_payload(mime='video/avi', frame_count=0))
-              if status == 415 and payload.get('error') == 'UNSUPPORTED_MEDIA_TYPE':
+          print(f'Waiting for production commit {expected_commit[:12]}...')
+          latest_health = None
+          for attempt in range(120):
+              status, health = request_json('/api/health', timeout=15)
+              latest_health = {'status': status, 'payload': health}
+              if status == 200 and health.get('deploymentCommit') == expected_commit:
+                  print('Fresh production deployment detected.')
                   break
-              if attempt == 23:
-                  raise AssertionError({'status': status, 'payload': payload})
+              if attempt == 119:
+                  raise AssertionError({
+                      'message': 'Production did not deploy the commit under test within 10 minutes.',
+                      'expectedCommit': expected_commit,
+                      'latestHealth': latest_health,
+                  })
               time.sleep(5)
 
-          status, payload = request_json('/api/scan', video_payload(mime='video/avi', frame_count=0))
+          status, payload = request_json('/api/scan', video_payload(mime='video/avi', frame_count=0), timeout=30)
           assert status == 415 and payload.get('error') == 'UNSUPPORTED_MEDIA_TYPE', (status, payload)
           print('Unsupported MIME rejected correctly.')
 
-          status, payload = request_json('/api/scan', video_payload(duration=2000, frame_count=0))
+          status, payload = request_json('/api/scan', video_payload(duration=2000, frame_count=0), timeout=30)
           assert status == 422 and payload.get('error') == 'VIDEO_TOO_SHORT', (status, payload)
           print('Too-short walkthrough rejected correctly.')
 
-          status, payload = request_json('/api/scan', video_payload(frame_count=1))
+          status, payload = request_json('/api/scan', video_payload(frame_count=1), timeout=30)
           assert status == 422 and payload.get('error') == 'TOO_FEW_FRAMES', (status, payload)
           print('Too-few evidence frames rejected correctly.')
 
           environment = f"phase4-contract-{os.environ.get('GITHUB_RUN_ID', 'manual')}"
-          status, payload = request_json('/api/scan', video_payload(environment=environment))
+          status, payload = request_json('/api/scan', video_payload(environment=environment), timeout=180)
           assert status == 200, (status, payload)
           assert payload.get('persistence') == 'neon', payload
           assert len(payload.get('frames') or []) == 8, payload
@@ -129,6 +147,7 @@ jobs:
           assert payload.get('environmentId') == environment, payload
           print('PHASE 4 PRODUCTION VIDEO CONTRACT VERIFIED')
           print(json.dumps({
+              'deploymentCommit': expected_commit,
               'environmentId': environment,
               'scanId': payload.get('scanId'),
               'stateId': payload.get('state', {}).get('id'),
