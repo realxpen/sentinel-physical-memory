@@ -15,6 +15,7 @@ export default function handler(req: Request, res: Response) {
     persistenceTransport: diagnostics.databaseUrlConfigured ? getRuntimeNeonTransport() : undefined,
     nebiusConfigured: diagnostics.nebiusApiKeyConfigured,
     runtimeEnvironment: process.env.VERCEL_ENV ?? 'local',
+    deploymentCommit: process.env.VERCEL_GIT_COMMIT_SHA?.trim() || undefined,
     localEnvFilesLoaded: diagnostics.loadedFiles,
     databaseUrlSource: diagnostics.databaseUrlSource,
     databaseHost: diagnostics.databaseHost,
