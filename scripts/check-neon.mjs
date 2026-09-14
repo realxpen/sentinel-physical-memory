@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process'
-import { getDefaultResultOrder, lookup, setDefaultResultOrder } from 'node:dns'
+import { getDefaultResultOrder, setDefaultResultOrder } from 'node:dns'
+import { lookup } from 'node:dns/promises'
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
