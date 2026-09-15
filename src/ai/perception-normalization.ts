@@ -4,7 +4,7 @@ export interface EvidenceReferenceNormalizationResult {
 }
 
 /**
- * Repair model-local evidence reference placeholders without inventing evidence.
+ * Repair model-local evidence reference formatting without inventing evidence.
  *
  * A reference is rewritten only when it can be mapped deterministically to an
  * evidence item that already exists in the model response:
@@ -12,10 +12,12 @@ export interface EvidenceReferenceNormalizationResult {
  * 2. a numeric placeholder such as evidence_3 maps to the unique evidence item
  *    whose frameIndex is 3;
  * 3. when no evidence item provides that frameIndex, evidence_3 may map to the
- *    existing evidence item at array index 3.
+ *    existing evidence item at array index 3;
+ * 4. a single string evidenceIds value is normalized to a one-item string[] so
+ *    provider formatting variance does not discard an otherwise grounded item.
  *
- * Unknown or ambiguous references are intentionally preserved so the strict
- * perception validator can reject them.
+ * Missing, non-string, unknown, or ambiguous references are intentionally left
+ * invalid so the strict perception validator can reject them.
  */
 export function normalizePerceptionEvidenceReferences(value: unknown): EvidenceReferenceNormalizationResult {
   if (!isRecord(value)) return { value, remappedReferences: 0 }
@@ -27,9 +29,19 @@ export function normalizePerceptionEvidenceReferences(value: unknown): EvidenceR
   const normalizeCollection = (collection: unknown): unknown[] => {
     if (!Array.isArray(collection)) return []
     return collection.map((item) => {
-      if (!isRecord(item) || !Array.isArray(item.evidenceIds)) return item
+      if (!isRecord(item)) return item
 
-      const evidenceIds = item.evidenceIds.map((reference) => {
+      let rawEvidenceIds: unknown[]
+      if (Array.isArray(item.evidenceIds)) {
+        rawEvidenceIds = item.evidenceIds
+      } else if (typeof item.evidenceIds === 'string' && item.evidenceIds.trim()) {
+        rawEvidenceIds = [item.evidenceIds]
+        remappedReferences += 1
+      } else {
+        return item
+      }
+
+      const evidenceIds = rawEvidenceIds.map((reference) => {
         if (typeof reference !== 'string') return reference
         const normalized = resolveEvidenceReference(reference, index)
         if (normalized !== reference) remappedReferences += 1
