@@ -84,6 +84,38 @@ if (unsafeConfidence.value.objects[2].confidence !== null) throw new Error('null
 if (unsafeConfidence.value.objects[3].confidence !== 1.4) throw new Error('out-of-range numeric confidence must remain invalid')
 console.log('PASS  unsafe confidence shapes remain invalid for strict validation')
 
+const relationAliases = normalize({
+  evidence: [{ id: 'proof-zero' }],
+  observations: [],
+  objects: [],
+  conditions: [],
+  relations: [
+    { type: 'inside', evidenceIds: ['proof-zero'] },
+    { type: 'next to', evidenceIds: ['proof-zero'] },
+    { type: 'mounted-on', evidenceIds: ['proof-zero'] },
+    { type: 'on top of', evidenceIds: ['proof-zero'] },
+    { type: 'front of', evidenceIds: ['proof-zero'] },
+    { type: 'left of', evidenceIds: ['proof-zero'] },
+  ],
+})
+const expectedRelationTypes = ['located_in', 'adjacent_to', 'attached_to', 'on', 'in_front_of', 'left_of']
+if (relationAliases.normalizedRelations !== expectedRelationTypes.length) throw new Error(`expected ${expectedRelationTypes.length} relation normalizations, got ${relationAliases.normalizedRelations}`)
+for (let index = 0; index < expectedRelationTypes.length; index += 1) {
+  if (relationAliases.value.relations[index].type !== expectedRelationTypes[index]) throw new Error(`relation alias ${index} did not normalize safely`)
+}
+console.log('PASS  unambiguous provider relation aliases normalize to canonical spatial relations')
+
+const unknownRelation = normalize({
+  evidence: [{ id: 'proof-zero' }],
+  observations: [],
+  objects: [],
+  conditions: [],
+  relations: [{ type: 'faces_toward', evidenceIds: ['proof-zero'] }],
+})
+if (unknownRelation.normalizedRelations !== 0) throw new Error('unknown relation semantics must not be rewritten')
+if (unknownRelation.value.relations[0].type !== 'faces_toward') throw new Error('unknown relation semantic changed unexpectedly')
+console.log('PASS  unknown relation semantics remain invalid for strict validation')
+
 const unknown = normalize({
   evidence: [{ id: 'proof-zero', frameIndex: 0 }],
   observations: [{ evidenceIds: ['evidence_9', 'semantic-label'] }],
