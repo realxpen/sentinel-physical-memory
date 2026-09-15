@@ -37,6 +37,19 @@ if (byArrayIndex.remappedReferences !== 1) throw new Error(`expected 1 array-ind
 if (evidenceIds(byArrayIndex, 'observations')[0] !== 'proof-one') throw new Error('array-index evidence reference was not remapped')
 console.log('PASS  unambiguous evidence array index fallback remaps an existing item')
 
+const scalar = normalize({
+  evidence: [{ id: 'proof-zero', frameIndex: 0 }],
+  observations: [],
+  objects: [{ evidenceIds: 'proof-zero' }],
+  conditions: [{ evidenceIds: 'evidence_0' }],
+  relations: [],
+})
+if (!Array.isArray(evidenceIds(scalar, 'objects'))) throw new Error('scalar object evidenceIds was not normalized to an array')
+if (evidenceIds(scalar, 'objects')[0] !== 'proof-zero') throw new Error('scalar exact object evidence id changed unexpectedly')
+if (!Array.isArray(evidenceIds(scalar, 'conditions'))) throw new Error('scalar condition evidenceIds was not normalized to an array')
+if (evidenceIds(scalar, 'conditions')[0] !== 'proof-zero') throw new Error('scalar condition placeholder did not resolve to existing evidence')
+console.log('PASS  single-string evidenceIds normalize to one-item arrays without inventing evidence')
+
 const unknown = normalize({
   evidence: [{ id: 'proof-zero', frameIndex: 0 }],
   observations: [{ evidenceIds: ['evidence_9', 'semantic-label'] }],
@@ -47,6 +60,15 @@ if (unknown.remappedReferences !== 0) throw new Error('unknown references must n
 if (evidenceIds(unknown, 'observations')[0] !== 'evidence_9') throw new Error('unknown numeric reference must remain for strict validation')
 if (evidenceIds(unknown, 'observations')[1] !== 'semantic-label') throw new Error('non-placeholder evidence reference must remain unchanged')
 console.log('PASS  unknown evidence references fail closed instead of inventing evidence')
+
+const invalidShape = normalize({
+  evidence: [{ id: 'proof-zero', frameIndex: 0 }],
+  observations: [],
+  objects: [{ evidenceIds: 42 }],
+  relations: [],
+})
+if (evidenceIds(invalidShape, 'objects') !== 42) throw new Error('non-string scalar evidenceIds must remain invalid for strict validation')
+console.log('PASS  non-string evidenceIds remain invalid and fail closed downstream')
 
 const ambiguous = normalize({
   evidence: [
