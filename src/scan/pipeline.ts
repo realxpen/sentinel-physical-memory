@@ -1,4 +1,4 @@
-import type { PerceptionResult } from '../domain/sentinel.js'
+import type { EnvironmentType, PerceptionResult } from '../domain/sentinel.js'
 import { validatePerceptionForScan } from '../ai/perception-schema.js'
 import type { ModelAdapter } from '../ai/model.js'
 import { EnvironmentalMemoryStore } from '../memory/store.js'
@@ -15,6 +15,7 @@ export interface ScanPipelineDependencies {
 
 const defaultId = (prefix: string) => `${prefix}_${crypto.randomUUID()}`
 const MAX_PERCEPTION_IMAGE_FRAMES = 10
+const ENVIRONMENT_TYPES = new Set<EnvironmentType>(['office', 'school', 'hotel', 'clinic', 'retail', 'home', 'warehouse', 'construction', 'other'])
 
 export class ScanPipeline {
   private readonly now: () => Date
@@ -79,7 +80,9 @@ export class ScanPipeline {
 
   private ensureEnvironment(memory: EnvironmentalMemoryStore, input: ScanInput) {
     if (memory.get(input.environmentId)) return
-    memory.createEnvironment({ id: input.environmentId, name: input.source.metadata?.name?.toString() ?? 'SENTINEL Environment', type: 'other', description: 'Environment created automatically by the scan pipeline.', createdAt: input.source.capturedAt, updatedAt: input.source.capturedAt, stateIds: [], roomIds: [], objectIds: [], issueIds: [] })
+    const name = input.source.metadata?.name?.toString().trim() || 'SENTINEL Environment'
+    const type = environmentTypeFromMetadata(input.source.metadata?.environmentType)
+    memory.createEnvironment({ id: input.environmentId, name, type, description: 'Environment created automatically by the scan pipeline.', createdAt: input.source.capturedAt, updatedAt: input.source.capturedAt, stateIds: [], roomIds: [], objectIds: [], issueIds: [] })
   }
 
   private async perceive(scanId: string, artifacts: ScanArtifact[], input: ScanInput): Promise<PerceptionResult> {
@@ -117,4 +120,9 @@ export class ScanPipeline {
   private createArtifacts(frames: ScanFrame[], input: ScanInput): ScanArtifact[] { const artifacts: ScanArtifact[] = frames.map((frame) => ({ artifactId: this.id('artifact'), frameId: frame.frameId, kind: 'frame', uri: frame.uri })); if (input.options?.preserveAudio && input.media.kind === 'video') artifacts.push({ artifactId: this.id('artifact'), kind: 'audio', uri: input.media.uri }); artifacts.push({ artifactId: this.id('artifact'), kind: 'metadata', uri: input.media.uri }); return artifacts }
   private emit(scanId: string, stage: ScanProgress['stage'], progress: number, message: string) { this.onProgress?.({ scanId, stage, progress, message }) }
   private error(code: string, message: string): ScanError { return Object.assign(new Error(message), { code, recoverable: false }) }
+}
+
+function environmentTypeFromMetadata(value: unknown): EnvironmentType {
+  if (typeof value !== 'string') return 'other'
+  return ENVIRONMENT_TYPES.has(value as EnvironmentType) ? value as EnvironmentType : 'other'
 }
