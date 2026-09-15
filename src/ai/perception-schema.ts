@@ -1,24 +1,188 @@
-import type { BoundingBox, EnvironmentRelation, EnvironmentalCondition, Evidence, Observation, PerceptionResult, SpatialObject, SpatialPosition } from '../domain/sentinel'
+import type {
+  BoundingBox,
+  EnvironmentRelation,
+  EnvironmentalCondition,
+  Evidence,
+  Observation,
+  PerceptionResult,
+  SpatialObject,
+  SpatialPosition,
+} from '../domain/sentinel.js'
 
-export class PerceptionValidationError extends Error { readonly code = 'INVALID_PERCEPTION_SCHEMA'; constructor(message: string) { super(message); this.name = 'PerceptionValidationError' } }
-export function validatePerception(value: unknown): PerceptionResult { if (!isRecord(value)) throw new PerceptionValidationError('Perception result must be an object'); return { sourceId: requireString(value.sourceId, 'sourceId'), observations: requireArray(value.observations, 'observations').map(validateObservation), objects: requireArray(value.objects, 'objects').map(validateSpatialObject), conditions: requireArray(value.conditions, 'conditions').map(validateCondition), relations: requireArray(value.relations, 'relations').map(validateRelation), evidence: requireArray(value.evidence, 'evidence').map(validateEvidence) } }
+export class PerceptionValidationError extends Error {
+  readonly code = 'INVALID_PERCEPTION_SCHEMA'
+  constructor(message: string) {
+    super(message)
+    this.name = 'PerceptionValidationError'
+  }
+}
+
+export function validatePerception(value: unknown): PerceptionResult {
+  if (!isRecord(value)) throw new PerceptionValidationError('Perception result must be an object')
+  return {
+    sourceId: requireString(value.sourceId, 'sourceId'),
+    observations: requireArray(value.observations, 'observations').map(validateObservation),
+    objects: requireArray(value.objects, 'objects').map(validateSpatialObject),
+    conditions: requireArray(value.conditions, 'conditions').map(validateCondition),
+    relations: requireArray(value.relations, 'relations').map(validateRelation),
+    evidence: requireArray(value.evidence, 'evidence').map(validateEvidence),
+  }
+}
+
 export function validatePerceptionForScan(result: PerceptionResult, environmentId: string, sourceId: string): PerceptionResult {
   if (result.sourceId !== sourceId) throw new PerceptionValidationError(`sourceId must equal scan source ${sourceId}`)
+
+  assertUniqueIds(result.observations, 'observation')
+  assertUniqueIds(result.objects, 'object')
+  assertUniqueIds(result.conditions, 'condition')
+  assertUniqueIds(result.relations, 'relation')
+  assertUniqueIds(result.evidence, 'evidence')
+
   const evidenceIds = new Set(result.evidence.map((item) => item.id))
   const objectIds = new Set(result.objects.map((item) => item.id))
-  for (const item of result.observations) { if (item.environmentId !== environmentId || item.sourceId !== sourceId) throw new PerceptionValidationError(`observation ${item.id} has invalid scan identity`); assertEvidence(item.evidenceIds, evidenceIds, `observation ${item.id}`) }
-  for (const item of result.objects) { if (item.environmentId !== environmentId) throw new PerceptionValidationError(`object ${item.id} has the wrong environmentId`); assertEvidence(item.evidenceIds, evidenceIds, `object ${item.id}`) }
-  for (const item of result.conditions) { if (item.environmentId !== environmentId) throw new PerceptionValidationError(`condition ${item.id} has the wrong environmentId`); assertEvidence(item.evidenceIds, evidenceIds, `condition ${item.id}`); for (const objectId of item.objectIds) if (!objectIds.has(objectId)) throw new PerceptionValidationError(`condition ${item.id} references missing object ${objectId}`) }
-  for (const item of result.relations) { if (item.environmentId !== environmentId) throw new PerceptionValidationError(`relation ${item.id} has the wrong environmentId`); assertEvidence(item.evidenceIds, evidenceIds, `relation ${item.id}`) }
-  for (const item of result.evidence) if (item.sourceId !== sourceId) throw new PerceptionValidationError(`evidence ${item.id} has the wrong sourceId`)
+
+  if (result.observations.length + result.objects.length + result.conditions.length === 0) {
+    throw new PerceptionValidationError('Perception produced no grounded observations, objects, or conditions')
+  }
+
+  for (const item of result.observations) {
+    if (item.environmentId !== environmentId || item.sourceId !== sourceId) {
+      throw new PerceptionValidationError(`observation ${item.id} has invalid scan identity`)
+    }
+    assertGroundedEvidence(item.evidenceIds, evidenceIds, `observation ${item.id}`)
+  }
+
+  for (const item of result.objects) {
+    if (item.environmentId !== environmentId) {
+      throw new PerceptionValidationError(`object ${item.id} has the wrong environmentId`)
+    }
+    assertGroundedEvidence(item.evidenceIds, evidenceIds, `object ${item.id}`)
+  }
+
+  for (const item of result.conditions) {
+    if (item.environmentId !== environmentId) {
+      throw new PerceptionValidationError(`condition ${item.id} has the wrong environmentId`)
+    }
+    assertGroundedEvidence(item.evidenceIds, evidenceIds, `condition ${item.id}`)
+    for (const objectId of item.objectIds) {
+      if (!objectIds.has(objectId)) throw new PerceptionValidationError(`condition ${item.id} references missing object ${objectId}`)
+    }
+  }
+
+  for (const item of result.relations) {
+    if (item.environmentId !== environmentId) {
+      throw new PerceptionValidationError(`relation ${item.id} has the wrong environmentId`)
+    }
+    assertGroundedEvidence(item.evidenceIds, evidenceIds, `relation ${item.id}`)
+    if (!objectIds.has(item.fromId) || !objectIds.has(item.toId)) {
+      throw new PerceptionValidationError(`relation ${item.id} references a missing object endpoint`)
+    }
+  }
+
+  for (const item of result.evidence) {
+    if (item.sourceId !== sourceId) throw new PerceptionValidationError(`evidence ${item.id} has the wrong sourceId`)
+  }
+
   return result
 }
-function assertEvidence(ids: readonly string[], known: ReadonlySet<string>, owner: string) { for (const id of ids) if (!known.has(id)) throw new PerceptionValidationError(`${owner} references missing evidence ${id}`) }
-function validateObservation(value: unknown, i: number): Observation { const r = requireRecord(value, `observations[${i}]`); return { id: requireString(r.id, `observations[${i}].id`), environmentId: requireString(r.environmentId, `observations[${i}].environmentId`), sourceId: requireString(r.sourceId, `observations[${i}].sourceId`), modality: requireEnum(r.modality, ['video','image','audio','document','sensor'], `observations[${i}].modality`), capturedAt: requireString(r.capturedAt, `observations[${i}].capturedAt`), label: requireString(r.label, `observations[${i}].label`), description: requireString(r.description, `observations[${i}].description`), confidence: requireConfidence(r.confidence, `observations[${i}].confidence`), basis: requireEnum(r.basis, ['observed'], `observations[${i}].basis`), position: optionalPosition(r.position, `observations[${i}].position`), evidenceIds: requireStringArray(r.evidenceIds, `observations[${i}].evidenceIds`) } }
-function validateSpatialObject(value: unknown, i: number): SpatialObject { const r = requireRecord(value, `objects[${i}]`); return { id: requireString(r.id, `objects[${i}].id`), environmentId: requireString(r.environmentId, `objects[${i}].environmentId`), category: requireEnum(r.category, ['room','door','window','furniture','equipment','electrical','hvac','safety','signage','document','person','obstruction','other'], `objects[${i}].category`), name: requireString(r.name, `objects[${i}].name`), description: optionalString(r.description, `objects[${i}].description`), position: optionalPosition(r.position, `objects[${i}].position`), boundingBox: optionalBoundingBox(r.boundingBox, `objects[${i}].boundingBox`), state: optionalString(r.state, `objects[${i}].state`), confidence: requireConfidence(r.confidence, `objects[${i}].confidence`), firstSeenAt: requireString(r.firstSeenAt, `objects[${i}].firstSeenAt`), lastSeenAt: requireString(r.lastSeenAt, `objects[${i}].lastSeenAt`), evidenceIds: requireStringArray(r.evidenceIds, `objects[${i}].evidenceIds`) } }
-function validateCondition(value: unknown, i: number): EnvironmentalCondition { const r = requireRecord(value, `conditions[${i}]`); return { id: requireString(r.id, `conditions[${i}].id`), environmentId: requireString(r.environmentId, `conditions[${i}].environmentId`), kind: requireEnum(r.kind, ['normal','attention','hazard','damage','maintenance','access','compliance','unknown'], `conditions[${i}].kind`), title: requireString(r.title, `conditions[${i}].title`), description: requireString(r.description, `conditions[${i}].description`), status: requireEnum(r.status, ['present','uncertain'], `conditions[${i}].status`), basis: requireEnum(r.basis, ['observed','inferred'], `conditions[${i}].basis`), confidence: requireConfidence(r.confidence, `conditions[${i}].confidence`), objectIds: requireStringArray(r.objectIds, `conditions[${i}].objectIds`), evidenceIds: requireStringArray(r.evidenceIds, `conditions[${i}].evidenceIds`), observedAt: requireString(r.observedAt, `conditions[${i}].observedAt`) } }
-function validateRelation(value: unknown, i: number): EnvironmentRelation { const r = requireRecord(value, `relations[${i}]`); return { id: requireString(r.id, `relations[${i}].id`), environmentId: requireString(r.environmentId, `relations[${i}].environmentId`), fromId: requireString(r.fromId, `relations[${i}].fromId`), toId: requireString(r.toId, `relations[${i}].toId`), type: requireEnum(r.type, ['contains','located_in','adjacent_to','near','attached_to','part_of','on','above','below','in_front_of','behind','left_of','right_of','has_issue','requires_action','supports'], `relations[${i}].type`), confidence: requireConfidence(r.confidence, `relations[${i}].confidence`), evidenceIds: requireStringArray(r.evidenceIds, `relations[${i}].evidenceIds`) } }
-function validateEvidence(value: unknown, i: number): Evidence { const r = requireRecord(value, `evidence[${i}]`); return { id: requireString(r.id, `evidence[${i}].id`), type: requireEnum(r.type, ['frame','image','audio','document','observation','previous_state'], `evidence[${i}].type`), sourceId: requireString(r.sourceId, `evidence[${i}].sourceId`), capturedAt: requireString(r.capturedAt, `evidence[${i}].capturedAt`), frameIndex: optionalNumber(r.frameIndex, `evidence[${i}].frameIndex`), timestampMs: optionalNumber(r.timestampMs, `evidence[${i}].timestampMs`), uri: optionalString(r.uri, `evidence[${i}].uri`), excerpt: optionalString(r.excerpt, `evidence[${i}].excerpt`), boundingBox: optionalBoundingBox(r.boundingBox, `evidence[${i}].boundingBox`), confidence: r.confidence === undefined || r.confidence === null ? undefined : requireConfidence(r.confidence, `evidence[${i}].confidence`), description: requireString(r.description, `evidence[${i}].description`) } }
+
+function assertGroundedEvidence(ids: readonly string[], known: ReadonlySet<string>, owner: string) {
+  if (!ids.length) throw new PerceptionValidationError(`${owner} has no grounded evidence`)
+  for (const id of ids) {
+    if (!known.has(id)) throw new PerceptionValidationError(`${owner} references missing evidence ${id}`)
+  }
+}
+
+function assertUniqueIds<T extends { id: string }>(items: readonly T[], label: string) {
+  const seen = new Set<string>()
+  for (const item of items) {
+    if (seen.has(item.id)) throw new PerceptionValidationError(`duplicate ${label} id ${item.id}`)
+    seen.add(item.id)
+  }
+}
+
+function validateObservation(value: unknown, i: number): Observation {
+  const r = requireRecord(value, `observations[${i}]`)
+  return {
+    id: requireString(r.id, `observations[${i}].id`),
+    environmentId: requireString(r.environmentId, `observations[${i}].environmentId`),
+    sourceId: requireString(r.sourceId, `observations[${i}].sourceId`),
+    modality: requireEnum(r.modality, ['video', 'image', 'audio', 'document', 'sensor'], `observations[${i}].modality`),
+    capturedAt: requireString(r.capturedAt, `observations[${i}].capturedAt`),
+    label: requireString(r.label, `observations[${i}].label`),
+    description: requireString(r.description, `observations[${i}].description`),
+    confidence: requireConfidence(r.confidence, `observations[${i}].confidence`),
+    basis: requireEnum(r.basis, ['observed'], `observations[${i}].basis`),
+    position: optionalPosition(r.position, `observations[${i}].position`),
+    evidenceIds: requireStringArray(r.evidenceIds, `observations[${i}].evidenceIds`),
+  }
+}
+
+function validateSpatialObject(value: unknown, i: number): SpatialObject {
+  const r = requireRecord(value, `objects[${i}]`)
+  return {
+    id: requireString(r.id, `objects[${i}].id`),
+    environmentId: requireString(r.environmentId, `objects[${i}].environmentId`),
+    category: requireEnum(r.category, ['room', 'door', 'window', 'furniture', 'equipment', 'electrical', 'hvac', 'safety', 'signage', 'document', 'person', 'obstruction', 'other'], `objects[${i}].category`),
+    name: requireString(r.name, `objects[${i}].name`),
+    description: optionalString(r.description, `objects[${i}].description`),
+    position: optionalPosition(r.position, `objects[${i}].position`),
+    boundingBox: optionalBoundingBox(r.boundingBox, `objects[${i}].boundingBox`),
+    state: optionalString(r.state, `objects[${i}].state`),
+    confidence: requireConfidence(r.confidence, `objects[${i}].confidence`),
+    firstSeenAt: requireString(r.firstSeenAt, `objects[${i}].firstSeenAt`),
+    lastSeenAt: requireString(r.lastSeenAt, `objects[${i}].lastSeenAt`),
+    evidenceIds: requireStringArray(r.evidenceIds, `objects[${i}].evidenceIds`),
+  }
+}
+
+function validateCondition(value: unknown, i: number): EnvironmentalCondition {
+  const r = requireRecord(value, `conditions[${i}]`)
+  return {
+    id: requireString(r.id, `conditions[${i}].id`),
+    environmentId: requireString(r.environmentId, `conditions[${i}].environmentId`),
+    kind: requireEnum(r.kind, ['normal', 'attention', 'hazard', 'damage', 'maintenance', 'access', 'compliance', 'unknown'], `conditions[${i}].kind`),
+    title: requireString(r.title, `conditions[${i}].title`),
+    description: requireString(r.description, `conditions[${i}].description`),
+    status: requireEnum(r.status, ['present', 'uncertain'], `conditions[${i}].status`),
+    basis: requireEnum(r.basis, ['observed', 'inferred'], `conditions[${i}].basis`),
+    confidence: requireConfidence(r.confidence, `conditions[${i}].confidence`),
+    objectIds: requireStringArray(r.objectIds, `conditions[${i}].objectIds`),
+    evidenceIds: requireStringArray(r.evidenceIds, `conditions[${i}].evidenceIds`),
+    observedAt: requireString(r.observedAt, `conditions[${i}].observedAt`),
+  }
+}
+
+function validateRelation(value: unknown, i: number): EnvironmentRelation {
+  const r = requireRecord(value, `relations[${i}]`)
+  return {
+    id: requireString(r.id, `relations[${i}].id`),
+    environmentId: requireString(r.environmentId, `relations[${i}].environmentId`),
+    fromId: requireString(r.fromId, `relations[${i}].fromId`),
+    toId: requireString(r.toId, `relations[${i}].toId`),
+    type: requireEnum(r.type, ['contains', 'located_in', 'adjacent_to', 'near', 'attached_to', 'part_of', 'on', 'above', 'below', 'in_front_of', 'behind', 'left_of', 'right_of', 'has_issue', 'requires_action', 'supports'], `relations[${i}].type`),
+    confidence: requireConfidence(r.confidence, `relations[${i}].confidence`),
+    evidenceIds: requireStringArray(r.evidenceIds, `relations[${i}].evidenceIds`),
+  }
+}
+
+function validateEvidence(value: unknown, i: number): Evidence {
+  const r = requireRecord(value, `evidence[${i}]`)
+  return {
+    id: requireString(r.id, `evidence[${i}].id`),
+    type: requireEnum(r.type, ['frame', 'image', 'audio', 'document', 'observation', 'previous_state'], `evidence[${i}].type`),
+    sourceId: requireString(r.sourceId, `evidence[${i}].sourceId`),
+    capturedAt: requireString(r.capturedAt, `evidence[${i}].capturedAt`),
+    frameIndex: optionalNumber(r.frameIndex, `evidence[${i}].frameIndex`),
+    timestampMs: optionalNumber(r.timestampMs, `evidence[${i}].timestampMs`),
+    uri: optionalString(r.uri, `evidence[${i}].uri`),
+    excerpt: optionalString(r.excerpt, `evidence[${i}].excerpt`),
+    boundingBox: optionalBoundingBox(r.boundingBox, `evidence[${i}].boundingBox`),
+    confidence: r.confidence === undefined || r.confidence === null ? undefined : requireConfidence(r.confidence, `evidence[${i}].confidence`),
+    description: requireString(r.description, `evidence[${i}].description`),
+  }
+}
+
 function optionalPosition(value: unknown, path: string): SpatialPosition | undefined {
   if (value === undefined || value === null) return undefined
   if (typeof value === 'string') return value.trim() ? { description: requireString(value, `${path}.description`) } : undefined
@@ -26,16 +190,94 @@ function optionalPosition(value: unknown, path: string): SpatialPosition | undef
   if (typeof value.description !== 'string' || !value.description.trim()) return undefined
   return validatePosition(value, path)
 }
-function validatePosition(value: unknown, path: string): SpatialPosition { const r = requireRecord(value, path); return { description: requireString(r.description, `${path}.description`), x: optionalNumber(r.x, `${path}.x`), y: optionalNumber(r.y, `${path}.y`), z: optionalNumber(r.z, `${path}.z`), roomId: optionalString(r.roomId, `${path}.roomId`), relativeToId: optionalString(r.relativeToId, `${path}.relativeToId`) } }
-function optionalBoundingBox(value: unknown, path: string): BoundingBox | undefined { if (value === undefined || value === null) return undefined; if (Array.isArray(value) && value.length >= 4) return { x: requireFiniteNumber(value[0], `${path}[0]`), y: requireFiniteNumber(value[1], `${path}[1]`), width: requireFiniteNumber(value[2], `${path}[2]`), height: requireFiniteNumber(value[3], `${path}[3]`), frameWidth: value.length > 4 ? optionalNumber(value[4], `${path}[4]`) : undefined, frameHeight: value.length > 5 ? optionalNumber(value[5], `${path}[5]`) : undefined }; if (!isRecord(value)) return undefined; return validateBoundingBox(value, path) }
-function validateBoundingBox(value: unknown, path: string): BoundingBox { const r = requireRecord(value, path); return { x: requireFiniteNumber(r.x, `${path}.x`), y: requireFiniteNumber(r.y, `${path}.y`), width: requireFiniteNumber(r.width, `${path}.width`), height: requireFiniteNumber(r.height, `${path}.height`), frameWidth: optionalNumber(r.frameWidth, `${path}.frameWidth`), frameHeight: optionalNumber(r.frameHeight, `${path}.frameHeight`) } }
-function requireFiniteNumber(v: unknown, path: string): number { if (typeof v !== 'number' || !Number.isFinite(v)) throw new PerceptionValidationError(`${path} must be a finite number`); return v }
-function requireRecord(v: unknown, path: string): Record<string, unknown> { if (!isRecord(v)) throw new PerceptionValidationError(`${path} must be an object`); return v }
-function requireArray(v: unknown, path: string): unknown[] { if (!Array.isArray(v)) throw new PerceptionValidationError(`${path} must be an array`); return v }
-function requireString(v: unknown, path: string): string { if (typeof v !== 'string' || !v.trim()) throw new PerceptionValidationError(`${path} must be a non-empty string`); return v }
-function optionalString(v: unknown, path: string): string | undefined { return v === undefined || v === null ? undefined : requireString(v, path) }
-function requireStringArray(v: unknown, path: string): string[] { return requireArray(v, path).map((x, i) => requireString(x, `${path}[${i}]`)) }
-function optionalNumber(v: unknown, path: string): number | undefined { if (v === undefined || v === null) return undefined; return requireFiniteNumber(v, path) }
-function requireConfidence(v: unknown, path: string): number { const n = requireFiniteNumber(v, path); if (n < 0 || n > 1) throw new PerceptionValidationError(`${path} must be between 0 and 1`); return n }
-function requireEnum<T extends string>(v: unknown, allowed: readonly T[], path: string): T { if (typeof v !== 'string' || !allowed.includes(v as T)) { const shown = typeof v === 'string' ? ` "${v.slice(0, 80)}"` : ''; throw new PerceptionValidationError(`${path} contains an unsupported value${shown}`) } return v as T }
-function isRecord(v: unknown): v is Record<string, unknown> { return typeof v === 'object' && v !== null && !Array.isArray(v) }
+
+function validatePosition(value: unknown, path: string): SpatialPosition {
+  const r = requireRecord(value, path)
+  return {
+    description: requireString(r.description, `${path}.description`),
+    x: optionalNumber(r.x, `${path}.x`),
+    y: optionalNumber(r.y, `${path}.y`),
+    z: optionalNumber(r.z, `${path}.z`),
+    roomId: optionalString(r.roomId, `${path}.roomId`),
+    relativeToId: optionalString(r.relativeToId, `${path}.relativeToId`),
+  }
+}
+
+function optionalBoundingBox(value: unknown, path: string): BoundingBox | undefined {
+  if (value === undefined || value === null) return undefined
+  if (Array.isArray(value) && value.length >= 4) {
+    return {
+      x: requireFiniteNumber(value[0], `${path}[0]`),
+      y: requireFiniteNumber(value[1], `${path}[1]`),
+      width: requireFiniteNumber(value[2], `${path}[2]`),
+      height: requireFiniteNumber(value[3], `${path}[3]`),
+      frameWidth: value.length > 4 ? optionalNumber(value[4], `${path}[4]`) : undefined,
+      frameHeight: value.length > 5 ? optionalNumber(value[5], `${path}[5]`) : undefined,
+    }
+  }
+  if (!isRecord(value)) return undefined
+  return validateBoundingBox(value, path)
+}
+
+function validateBoundingBox(value: unknown, path: string): BoundingBox {
+  const r = requireRecord(value, path)
+  return {
+    x: requireFiniteNumber(r.x, `${path}.x`),
+    y: requireFiniteNumber(r.y, `${path}.y`),
+    width: requireFiniteNumber(r.width, `${path}.width`),
+    height: requireFiniteNumber(r.height, `${path}.height`),
+    frameWidth: optionalNumber(r.frameWidth, `${path}.frameWidth`),
+    frameHeight: optionalNumber(r.frameHeight, `${path}.frameHeight`),
+  }
+}
+
+function requireFiniteNumber(v: unknown, path: string): number {
+  if (typeof v !== 'number' || !Number.isFinite(v)) throw new PerceptionValidationError(`${path} must be a finite number`)
+  return v
+}
+
+function requireRecord(v: unknown, path: string): Record<string, unknown> {
+  if (!isRecord(v)) throw new PerceptionValidationError(`${path} must be an object`)
+  return v
+}
+
+function requireArray(v: unknown, path: string): unknown[] {
+  if (!Array.isArray(v)) throw new PerceptionValidationError(`${path} must be an array`)
+  return v
+}
+
+function requireString(v: unknown, path: string): string {
+  if (typeof v !== 'string' || !v.trim()) throw new PerceptionValidationError(`${path} must be a non-empty string`)
+  return v
+}
+
+function optionalString(v: unknown, path: string): string | undefined {
+  return v === undefined || v === null ? undefined : requireString(v, path)
+}
+
+function requireStringArray(v: unknown, path: string): string[] {
+  return requireArray(v, path).map((x, i) => requireString(x, `${path}[${i}]`))
+}
+
+function optionalNumber(v: unknown, path: string): number | undefined {
+  if (v === undefined || v === null) return undefined
+  return requireFiniteNumber(v, path)
+}
+
+function requireConfidence(v: unknown, path: string): number {
+  const n = requireFiniteNumber(v, path)
+  if (n < 0 || n > 1) throw new PerceptionValidationError(`${path} must be between 0 and 1`)
+  return n
+}
+
+function requireEnum<T extends string>(v: unknown, allowed: readonly T[], path: string): T {
+  if (typeof v !== 'string' || !allowed.includes(v as T)) {
+    const shown = typeof v === 'string' ? ` "${v.slice(0, 80)}"` : ''
+    throw new PerceptionValidationError(`${path} contains an unsupported value${shown}`)
+  }
+  return v as T
+}
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v)
+}
