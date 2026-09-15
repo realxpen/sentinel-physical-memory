@@ -1,4 +1,4 @@
-import type { EnvironmentalCondition, EnvironmentalDiff, EnvironmentalMemory, EnvironmentalState, EnvironmentalStateSnapshot, Environment, EnvironmentRelation, Evidence, Issue, Observation, ScanSource, SpatialObject, PerceptionResult } from '../domain/sentinel.js'
+import type { EnvironmentalCondition, EnvironmentalDiff, EnvironmentalMemory, EnvironmentalState, EnvironmentalStateSnapshot, Environment, EnvironmentRelation, Evidence, Issue, ScanSource, SpatialObject, PerceptionResult } from '../domain/sentinel.js'
 import { assessCondition } from '../perception/condition-model.js'
 import { EnvironmentalDiffEngine, type DiffEngine } from './diff-engine.js'
 
