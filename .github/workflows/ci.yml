@@ -22,6 +22,8 @@ jobs:
         run: npm run check:phase4-poor-inputs
       - name: Verify provider canonicalization and evidence grounding
         run: npm run check:provider-boundary
+      - name: Verify automatic perception retry
+        run: npm run check:perception-retry
       - name: Verify Phase 5 condition trust gate
         run: npm run check:phase5-conditions
       - name: Build
