@@ -103,26 +103,71 @@ export class ScanPipeline {
   private async perceive(scanId: string, artifacts: ScanArtifact[], frames: ScanFrame[], input: ScanInput): Promise<PerceptionResult> {
     if (!this.model) return { sourceId: input.source.id, observations: [], objects: [], conditions: [], relations: [], evidence: [] }
 
-    const basePrompt = [
+    const scenePrompt = [
       `Analyze scan ${scanId} for environment ${input.environmentId}.`,
       `The scan source id is ${input.source.id}.`,
       `The trusted scan capturedAt is ${input.source.capturedAt}.`,
+      'Perform a grounded scene inventory: direct observations, visible objects, supported environmental conditions, and spatial relationships.',
       'Separate direct visual observations from condition interpretations.',
-      'Identify only visually supported rooms, objects, conditions, and spatial relationships.',
-      'Create evidence entries for every observation, object, and condition grounded to supplied frames.',
+      'Reference only the exact supplied FRAME_ID values in evidenceIds. SENTINEL owns frame evidence records; do not manufacture replacement frame evidence IDs.',
+      'Omit unsupported optional claims instead of guessing.',
       'Return the SENTINEL PerceptionResult JSON schema exactly.',
-    ]
+    ].join('\n')
 
+    const scene = await this.inferPerceptionPass('scene', scenePrompt, artifacts, frames, input)
+    if (scene.conditions.length > 0) return scene
+
+    const auditPrompt = [
+      `Condition audit for scan ${scanId} in environment ${input.environmentId}.`,
+      `The scan source id is ${input.source.id}.`,
+      `The trusted scan capturedAt is ${input.source.capturedAt}.`,
+      'Inspect every supplied frame specifically for visually defensible environmental conditions that a facility or operations manager would care about.',
+      'Check walking paths, doors, exits, floors, desks, furniture, cables, electrical items, equipment, and visible maintenance state.',
+      'Examples of relevant visible conditions include a blocked or narrowed passage, furniture obstructing a normal walkway, a loose cable on a walking surface, a spill/wet floor, visible physical damage, unstable or misplaced equipment, a blocked door/exit, or an obvious maintenance defect.',
+      'Do NOT force a condition. Ordinary furniture arrangement is not a hazard unless the visual evidence supports obstruction or another condition.',
+      'Use basis="observed" only for the directly visible state. Use basis="inferred" and status="uncertain" when interpreting what the visible state may mean.',
+      'Do not recommend actions and do not infer invisible causes or risks.',
+      'Reference only the exact supplied FRAME_ID values in evidenceIds. SENTINEL owns frame evidence records.',
+      'Return the full SENTINEL PerceptionResult JSON schema. It is acceptable for conditions to be empty if no condition is visually supported.',
+    ].join('\n')
+
+    try {
+      console.warn('SENTINEL_CONDITION_AUDIT_STARTED', { scanId, reason: 'scene_pass_returned_zero_conditions' })
+      const audit = await this.inferPerceptionPass('condition-audit', auditPrompt, artifacts, frames, input)
+      const merged = mergePerceptionPasses(scene, audit)
+      console.warn('SENTINEL_CONDITION_AUDIT_COMPLETED', {
+        scanId,
+        auditConditions: audit.conditions.length,
+        mergedConditions: merged.conditions.length,
+      })
+      return validatePerceptionForScan(merged, input.environmentId, input.source.id)
+    } catch (error) {
+      console.warn('SENTINEL_CONDITION_AUDIT_SKIPPED', {
+        scanId,
+        code: errorCode(error),
+        message: error instanceof Error ? error.message : 'Unknown condition-audit failure',
+      })
+      return scene
+    }
+  }
+
+  private async inferPerceptionPass(
+    pass: 'scene' | 'condition-audit',
+    prompt: string,
+    artifacts: ScanArtifact[],
+    frames: ScanFrame[],
+    input: ScanInput,
+  ): Promise<PerceptionResult> {
     let lastError: unknown
     for (let attempt = 1; attempt <= MAX_PERCEPTION_ATTEMPTS; attempt += 1) {
       try {
         const retryInstruction = attempt > 1
-          ? 'STRICT RETRY: Return one complete JSON object only. Use canonical enum values, finite numeric confidences, arrays for reference fields, and reference only supplied frame evidence. Omit unsupported optional claims instead of guessing.'
+          ? 'STRICT RETRY: Return one complete JSON object only. Use canonical enum values, finite numeric confidences, arrays for reference fields, and reference only supplied FRAME_ID evidence. Omit unsupported optional claims instead of guessing.'
           : undefined
-        const result = await this.model.infer({
+        const result = await this.model!.infer({
           role: 'perception',
           artifacts,
-          prompt: [...basePrompt, retryInstruction].filter((item): item is string => Boolean(item)).join('\n'),
+          prompt: [prompt, retryInstruction].filter((item): item is string => Boolean(item)).join('\n'),
         })
 
         const grounded = groundPerceptionToTrustedFrames(result, frames, input.source.id, input.source.capturedAt)
@@ -134,6 +179,7 @@ export class ScanPipeline {
           grounded.droppedDanglingRelations > 0
         ) {
           console.warn('SENTINEL_TRUSTED_FRAME_EVIDENCE_GROUNDED', {
+            pass,
             attempt,
             remappedReferences: grounded.remappedReferences,
             addedEvidence: grounded.addedEvidence,
@@ -148,6 +194,7 @@ export class ScanPipeline {
         lastError = error
         if (attempt >= MAX_PERCEPTION_ATTEMPTS || !isRetryablePerceptionOutputError(error)) throw error
         console.warn('SENTINEL_PERCEPTION_SCHEMA_RETRY', {
+          pass,
           attempt,
           nextAttempt: attempt + 1,
           code: errorCode(error),
@@ -213,6 +260,44 @@ export class ScanPipeline {
   private error(code: string, message: string): ScanError {
     return Object.assign(new Error(message), { code, recoverable: false })
   }
+}
+
+function mergePerceptionPasses(scene: PerceptionResult, audit: PerceptionResult): PerceptionResult {
+  const objectIdMap = new Map(audit.objects.map((item) => [item.id, `audit_${item.id}`]))
+  const prefixId = (id: string) => `audit_${id}`
+  const mapObjectId = (id: string) => objectIdMap.get(id) ?? id
+
+  const auditObservations = audit.observations.map((item) => ({ ...item, id: prefixId(item.id) }))
+  const auditObjects = audit.objects.map((item) => ({ ...item, id: mapObjectId(item.id) }))
+  const auditConditions = audit.conditions.map((item) => ({
+    ...item,
+    id: prefixId(item.id),
+    objectIds: item.objectIds.map(mapObjectId),
+  }))
+  const auditRelations = audit.relations.map((item) => ({
+    ...item,
+    id: prefixId(item.id),
+    fromId: mapObjectId(item.fromId),
+    toId: mapObjectId(item.toId),
+  }))
+
+  return {
+    sourceId: scene.sourceId,
+    observations: uniqueById([...scene.observations, ...auditObservations]),
+    objects: uniqueById([...scene.objects, ...auditObjects]),
+    conditions: uniqueById([...scene.conditions, ...auditConditions]),
+    relations: uniqueById([...scene.relations, ...auditRelations]),
+    evidence: uniqueById([...scene.evidence, ...audit.evidence]),
+  }
+}
+
+function uniqueById<T extends { id: string }>(values: T[]): T[] {
+  const seen = new Set<string>()
+  return values.filter((value) => {
+    if (seen.has(value.id)) return false
+    seen.add(value.id)
+    return true
+  })
 }
 
 function isRetryablePerceptionOutputError(error: unknown): boolean {
