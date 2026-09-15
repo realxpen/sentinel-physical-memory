@@ -1,9 +1,10 @@
-import type { Change, EnvironmentalDiff, Issue, SpatialObject } from '../domain/sentinel'
+import type { Change, EnvironmentalCondition, EnvironmentalDiff, Issue, SpatialObject } from '../domain/sentinel'
 
 export interface EnvironmentalSnapshot {
   stateId: string
   environmentId: string
   objects: SpatialObject[]
+  conditions: EnvironmentalCondition[]
   issues: Issue[]
 }
 
