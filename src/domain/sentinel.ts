@@ -32,16 +32,20 @@ export type EvidenceType = 'frame' | 'image' | 'audio' | 'document' | 'observati
 export type ActionStatus = 'recommended' | 'approved' | 'in_progress' | 'completed' | 'verified' | 'cancelled'
 export type ActionPriority = 'critical' | 'high' | 'medium' | 'low'
 export type RelationType = 'contains' | 'located_in' | 'adjacent_to' | 'near' | 'attached_to' | 'part_of' | 'has_issue' | 'requires_action' | 'supports'
+export type ClaimBasis = 'observed' | 'inferred'
+export type ConditionKind = 'normal' | 'attention' | 'hazard' | 'damage' | 'maintenance' | 'access' | 'compliance' | 'unknown'
+export type ConditionStatus = 'present' | 'uncertain'
 
 export interface SpatialPosition { description: string; x?: number; y?: number; z?: number; roomId?: ID; relativeToId?: ID }
 export interface BoundingBox { x: number; y: number; width: number; height: number; frameWidth?: number; frameHeight?: number }
 export interface Evidence { id: ID; type: EvidenceType; sourceId: ID; capturedAt: ISODateTime; frameIndex?: number; timestampMs?: number; uri?: string; excerpt?: string; boundingBox?: BoundingBox; confidence?: Confidence; description: string }
-export interface Observation { id: ID; environmentId: ID; sourceId: ID; modality: ObservationModality; capturedAt: ISODateTime; label: string; description: string; confidence: Confidence; position?: SpatialPosition; evidenceIds: ID[] }
+export interface Observation { id: ID; environmentId: ID; sourceId: ID; modality: ObservationModality; capturedAt: ISODateTime; label: string; description: string; confidence: Confidence; basis: 'observed'; position?: SpatialPosition; evidenceIds: ID[] }
 export interface SpatialObject { id: ID; environmentId: ID; category: ObjectCategory; name: string; description?: string; position?: SpatialPosition; boundingBox?: BoundingBox; state?: string; confidence: Confidence; firstSeenAt: ISODateTime; lastSeenAt: ISODateTime; evidenceIds: ID[] }
+export interface EnvironmentalCondition { id: ID; environmentId: ID; kind: ConditionKind; title: string; description: string; status: ConditionStatus; basis: ClaimBasis; confidence: Confidence; objectIds: ID[]; evidenceIds: ID[]; observedAt: ISODateTime }
 export interface Issue { id: ID; environmentId: ID; type: IssueType; title: string; description: string; severity: IssueSeverity; status: IssueStatus; confidence: Confidence; objectIds: ID[]; roomId?: ID; evidenceIds: ID[]; firstDetectedAt: ISODateTime; lastObservedAt: ISODateTime; resolvedAt?: ISODateTime; resolutionNote?: string }
 export interface EnvironmentRelation { id: ID; environmentId: ID; fromId: ID; toId: ID; type: RelationType; confidence: Confidence; evidenceIds: ID[] }
-export interface EnvironmentalState { id: ID; environmentId: ID; capturedAt: ISODateTime; sourceIds: ID[]; objectIds: ID[]; issueIds: ID[]; relationIds: ID[]; summary: string; version: number }
-export interface EnvironmentalStateSnapshot { stateId: ID; environmentId: ID; objects: SpatialObject[]; issues: Issue[] }
+export interface EnvironmentalState { id: ID; environmentId: ID; capturedAt: ISODateTime; sourceIds: ID[]; objectIds: ID[]; conditionIds: ID[]; issueIds: ID[]; relationIds: ID[]; summary: string; version: number }
+export interface EnvironmentalStateSnapshot { stateId: ID; environmentId: ID; objects: SpatialObject[]; conditions: EnvironmentalCondition[]; issues: Issue[] }
 export interface Environment { id: ID; name: string; type: EnvironmentType; description?: string; createdAt: ISODateTime; updatedAt: ISODateTime; currentStateId?: ID; stateIds: ID[]; roomIds: ID[]; objectIds: ID[]; issueIds: ID[] }
 export interface Change { id: ID; environmentId: ID; fromStateId: ID; toStateId: ID; type: ChangeType; entityId?: ID; title: string; description: string; confidence: Confidence; evidenceIds: ID[] }
 export interface EnvironmentalDiff { id: ID; environmentId: ID; fromStateId: ID; toStateId: ID; createdAt: ISODateTime; changes: Change[]; summary: string }
@@ -50,8 +54,8 @@ export interface MoneyEstimate { currency: string; min: number; max: number; bas
 export interface ActionPlan { id: ID; environmentId: ID; createdAt: ISODateTime; goal: string; steps: ActionStep[]; rationale: string; evidenceIds: ID[] }
 export interface VerificationResult { id: ID; environmentId: ID; actionPlanId?: ID; verifiedAt: ISODateTime; status: 'passed' | 'partial' | 'failed' | 'inconclusive'; resolvedIssueIds: ID[]; remainingIssueIds: ID[]; newIssueIds: ID[]; changes: Change[]; summary: string; evidenceIds: ID[] }
 export interface ScanSource { id: ID; environmentId: ID; modality: ObservationModality; uri: string; capturedAt: ISODateTime; durationMs?: number; metadata?: Record<string, string | number | boolean> }
-export interface EnvironmentalMemory { environment: Environment; states: EnvironmentalState[]; snapshots: EnvironmentalStateSnapshot[]; objects: SpatialObject[]; issues: Issue[]; observations: Observation[]; evidence: Evidence[]; relations: EnvironmentRelation[]; sources: ScanSource[]; diffs: EnvironmentalDiff[] }
+export interface EnvironmentalMemory { environment: Environment; states: EnvironmentalState[]; snapshots: EnvironmentalStateSnapshot[]; objects: SpatialObject[]; conditions: EnvironmentalCondition[]; issues: Issue[]; observations: Observation[]; evidence: Evidence[]; relations: EnvironmentRelation[]; sources: ScanSource[]; diffs: EnvironmentalDiff[] }
 export interface AskBuildingRequest { environmentId: ID; question: string; stateId?: ID }
 export interface AskBuildingResponse { answer: string; confidence: Confidence; stateId: ID; evidenceIds: ID[]; relatedObjectIds: ID[]; relatedIssueIds: ID[] }
-export interface PerceptionResult { sourceId: ID; observations: Observation[]; objects: SpatialObject[]; relations: EnvironmentRelation[]; evidence: Evidence[] }
+export interface PerceptionResult { sourceId: ID; observations: Observation[]; objects: SpatialObject[]; conditions: EnvironmentalCondition[]; relations: EnvironmentRelation[]; evidence: Evidence[] }
 export interface VerificationRequest { environmentId: ID; previousStateId: ID; currentStateId: ID; actionPlanId?: ID }
