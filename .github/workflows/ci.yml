@@ -20,8 +20,8 @@ jobs:
         run: npm install
       - name: Verify Phase 4 poor-input quality gate
         run: npm run check:phase4-poor-inputs
-      - name: Verify Phase 4 evidence-reference gate
-        run: npm run check:phase4-evidence-refs
+      - name: Verify provider canonicalization and evidence grounding
+        run: npm run check:provider-boundary
       - name: Verify Phase 5 condition trust gate
         run: npm run check:phase5-conditions
       - name: Build
