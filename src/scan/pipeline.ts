@@ -1,7 +1,7 @@
 import type { EnvironmentType, PerceptionResult } from '../domain/sentinel.js'
-import { validatePerceptionForScan } from '../ai/perception-schema.js'
+import { PerceptionValidationError, validatePerceptionForScan } from '../ai/perception-schema.js'
 import { groundPerceptionToTrustedFrames } from '../ai/trusted-evidence.js'
-import type { ModelAdapter } from '../ai/model.js'
+import { ModelAdapterError, type ModelAdapter } from '../ai/model.js'
 import { EnvironmentalMemoryStore } from '../memory/store.js'
 import { InMemoryEnvironmentalMemoryRepository, type EnvironmentalMemoryRepository } from '../memory/repository.js'
 import type { ScanArtifact, ScanError, ScanFrame, ScanInput, ScanProgress, ScanResult } from './types.js'
@@ -16,6 +16,7 @@ export interface ScanPipelineDependencies {
 
 const defaultId = (prefix: string) => `${prefix}_${crypto.randomUUID()}`
 const MAX_PERCEPTION_IMAGE_FRAMES = 10
+const MAX_PERCEPTION_ATTEMPTS = 2
 const ENVIRONMENT_TYPES = new Set<EnvironmentType>(['office', 'school', 'hotel', 'clinic', 'retail', 'home', 'warehouse', 'construction', 'other'])
 
 export class ScanPipeline {
@@ -70,7 +71,9 @@ export class ScanPipeline {
     return { scanId, environmentId: input.environmentId, source: input.source, frames, artifacts, observations, conditions, state, diff, completedAt: this.now().toISOString() }
   }
 
-  getMemory(environmentId: string) { return this.memoryRepository.get(environmentId) }
+  getMemory(environmentId: string) {
+    return this.memoryRepository.get(environmentId)
+  }
 
   private async loadMemoryStore(environmentId: string): Promise<EnvironmentalMemoryStore> {
     const store = new EnvironmentalMemoryStore({ now: this.now })
@@ -83,23 +86,87 @@ export class ScanPipeline {
     if (memory.get(input.environmentId)) return
     const name = input.source.metadata?.name?.toString().trim() || 'SENTINEL Environment'
     const type = environmentTypeFromMetadata(input.source.metadata?.environmentType)
-    memory.createEnvironment({ id: input.environmentId, name, type, description: 'Environment created automatically by the scan pipeline.', createdAt: input.source.capturedAt, updatedAt: input.source.capturedAt, stateIds: [], roomIds: [], objectIds: [], issueIds: [] })
+    memory.createEnvironment({
+      id: input.environmentId,
+      name,
+      type,
+      description: 'Environment created automatically by the scan pipeline.',
+      createdAt: input.source.capturedAt,
+      updatedAt: input.source.capturedAt,
+      stateIds: [],
+      roomIds: [],
+      objectIds: [],
+      issueIds: [],
+    })
   }
 
   private async perceive(scanId: string, artifacts: ScanArtifact[], frames: ScanFrame[], input: ScanInput): Promise<PerceptionResult> {
     if (!this.model) return { sourceId: input.source.id, observations: [], objects: [], conditions: [], relations: [], evidence: [] }
-    const result = await this.model.infer({ role: 'perception', artifacts, prompt: [`Analyze scan ${scanId} for environment ${input.environmentId}.`, `The scan source id is ${input.source.id}.`, `The trusted scan capturedAt is ${input.source.capturedAt}.`, 'Separate direct visual observations from condition interpretations.', 'Identify only visually supported rooms, objects, conditions, and spatial relationships.', 'Create evidence entries for every observation, object, and condition grounded to supplied frames.', 'Return the SENTINEL PerceptionResult JSON schema exactly.'].join('\n') })
-    const grounded = groundPerceptionToTrustedFrames(result, frames, input.source.id, input.source.capturedAt)
-    if (grounded.remappedReferences > 0 || grounded.addedEvidence > 0) {
-      console.warn('SENTINEL_TRUSTED_FRAME_EVIDENCE_GROUNDED', {
-        remappedReferences: grounded.remappedReferences,
-        addedEvidence: grounded.addedEvidence,
-      })
+
+    const basePrompt = [
+      `Analyze scan ${scanId} for environment ${input.environmentId}.`,
+      `The scan source id is ${input.source.id}.`,
+      `The trusted scan capturedAt is ${input.source.capturedAt}.`,
+      'Separate direct visual observations from condition interpretations.',
+      'Identify only visually supported rooms, objects, conditions, and spatial relationships.',
+      'Create evidence entries for every observation, object, and condition grounded to supplied frames.',
+      'Return the SENTINEL PerceptionResult JSON schema exactly.',
+    ]
+
+    let lastError: unknown
+    for (let attempt = 1; attempt <= MAX_PERCEPTION_ATTEMPTS; attempt += 1) {
+      try {
+        const retryInstruction = attempt > 1
+          ? 'STRICT RETRY: Return one complete JSON object only. Use canonical enum values, finite numeric confidences, arrays for reference fields, and reference only supplied frame evidence. Omit unsupported optional claims instead of guessing.'
+          : undefined
+        const result = await this.model.infer({
+          role: 'perception',
+          artifacts,
+          prompt: [...basePrompt, retryInstruction].filter((item): item is string => Boolean(item)).join('\n'),
+        })
+
+        const grounded = groundPerceptionToTrustedFrames(result, frames, input.source.id, input.source.capturedAt)
+        if (
+          grounded.remappedReferences > 0 ||
+          grounded.addedEvidence > 0 ||
+          grounded.droppedUnknownEvidenceReferences > 0 ||
+          grounded.droppedUngroundedItems > 0 ||
+          grounded.droppedDanglingRelations > 0
+        ) {
+          console.warn('SENTINEL_TRUSTED_FRAME_EVIDENCE_GROUNDED', {
+            attempt,
+            remappedReferences: grounded.remappedReferences,
+            addedEvidence: grounded.addedEvidence,
+            droppedUnknownEvidenceReferences: grounded.droppedUnknownEvidenceReferences,
+            droppedUngroundedItems: grounded.droppedUngroundedItems,
+            droppedDanglingRelations: grounded.droppedDanglingRelations,
+          })
+        }
+
+        return validatePerceptionForScan(grounded.result, input.environmentId, input.source.id)
+      } catch (error) {
+        lastError = error
+        if (attempt >= MAX_PERCEPTION_ATTEMPTS || !isRetryablePerceptionOutputError(error)) throw error
+        console.warn('SENTINEL_PERCEPTION_SCHEMA_RETRY', {
+          attempt,
+          nextAttempt: attempt + 1,
+          code: errorCode(error),
+          message: error instanceof Error ? error.message : 'Unknown perception output error',
+        })
+      }
     }
-    return validatePerceptionForScan(grounded.result, input.environmentId, input.source.id)
+
+    throw lastError instanceof Error ? lastError : new Error('Perception failed without an error')
   }
 
-  private validate(input: ScanInput) { if (!input.environmentId) throw this.error('INVALID_ENVIRONMENT', 'environmentId is required'); if (!input.source?.id) throw this.error('INVALID_SOURCE', 'source.id is required'); if (!input.media.uri) throw this.error('INVALID_MEDIA', 'media.uri is required'); if (!input.media.mimeType) throw this.error('INVALID_MEDIA', 'media.mimeType is required'); if (input.media.kind === 'image' && input.media.durationMs !== undefined) throw this.error('INVALID_MEDIA', 'image media cannot declare durationMs'); if (input.media.kind === 'video' && !input.media.extractedFrames?.length) throw this.error('VIDEO_FRAMES_REQUIRED', 'Video media must provide extracted frames before perception') }
+  private validate(input: ScanInput) {
+    if (!input.environmentId) throw this.error('INVALID_ENVIRONMENT', 'environmentId is required')
+    if (!input.source?.id) throw this.error('INVALID_SOURCE', 'source.id is required')
+    if (!input.media.uri) throw this.error('INVALID_MEDIA', 'media.uri is required')
+    if (!input.media.mimeType) throw this.error('INVALID_MEDIA', 'media.mimeType is required')
+    if (input.media.kind === 'image' && input.media.durationMs !== undefined) throw this.error('INVALID_MEDIA', 'image media cannot declare durationMs')
+    if (input.media.kind === 'video' && !input.media.extractedFrames?.length) throw this.error('VIDEO_FRAMES_REQUIRED', 'Video media must provide extracted frames before perception')
+  }
 
   private sample(input: ScanInput): ScanFrame[] {
     if (input.media.kind !== 'video' || !input.media.extractedFrames?.length) {
@@ -125,9 +192,39 @@ export class ScanPipeline {
     return [...chosenIndexes].sort((a, b) => a - b).map((index) => eligible[index])
   }
 
-  private createArtifacts(frames: ScanFrame[], input: ScanInput): ScanArtifact[] { const artifacts: ScanArtifact[] = frames.map((frame) => ({ artifactId: this.id('artifact'), frameId: frame.frameId, kind: 'frame', uri: frame.uri })); if (input.options?.preserveAudio && input.media.kind === 'video') artifacts.push({ artifactId: this.id('artifact'), kind: 'audio', uri: input.media.uri }); artifacts.push({ artifactId: this.id('artifact'), kind: 'metadata', uri: input.media.uri }); return artifacts }
-  private emit(scanId: string, stage: ScanProgress['stage'], progress: number, message: string) { this.onProgress?.({ scanId, stage, progress, message }) }
-  private error(code: string, message: string): ScanError { return Object.assign(new Error(message), { code, recoverable: false }) }
+  private createArtifacts(frames: ScanFrame[], input: ScanInput): ScanArtifact[] {
+    const artifacts: ScanArtifact[] = frames.map((frame) => ({
+      artifactId: this.id('artifact'),
+      frameId: frame.frameId,
+      kind: 'frame',
+      uri: frame.uri,
+    }))
+    if (input.options?.preserveAudio && input.media.kind === 'video') {
+      artifacts.push({ artifactId: this.id('artifact'), kind: 'audio', uri: input.media.uri })
+    }
+    artifacts.push({ artifactId: this.id('artifact'), kind: 'metadata', uri: input.media.uri })
+    return artifacts
+  }
+
+  private emit(scanId: string, stage: ScanProgress['stage'], progress: number, message: string) {
+    this.onProgress?.({ scanId, stage, progress, message })
+  }
+
+  private error(code: string, message: string): ScanError {
+    return Object.assign(new Error(message), { code, recoverable: false })
+  }
+}
+
+function isRetryablePerceptionOutputError(error: unknown): boolean {
+  if (error instanceof PerceptionValidationError) return true
+  if (!(error instanceof ModelAdapterError)) return false
+  return error.code === 'INVALID_MODEL_JSON' || error.code === 'INVALID_PERCEPTION_SCHEMA' || error.code === 'EMPTY_MODEL_RESPONSE'
+}
+
+function errorCode(error: unknown): string {
+  if (error instanceof ModelAdapterError) return error.code
+  if (error instanceof PerceptionValidationError) return error.code
+  return 'PERCEPTION_OUTPUT_ERROR'
 }
 
 function environmentTypeFromMetadata(value: unknown): EnvironmentType {
