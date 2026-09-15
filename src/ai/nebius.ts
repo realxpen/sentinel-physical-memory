@@ -3,62 +3,31 @@ import type { AskBuildingResponse, PerceptionResult } from '../domain/sentinel.j
 import type { ScanArtifact } from '../scan/types.js'
 import { normalizePerceptionEvidenceReferences } from './perception-normalization.js'
 import { validatePerception, PerceptionValidationError } from './perception-schema.js'
-import { ModelAdapterError, type ArtifactResolver, type ModelAdapter, type ModelInferenceRequest, type ReasoningInferenceRequest, type ReasoningModelAdapter } from './model.js'
+import {
+  ModelAdapterError,
+  type ArtifactResolver,
+  type ModelAdapter,
+  type ModelInferenceRequest,
+  type ReasoningInferenceRequest,
+  type ReasoningModelAdapter,
+} from './model.js'
 
 const DEFAULT_BASE_URL = 'https://api.tokenfactory.us-central1.nebius.com/v1'
 const LEGACY_GLOBAL_BASE_URL = 'https://api.tokenfactory.nebius.com/v1'
 const DEFAULT_MODEL = 'nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B'
-const SENTINEL_OBJECT_CATEGORIES = new Set([
-  'room',
-  'door',
-  'window',
-  'furniture',
-  'equipment',
-  'electrical',
-  'hvac',
-  'safety',
-  'signage',
-  'document',
-  'person',
-  'obstruction',
-  'other',
-])
-const SENTINEL_CONDITION_KINDS = new Set([
-  'normal',
-  'attention',
-  'hazard',
-  'damage',
-  'maintenance',
-  'access',
-  'compliance',
-  'unknown',
-])
-const OBJECT_CATEGORY_ALIASES: Record<string, string> = {
-  chair: 'furniture',
-  chairs: 'furniture',
-  sofa: 'furniture',
-  sofas: 'furniture',
-  couch: 'furniture',
-  couches: 'furniture',
-  desk: 'furniture',
-  desks: 'furniture',
-  table: 'furniture',
-  tables: 'furniture',
-  locker: 'furniture',
-  lockers: 'furniture',
-  cabinet: 'furniture',
-  cabinets: 'furniture',
-  shelf: 'furniture',
-  shelves: 'furniture',
-  logo: 'signage',
-  sign: 'signage',
-  display: 'equipment',
-  monitor: 'equipment',
-  screen: 'equipment',
-  appliance: 'equipment',
+
+interface NebiusAdapterOptions {
+  apiKey: string
+  baseUrl?: string
+  model?: string
+  fetchImpl?: typeof fetch
+  artifactResolver?: ArtifactResolver
+  timeoutMs?: number
 }
-interface NebiusAdapterOptions { apiKey: string; baseUrl?: string; model?: string; fetchImpl?: typeof fetch; artifactResolver?: ArtifactResolver; timeoutMs?: number }
-interface ChatCompletionResponse { choices?: Array<{ message?: { content?: string | Array<{ type?: string; text?: string }> } }> }
+
+interface ChatCompletionResponse {
+  choices?: Array<{ message?: { content?: string | Array<{ type?: string; text?: string }> } }>
+}
 
 export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapter {
   readonly provider = 'nebius-token-factory'
@@ -98,7 +67,10 @@ export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapte
       'Environmental memory context:',
       request.context,
     ].join('\n')
-    const response = await this.requestCompletion('You are SENTINEL, an evidence-grounded physical-environment reasoning agent.', [{ type: 'text', text: prompt }])
+    const response = await this.requestCompletion(
+      'You are SENTINEL, an evidence-grounded physical-environment reasoning agent.',
+      [{ type: 'text', text: prompt }],
+    )
     return this.parseReasoningResult(this.extractText(response), request)
   }
 
@@ -106,23 +78,55 @@ export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapte
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs)
     try {
-      const response = await this.fetchImpl(`${this.baseUrl}/chat/completions`, { method: 'POST', headers: { Authorization: `Bearer ${this.apiKey}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ model: this.model, temperature: 0, messages: [{ role: 'system', content: system }, { role: 'user', content }] }), signal: controller.signal })
-      if (!response.ok) { const body = await response.text().catch(() => ''); throw new ModelAdapterError({ code: 'NEBIUS_HTTP_ERROR', message: `Nebius inference failed (${response.status}): ${body.slice(0, 500)}`, status: response.status, retryable: response.status === 429 || response.status >= 500 }) }
+      const response = await this.fetchImpl(`${this.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${this.apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: this.model,
+          temperature: 0,
+          messages: [{ role: 'system', content: system }, { role: 'user', content }],
+        }),
+        signal: controller.signal,
+      })
+      if (!response.ok) {
+        const body = await response.text().catch(() => '')
+        throw new ModelAdapterError({
+          code: 'NEBIUS_HTTP_ERROR',
+          message: `Nebius inference failed (${response.status}): ${body.slice(0, 500)}`,
+          status: response.status,
+          retryable: response.status === 429 || response.status >= 500,
+        })
+      }
       return await response.json() as ChatCompletionResponse
     } catch (error) {
       if (error instanceof ModelAdapterError) throw error
-      if (error instanceof DOMException && error.name === 'AbortError') throw new ModelAdapterError({ code: 'NEBIUS_TIMEOUT', message: `Nebius inference exceeded ${this.timeoutMs}ms`, retryable: true })
-      throw new ModelAdapterError({ code: 'NEBIUS_REQUEST_FAILED', message: error instanceof Error ? error.message : 'Unknown Nebius request failure', retryable: true })
-    } finally { clearTimeout(timeout) }
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        throw new ModelAdapterError({ code: 'NEBIUS_TIMEOUT', message: `Nebius inference exceeded ${this.timeoutMs}ms`, retryable: true })
+      }
+      throw new ModelAdapterError({
+        code: 'NEBIUS_REQUEST_FAILED',
+        message: error instanceof Error ? error.message : 'Unknown Nebius request failure',
+        retryable: true,
+      })
+    } finally {
+      clearTimeout(timeout)
+    }
   }
 
   private async buildContent(prompt: string, artifacts: ScanArtifact[]) {
     const parts: Array<Record<string, unknown>> = [{ type: 'text', text: prompt }]
+    let frameIndex = 0
     for (const artifact of artifacts) {
       if (artifact.kind !== 'frame') continue
-      if (!this.artifactResolver) { parts.push({ type: 'text', text: `FRAME_ARTIFACT ${artifact.artifactId}: ${artifact.uri}` }); continue }
+      const frameId = artifact.frameId ?? artifact.artifactId
+      parts.push({ type: 'text', text: `FRAME_INDEX: ${frameIndex}\nFRAME_ID: ${frameId}` })
+      frameIndex += 1
+
+      if (!this.artifactResolver) {
+        parts.push({ type: 'text', text: `FRAME_ARTIFACT ${artifact.artifactId}: ${artifact.uri}` })
+        continue
+      }
       const resolved = await this.artifactResolver.resolve(artifact)
-      parts.push({ type: 'text', text: `FRAME_ID: ${artifact.frameId ?? artifact.artifactId}` })
       parts.push({ type: 'image_url', image_url: { url: resolved.uri } })
     }
     return parts
@@ -132,72 +136,192 @@ export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapte
     return [
       'You are SENTINEL, a physical-environment perception system.',
       `Current role: ${role}.`,
-      'Return ONLY one JSON object. No prose and no markdown.',
-      'The top-level JSON shape MUST be exactly: {"sourceId":"string","observations":[],"objects":[],"conditions":[],"relations":[],"evidence":[]}.',
-      'All six top-level fields are required. Use an empty array when there are no supported items.',
+      'Return ONLY one complete JSON object. No prose and no markdown.',
+      'The top-level JSON shape is {"sourceId":"string","observations":[],"objects":[],"conditions":[],"relations":[],"evidence":[]}.',
+      'All six top-level fields are required. Use [] when a collection has no supported items.',
+      'SENTINEL owns frame evidence identity. Each supplied image is preceded by FRAME_INDEX and FRAME_ID. Use the exact FRAME_ID in evidenceIds whenever possible.',
+      'Do NOT invent frame evidence records or fabricate evidence IDs. The evidence array may be empty because SENTINEL will create trusted frame evidence from the supplied images.',
+      'If you use a numeric placeholder instead of FRAME_ID, use only evidence_N or frame_N where N is the supplied FRAME_INDEX.',
+      'Every observation, object, condition, and relation you return must be visibly supportable by at least one supplied frame.',
+      'If an optional claim, relation, location, geometry, or condition is not visually supportable, omit that item or optional field instead of guessing.',
       'OBSERVATION means a direct visible fact only. Do not put diagnosis, cause, risk prediction, or recommendation in observations.',
-      'Observation item fields: id, environmentId, sourceId, modality (image|video|audio|document|sensor), capturedAt, label, description, confidence (0..1), basis="observed", optional position, evidenceIds (string[]).',
-      'Object item fields: id, environmentId, category (room|door|window|furniture|equipment|electrical|hvac|safety|signage|document|person|obstruction|other), name, optional description, optional position, optional boundingBox, optional state, confidence (0..1), firstSeenAt, lastSeenAt, evidenceIds (string[]).',
-      'Use only the listed canonical object categories. Put specific labels such as chair, sofa, desk, locker, logo, screen, or monitor in name/description rather than category.',
-      'CONDITION means a state of the environment supported by evidence. Use basis="observed" only when the condition itself is directly visible. Use basis="inferred" when interpreting what the visible evidence may mean.',
-      'Condition item fields: id, environmentId, kind (normal|attention|hazard|damage|maintenance|access|compliance|unknown), title, description, status (present|uncertain), basis (observed|inferred), confidence (0..1), objectIds (string[]), evidenceIds (string[]), observedAt.',
+      'Observation fields: id, environmentId, sourceId, modality (image|video|audio|document|sensor), capturedAt, label, description, confidence (0..1), basis="observed", optional position, evidenceIds (string[]).',
+      'Object fields: id, environmentId, category (room|door|window|furniture|equipment|electrical|hvac|safety|signage|document|person|obstruction|other), name, optional description, optional position, optional boundingBox, optional state, confidence (0..1), firstSeenAt, lastSeenAt, evidenceIds (string[]).',
+      'Use only canonical object categories. Put specific labels such as chair, sofa, desk, cable, locker, logo, screen, or monitor in name/description rather than category.',
+      'CONDITION means a state of the environment supported by evidence. Use basis="observed" only when directly visible. Use basis="inferred" for interpretations.',
+      'Condition fields: id, environmentId, kind (normal|attention|hazard|damage|maintenance|access|compliance|unknown), title, description, status (present|uncertain), basis (observed|inferred), confidence (0..1), objectIds (string[]), evidenceIds (string[]), observedAt.',
       'For inferred conditions prefer status="uncertain" unless the evidence is unusually direct. Never output recommendations as conditions.',
-      'Relation item fields: id, environmentId, fromId, toId, type (contains|located_in|adjacent_to|near|attached_to|part_of|has_issue|requires_action|supports), confidence (0..1), evidenceIds (string[]).',
-      'Evidence item fields: id, type (frame|image|audio|document|observation|previous_state), sourceId, capturedAt, optional frameIndex, optional timestampMs, optional uri, optional excerpt, optional boundingBox, optional confidence, description.',
-      'Every evidenceIds value must exactly match the id of an item in the evidence array.',
-      'Never invent an object, condition, location, measurement, relationship, cause, diagnosis, or evidence source.',
-      'Every observation, object, and condition must reference evidenceIds that exist in the evidence array.',
-      'Evidence must be grounded in the supplied frame artifacts.',
+      'Relation fields: id, environmentId, fromId, toId, type (contains|located_in|adjacent_to|near|attached_to|part_of|on|above|below|in_front_of|behind|left_of|right_of|has_issue|requires_action|supports), confidence (0..1), evidenceIds (string[]).',
+      'A relation must reference object IDs that you actually returned. If either endpoint is uncertain, omit the relation.',
+      'Evidence fields, only when needed for non-frame evidence: id, type (frame|image|audio|document|observation|previous_state), sourceId, capturedAt, optional frameIndex, optional timestampMs, optional uri, optional excerpt, optional boundingBox, optional confidence, description.',
+      'Never invent an object, condition, location, measurement, relationship, cause, diagnosis, timestamp, or evidence source.',
     ].join(' ')
   }
 
-  private extractText(response: ChatCompletionResponse): string { const content = response.choices?.[0]?.message?.content; if (typeof content === 'string') return content; if (Array.isArray(content)) return content.map((part) => part.text ?? '').join(''); throw new ModelAdapterError({ code: 'EMPTY_MODEL_RESPONSE', message: 'Nebius returned no model content', retryable: true }) }
+  private extractText(response: ChatCompletionResponse): string {
+    const content = response.choices?.[0]?.message?.content
+    if (typeof content === 'string') return content
+    if (Array.isArray(content)) return content.map((part) => part.text ?? '').join('')
+    throw new ModelAdapterError({ code: 'EMPTY_MODEL_RESPONSE', message: 'Nebius returned no model content', retryable: true })
+  }
+
   private parsePerceptionResult(text: string, request: ModelInferenceRequest): PerceptionResult {
     let value: unknown
     try {
       const parsed = parseModelJson(text)
       value = parsed.value
-      if (parsed.repaired) console.warn('SENTINEL_MODEL_JSON_REPAIRED', { model: this.model, kind: 'perception', chars: text.length })
+      if (parsed.repaired) {
+        console.warn('SENTINEL_MODEL_JSON_REPAIRED', { model: this.model, kind: 'perception', chars: text.length })
+      }
     } catch {
-      throw new ModelAdapterError({ code: 'INVALID_MODEL_JSON', message: 'Vision model returned invalid JSON that could not be repaired safely', retryable: false })
+      throw new ModelAdapterError({
+        code: 'INVALID_MODEL_JSON',
+        message: 'Vision model returned invalid JSON that could not be repaired safely',
+        retryable: false,
+      })
     }
+
     const sourceId = extractScanSourceId(request.prompt)
     const environmentId = extractScanEnvironmentId(request.prompt)
     const capturedAt = extractScanCapturedAt(request.prompt)
+
     if (isRecord(value)) {
-      value = {
-        ...value,
-        ...(sourceId ? { sourceId } : {}),
-        observations: normalizeObservationArray(value.observations, sourceId, environmentId),
-        objects: normalizeObjectArray(value.objects, environmentId),
-        conditions: normalizeConditionArray(value.conditions, environmentId, capturedAt),
-        relations: normalizeIdentityArray(value.relations, undefined, environmentId),
-        evidence: normalizeIdentityArray(value.evidence, sourceId, undefined),
-      }
-      const evidenceNormalization = normalizePerceptionEvidenceReferences(value)
-      value = evidenceNormalization.value
-      if (evidenceNormalization.remappedReferences > 0) {
-        console.warn('SENTINEL_MODEL_EVIDENCE_REFERENCES_REPAIRED', {
+      value = stampTrustedPerceptionIdentity(value, sourceId, environmentId, capturedAt)
+      const normalization = normalizePerceptionEvidenceReferences(value)
+      value = normalization.value
+
+      const repairCount = normalization.remappedReferences
+        + normalization.normalizedConfidences
+        + normalization.normalizedNumericFields
+        + normalization.normalizedRelations
+        + normalization.normalizedArrays
+        + normalization.normalizedOptionalFields
+        + normalization.generatedIds
+        + normalization.droppedItems
+
+      if (repairCount > 0) {
+        console.warn('SENTINEL_PROVIDER_PERCEPTION_CANONICALIZED', {
           model: this.model,
-          count: evidenceNormalization.remappedReferences,
+          remappedReferences: normalization.remappedReferences,
+          normalizedConfidences: normalization.normalizedConfidences,
+          normalizedNumericFields: normalization.normalizedNumericFields,
+          normalizedRelations: normalization.normalizedRelations,
+          normalizedArrays: normalization.normalizedArrays,
+          normalizedOptionalFields: normalization.normalizedOptionalFields,
+          generatedIds: normalization.generatedIds,
+          droppedItems: normalization.droppedItems,
+          droppedRelations: normalization.droppedRelations,
         })
       }
     }
-    try { return validatePerception(value) } catch (error) { if (error instanceof PerceptionValidationError) throw new ModelAdapterError({ code: error.code, message: error.message, retryable: false }); throw error }
+
+    try {
+      return validatePerception(value)
+    } catch (error) {
+      if (error instanceof PerceptionValidationError) {
+        throw new ModelAdapterError({ code: error.code, message: error.message, retryable: false })
+      }
+      throw error
+    }
   }
+
   private parseReasoningResult(text: string, request: ReasoningInferenceRequest): AskBuildingResponse {
     let value: unknown
     try {
       const parsed = parseModelJson(text)
       value = parsed.value
-      if (parsed.repaired) console.warn('SENTINEL_MODEL_JSON_REPAIRED', { model: this.model, kind: 'reasoning', chars: text.length })
+      if (parsed.repaired) {
+        console.warn('SENTINEL_MODEL_JSON_REPAIRED', { model: this.model, kind: 'reasoning', chars: text.length })
+      }
     } catch {
-      throw new ModelAdapterError({ code: 'INVALID_REASONING_JSON', message: 'Nemotron returned invalid reasoning JSON that could not be repaired safely', retryable: false })
+      throw new ModelAdapterError({
+        code: 'INVALID_REASONING_JSON',
+        message: 'Nemotron returned invalid reasoning JSON that could not be repaired safely',
+        retryable: false,
+      })
     }
-    if (!isRecord(value) || typeof value.answer !== 'string' || typeof value.confidence !== 'number' || typeof value.stateId !== 'string' || !isStringArray(value.evidenceIds) || !isStringArray(value.relatedObjectIds) || !isStringArray(value.relatedIssueIds)) throw new ModelAdapterError({ code: 'INVALID_REASONING_SCHEMA', message: 'Nemotron reasoning response did not match the AskBuildingResponse schema', retryable: false })
-    if (value.stateId !== request.request.stateId && !request.context.includes(`STATE_ID ${value.stateId}`)) throw new ModelAdapterError({ code: 'INVALID_REASONING_STATE', message: 'Reasoning response referenced a state outside the supplied context', retryable: false })
-    return { answer: value.answer, confidence: Math.max(0, Math.min(1, value.confidence)), stateId: value.stateId, evidenceIds: value.evidenceIds, relatedObjectIds: value.relatedObjectIds, relatedIssueIds: value.relatedIssueIds }
+
+    if (
+      !isRecord(value)
+      || typeof value.answer !== 'string'
+      || typeof value.confidence !== 'number'
+      || typeof value.stateId !== 'string'
+      || !isStringArray(value.evidenceIds)
+      || !isStringArray(value.relatedObjectIds)
+      || !isStringArray(value.relatedIssueIds)
+    ) {
+      throw new ModelAdapterError({
+        code: 'INVALID_REASONING_SCHEMA',
+        message: 'Nemotron reasoning response did not match the AskBuildingResponse schema',
+        retryable: false,
+      })
+    }
+
+    if (value.stateId !== request.request.stateId && !request.context.includes(`STATE_ID ${value.stateId}`)) {
+      throw new ModelAdapterError({
+        code: 'INVALID_REASONING_STATE',
+        message: 'Reasoning response referenced a state outside the supplied context',
+        retryable: false,
+      })
+    }
+
+    return {
+      answer: value.answer,
+      confidence: Math.max(0, Math.min(1, value.confidence)),
+      stateId: value.stateId,
+      evidenceIds: value.evidenceIds,
+      relatedObjectIds: value.relatedObjectIds,
+      relatedIssueIds: value.relatedIssueIds,
+    }
   }
+}
+
+function stampTrustedPerceptionIdentity(
+  value: Record<string, unknown>,
+  sourceId?: string,
+  environmentId?: string,
+  capturedAt?: string,
+): Record<string, unknown> {
+  return {
+    ...value,
+    ...(sourceId ? { sourceId } : {}),
+    observations: stampCollection(value.observations, (item) => ({
+      ...item,
+      ...(sourceId ? { sourceId } : {}),
+      ...(environmentId ? { environmentId } : {}),
+      ...(capturedAt ? { capturedAt } : {}),
+      basis: 'observed',
+      modality: item.modality ?? 'video',
+    })),
+    objects: stampCollection(value.objects, (item) => ({
+      ...item,
+      ...(environmentId ? { environmentId } : {}),
+      ...(capturedAt ? { firstSeenAt: capturedAt, lastSeenAt: capturedAt } : {}),
+    })),
+    conditions: stampCollection(value.conditions, (item) => ({
+      ...item,
+      ...(environmentId ? { environmentId } : {}),
+      ...(capturedAt ? { observedAt: capturedAt } : {}),
+    })),
+    relations: stampCollection(value.relations, (item) => ({
+      ...item,
+      ...(environmentId ? { environmentId } : {}),
+    })),
+    evidence: stampCollection(value.evidence, (item) => ({
+      ...item,
+      ...(sourceId ? { sourceId } : {}),
+      ...(capturedAt ? { capturedAt } : {}),
+    })),
+  }
+}
+
+function stampCollection(
+  value: unknown,
+  stamp: (item: Record<string, unknown>) => Record<string, unknown>,
+): unknown {
+  if (Array.isArray(value)) return value.map((item) => isRecord(item) ? stamp(item) : item)
+  if (isRecord(value)) return stamp(value)
+  return value
 }
 
 function resolveBaseUrl(value?: string): string {
@@ -205,55 +329,7 @@ function resolveBaseUrl(value?: string): string {
   if (!configured || configured === LEGACY_GLOBAL_BASE_URL) return DEFAULT_BASE_URL
   return configured
 }
-function normalizeIdentityArray(value: unknown, sourceId?: string, environmentId?: string): unknown[] {
-  if (!Array.isArray(value)) return []
-  return value.map((item) => {
-    if (!isRecord(item)) return item
-    return {
-      ...item,
-      ...(sourceId ? { sourceId } : {}),
-      ...(environmentId ? { environmentId } : {}),
-    }
-  })
-}
-function normalizeObservationArray(value: unknown, sourceId?: string, environmentId?: string): unknown[] {
-  return normalizeIdentityArray(value, sourceId, environmentId).map((item) => {
-    if (!isRecord(item)) return item
-    return { ...item, modality: item.modality ?? 'video', basis: 'observed' }
-  })
-}
-function normalizeObjectArray(value: unknown, environmentId?: string): unknown[] {
-  return normalizeIdentityArray(value, undefined, environmentId).map((item) => {
-    if (!isRecord(item)) return item
-    return { ...item, category: normalizeObjectCategory(item.category) }
-  })
-}
-function normalizeConditionArray(value: unknown, environmentId?: string, capturedAt?: string): unknown[] {
-  return normalizeIdentityArray(value, undefined, environmentId).map((item) => {
-    if (!isRecord(item)) return item
-    const basis = item.basis === 'observed' || item.basis === 'inferred' ? item.basis : 'inferred'
-    const status = item.status === 'present' || item.status === 'uncertain' ? item.status : (basis === 'observed' ? 'present' : 'uncertain')
-    return {
-      ...item,
-      kind: normalizeConditionKind(item.kind),
-      basis,
-      status,
-      ...(capturedAt ? { observedAt: capturedAt } : {}),
-      objectIds: Array.isArray(item.objectIds) ? item.objectIds : [],
-    }
-  })
-}
-function normalizeObjectCategory(value: unknown): string {
-  if (typeof value !== 'string') return 'other'
-  const normalized = value.trim().toLowerCase().replace(/[\s-]+/g, '_')
-  if (SENTINEL_OBJECT_CATEGORIES.has(normalized)) return normalized
-  return OBJECT_CATEGORY_ALIASES[normalized] ?? 'other'
-}
-function normalizeConditionKind(value: unknown): string {
-  if (typeof value !== 'string') return 'unknown'
-  const normalized = value.trim().toLowerCase().replace(/[\s-]+/g, '_')
-  return SENTINEL_CONDITION_KINDS.has(normalized) ? normalized : 'unknown'
-}
+
 function parseModelJson(text: string): { value: unknown; repaired: boolean } {
   const candidate = extractJson(text)
   try {
@@ -263,9 +339,22 @@ function parseModelJson(text: string): { value: unknown; repaired: boolean } {
     return { value: JSON.parse(repaired), repaired: true }
   }
 }
-function extractScanSourceId(prompt: string): string | undefined { const match = prompt.match(/The scan source id is\s+([^\n.]+)\.?/i); return match?.[1]?.trim() || undefined }
-function extractScanEnvironmentId(prompt: string): string | undefined { const match = prompt.match(/for environment\s+([^\n.]+)\.?/i); return match?.[1]?.trim() || undefined }
-function extractScanCapturedAt(prompt: string): string | undefined { const match = prompt.match(/The trusted scan capturedAt is\s+([^\n.]+)\.?/i); return match?.[1]?.trim() || undefined }
+
+function extractScanSourceId(prompt: string): string | undefined {
+  const match = prompt.match(/The scan source id is\s+([^\n.]+)\.?/i)
+  return match?.[1]?.trim() || undefined
+}
+
+function extractScanEnvironmentId(prompt: string): string | undefined {
+  const match = prompt.match(/for environment\s+([^\n.]+)\.?/i)
+  return match?.[1]?.trim() || undefined
+}
+
+function extractScanCapturedAt(prompt: string): string | undefined {
+  const match = prompt.match(/The trusted scan capturedAt is\s+([^\n.]+)\.?/i)
+  return match?.[1]?.trim() || undefined
+}
+
 function extractJson(text: string): string {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i)
   if (fenced) return fenced[1]
@@ -274,6 +363,18 @@ function extractJson(text: string): string {
   const end = text.lastIndexOf('}')
   return end > start ? text.slice(start, end + 1) : text.slice(start)
 }
-function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value) }
-function isStringArray(value: unknown): value is string[] { return Array.isArray(value) && value.every((item) => typeof item === 'string') }
-export function createNebiusNemotronAdapter(apiKey: string, options: Omit<NebiusAdapterOptions, 'apiKey'> = {}) { return new NebiusNemotronAdapter({ apiKey, ...options }) }
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string')
+}
+
+export function createNebiusNemotronAdapter(
+  apiKey: string,
+  options: Omit<NebiusAdapterOptions, 'apiKey'> = {},
+) {
+  return new NebiusNemotronAdapter({ apiKey, ...options })
+}
