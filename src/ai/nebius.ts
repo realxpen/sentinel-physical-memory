@@ -23,6 +23,16 @@ const SENTINEL_OBJECT_CATEGORIES = new Set([
   'obstruction',
   'other',
 ])
+const SENTINEL_CONDITION_KINDS = new Set([
+  'normal',
+  'attention',
+  'hazard',
+  'damage',
+  'maintenance',
+  'access',
+  'compliance',
+  'unknown',
+])
 const OBJECT_CATEGORY_ALIASES: Record<string, string> = {
   chair: 'furniture',
   chairs: 'furniture',
@@ -81,6 +91,7 @@ export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapte
       'Answer the user question using ONLY the supplied SENTINEL environmental memory context.',
       'Every factual claim about the environment must be supported by evidenceIds from the context.',
       'If the memory does not contain enough evidence, say that clearly instead of guessing.',
+      'Treat Observed conditions as direct evidence and Inferred conditions as interpretations with lower epistemic authority.',
       'Return ONLY JSON with: answer (string), confidence (0..1), stateId (string), evidenceIds (string[]), relatedObjectIds (string[]), relatedIssueIds (string[]).',
       `Question: ${request.request.question}`,
       `Requested state: ${request.request.stateId ?? 'current'}`,
@@ -122,16 +133,20 @@ export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapte
       'You are SENTINEL, a physical-environment perception system.',
       `Current role: ${role}.`,
       'Return ONLY one JSON object. No prose and no markdown.',
-      'The top-level JSON shape MUST be exactly: {"sourceId":"string","observations":[],"objects":[],"relations":[],"evidence":[]}.',
-      'All five top-level fields are required. Use an empty array when there are no supported items.',
-      'Observation item fields: id, environmentId, sourceId, modality (image|video|audio|document|sensor), capturedAt, label, description, confidence (0..1), optional position, evidenceIds (string[]).',
+      'The top-level JSON shape MUST be exactly: {"sourceId":"string","observations":[],"objects":[],"conditions":[],"relations":[],"evidence":[]}.',
+      'All six top-level fields are required. Use an empty array when there are no supported items.',
+      'OBSERVATION means a direct visible fact only. Do not put diagnosis, cause, risk prediction, or recommendation in observations.',
+      'Observation item fields: id, environmentId, sourceId, modality (image|video|audio|document|sensor), capturedAt, label, description, confidence (0..1), basis="observed", optional position, evidenceIds (string[]).',
       'Object item fields: id, environmentId, category (room|door|window|furniture|equipment|electrical|hvac|safety|signage|document|person|obstruction|other), name, optional description, optional position, optional boundingBox, optional state, confidence (0..1), firstSeenAt, lastSeenAt, evidenceIds (string[]).',
       'Use only the listed canonical object categories. Put specific labels such as chair, sofa, desk, locker, logo, screen, or monitor in name/description rather than category.',
+      'CONDITION means a state of the environment supported by evidence. Use basis="observed" only when the condition itself is directly visible. Use basis="inferred" when interpreting what the visible evidence may mean.',
+      'Condition item fields: id, environmentId, kind (normal|attention|hazard|damage|maintenance|access|compliance|unknown), title, description, status (present|uncertain), basis (observed|inferred), confidence (0..1), objectIds (string[]), evidenceIds (string[]), observedAt.',
+      'For inferred conditions prefer status="uncertain" unless the evidence is unusually direct. Never output recommendations as conditions.',
       'Relation item fields: id, environmentId, fromId, toId, type (contains|located_in|adjacent_to|near|attached_to|part_of|has_issue|requires_action|supports), confidence (0..1), evidenceIds (string[]).',
       'Evidence item fields: id, type (frame|image|audio|document|observation|previous_state), sourceId, capturedAt, optional frameIndex, optional timestampMs, optional uri, optional excerpt, optional boundingBox, optional confidence, description.',
       'Every evidenceIds value must exactly match the id of an item in the evidence array.',
-      'Never invent an object, condition, location, measurement, relationship, or evidence source.',
-      'Every observation and object must reference evidenceIds that exist in the evidence array.',
+      'Never invent an object, condition, location, measurement, relationship, cause, diagnosis, or evidence source.',
+      'Every observation, object, and condition must reference evidenceIds that exist in the evidence array.',
       'Evidence must be grounded in the supplied frame artifacts.',
     ].join(' ')
   }
@@ -148,14 +163,16 @@ export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapte
     }
     const sourceId = extractScanSourceId(request.prompt)
     const environmentId = extractScanEnvironmentId(request.prompt)
+    const capturedAt = extractScanCapturedAt(request.prompt)
     if (isRecord(value)) {
       value = {
         ...value,
         ...(sourceId ? { sourceId } : {}),
-        observations: normalizeIdentityArray(value.observations, sourceId, environmentId, true),
+        observations: normalizeObservationArray(value.observations, sourceId, environmentId),
         objects: normalizeObjectArray(value.objects, environmentId),
-        relations: normalizeIdentityArray(value.relations, undefined, environmentId, false),
-        evidence: normalizeIdentityArray(value.evidence, sourceId, undefined, false),
+        conditions: normalizeConditionArray(value.conditions, environmentId, capturedAt),
+        relations: normalizeIdentityArray(value.relations, undefined, environmentId),
+        evidence: normalizeIdentityArray(value.evidence, sourceId, undefined),
       }
       const evidenceNormalization = normalizePerceptionEvidenceReferences(value)
       value = evidenceNormalization.value
@@ -188,7 +205,7 @@ function resolveBaseUrl(value?: string): string {
   if (!configured || configured === LEGACY_GLOBAL_BASE_URL) return DEFAULT_BASE_URL
   return configured
 }
-function normalizeIdentityArray(value: unknown, sourceId?: string, environmentId?: string, ensureObservationModality = false): unknown[] {
+function normalizeIdentityArray(value: unknown, sourceId?: string, environmentId?: string): unknown[] {
   if (!Array.isArray(value)) return []
   return value.map((item) => {
     if (!isRecord(item)) return item
@@ -196,14 +213,34 @@ function normalizeIdentityArray(value: unknown, sourceId?: string, environmentId
       ...item,
       ...(sourceId ? { sourceId } : {}),
       ...(environmentId ? { environmentId } : {}),
-      ...(ensureObservationModality && item.modality === undefined ? { modality: 'video' } : {}),
     }
   })
 }
+function normalizeObservationArray(value: unknown, sourceId?: string, environmentId?: string): unknown[] {
+  return normalizeIdentityArray(value, sourceId, environmentId).map((item) => {
+    if (!isRecord(item)) return item
+    return { ...item, modality: item.modality ?? 'video', basis: 'observed' }
+  })
+}
 function normalizeObjectArray(value: unknown, environmentId?: string): unknown[] {
-  return normalizeIdentityArray(value, undefined, environmentId, false).map((item) => {
+  return normalizeIdentityArray(value, undefined, environmentId).map((item) => {
     if (!isRecord(item)) return item
     return { ...item, category: normalizeObjectCategory(item.category) }
+  })
+}
+function normalizeConditionArray(value: unknown, environmentId?: string, capturedAt?: string): unknown[] {
+  return normalizeIdentityArray(value, undefined, environmentId).map((item) => {
+    if (!isRecord(item)) return item
+    const basis = item.basis === 'observed' || item.basis === 'inferred' ? item.basis : 'inferred'
+    const status = item.status === 'present' || item.status === 'uncertain' ? item.status : (basis === 'observed' ? 'present' : 'uncertain')
+    return {
+      ...item,
+      kind: normalizeConditionKind(item.kind),
+      basis,
+      status,
+      ...(capturedAt ? { observedAt: capturedAt } : {}),
+      objectIds: Array.isArray(item.objectIds) ? item.objectIds : [],
+    }
   })
 }
 function normalizeObjectCategory(value: unknown): string {
@@ -211,6 +248,11 @@ function normalizeObjectCategory(value: unknown): string {
   const normalized = value.trim().toLowerCase().replace(/[\s-]+/g, '_')
   if (SENTINEL_OBJECT_CATEGORIES.has(normalized)) return normalized
   return OBJECT_CATEGORY_ALIASES[normalized] ?? 'other'
+}
+function normalizeConditionKind(value: unknown): string {
+  if (typeof value !== 'string') return 'unknown'
+  const normalized = value.trim().toLowerCase().replace(/[\s-]+/g, '_')
+  return SENTINEL_CONDITION_KINDS.has(normalized) ? normalized : 'unknown'
 }
 function parseModelJson(text: string): { value: unknown; repaired: boolean } {
   const candidate = extractJson(text)
@@ -223,6 +265,7 @@ function parseModelJson(text: string): { value: unknown; repaired: boolean } {
 }
 function extractScanSourceId(prompt: string): string | undefined { const match = prompt.match(/The scan source id is\s+([^\n.]+)\.?/i); return match?.[1]?.trim() || undefined }
 function extractScanEnvironmentId(prompt: string): string | undefined { const match = prompt.match(/for environment\s+([^\n.]+)\.?/i); return match?.[1]?.trim() || undefined }
+function extractScanCapturedAt(prompt: string): string | undefined { const match = prompt.match(/The trusted scan capturedAt is\s+([^\n.]+)\.?/i); return match?.[1]?.trim() || undefined }
 function extractJson(text: string): string {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i)
   if (fenced) return fenced[1]
