@@ -34,6 +34,7 @@ const RELATION_TYPE_ALIASES: Record<string, string> = {
   next_to: 'adjacent_to',
   nextto: 'adjacent_to',
   nearby: 'near',
+  located_near: 'near',
   close_to: 'near',
   mounted_on: 'attached_to',
   mounted_to: 'attached_to',
