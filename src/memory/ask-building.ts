@@ -1,5 +1,6 @@
-import type { AskBuildingRequest, AskBuildingResponse, EnvironmentalMemory, Evidence, Issue, SpatialObject } from '../domain/sentinel'
+import type { AskBuildingRequest, AskBuildingResponse, EnvironmentalCondition, EnvironmentalMemory, Evidence, Issue, SpatialObject } from '../domain/sentinel'
 import type { ReasoningModelAdapter } from '../ai/model'
+import { conditionTrustLabel } from '../perception/condition-model'
 import type { EnvironmentalMemoryReader } from './repository'
 
 export class AskBuildingService {
@@ -25,10 +26,12 @@ export class AskBuildingService {
     const tokens = normalized.split(/[^a-z0-9]+/).filter((token) => token.length >= 3)
     const snapshot = memory.snapshots.find((item) => item.stateId === state.id)
     const stateObjects = snapshot?.objects ?? memory.objects.filter((object) => state.objectIds.includes(object.id))
+    const stateConditions = snapshot?.conditions ?? memory.conditions.filter((condition) => state.conditionIds.includes(condition.id))
     const stateIssues = snapshot?.issues ?? memory.issues.filter((issue) => state.issueIds.includes(issue.id))
     const objects = [...stateObjects].sort((a, b) => this.relevance(b, tokens) - this.relevance(a, tokens))
+    const conditions = [...stateConditions].sort((a, b) => this.relevance(b, tokens) - this.relevance(a, tokens))
     const issues = [...stateIssues].sort((a, b) => this.relevance(b, tokens) - this.relevance(a, tokens))
-    const evidenceIds = new Set([...objects.flatMap((item) => item.evidenceIds), ...issues.flatMap((item) => item.evidenceIds)])
+    const evidenceIds = new Set([...objects.flatMap((item) => item.evidenceIds), ...conditions.flatMap((item) => item.evidenceIds), ...issues.flatMap((item) => item.evidenceIds)])
     const evidence = memory.evidence.filter((item) => evidenceIds.has(item.id))
     const previousState = memory.states.find((item) => item.version === state.version - 1)
     const diff = memory.diffs.find((item) => item.fromStateId === previousState?.id && item.toStateId === state.id)
@@ -40,6 +43,8 @@ export class AskBuildingService {
       `QUESTION: ${question}`,
       'RELEVANT OBJECTS:',
       ...objects.slice(0, 30).map((item) => this.objectLine(item)),
+      'RELEVANT CONDITIONS:',
+      ...conditions.slice(0, 30).map((item) => this.conditionLine(item)),
       'RELEVANT ISSUES:',
       ...issues.slice(0, 30).map((item) => this.issueLine(item)),
       'EVIDENCE:',
@@ -49,8 +54,9 @@ export class AskBuildingService {
     ].join('\n')
   }
 
-  private relevance(item: SpatialObject | Issue, tokens: string[]): number { const text = `${'name' in item ? item.name : item.title} ${item.description ?? ''}`.toLowerCase(); return tokens.reduce((score, token) => score + (text.includes(token) ? 1 : 0), 0) }
+  private relevance(item: SpatialObject | EnvironmentalCondition | Issue, tokens: string[]): number { const text = `${'name' in item ? item.name : item.title} ${item.description ?? ''}`.toLowerCase(); return tokens.reduce((score, token) => score + (text.includes(token) ? 1 : 0), 0) }
   private objectLine(item: SpatialObject): string { return `- OBJECT ${item.id}: ${item.name} | category=${item.category} | state=${item.state ?? 'unknown'} | confidence=${item.confidence} | position=${item.position?.description ?? 'unknown'} | evidence=${item.evidenceIds.join(',')}` }
+  private conditionLine(item: EnvironmentalCondition): string { return `- CONDITION ${item.id}: ${item.title} | trust=${conditionTrustLabel(item)} | kind=${item.kind} | status=${item.status} | confidence=${item.confidence} | description=${item.description} | evidence=${item.evidenceIds.join(',')}` }
   private issueLine(item: Issue): string { return `- ISSUE ${item.id}: ${item.title} | severity=${item.severity} | status=${item.status} | description=${item.description} | evidence=${item.evidenceIds.join(',')}` }
   private evidenceLine(item: Evidence): string { return `- EVIDENCE ${item.id}: type=${item.type} source=${item.sourceId} description=${item.description} frame=${item.frameIndex ?? 'n/a'} timestampMs=${item.timestampMs ?? 'n/a'}` }
 
