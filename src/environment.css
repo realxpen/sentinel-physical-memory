@@ -1,23 +1,44 @@
 .environment-switcher {
+  position: fixed;
+  z-index: 60;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
-  min-width: 10rem;
+  gap: 0.2rem;
+  min-width: 18rem;
+  padding: 0.55rem 0.7rem 0.5rem;
+  border: 1px solid rgba(91, 255, 138, 0.24);
+  border-radius: 1rem;
+  background: rgba(8, 10, 9, 0.9);
+  color: #f4f4ef;
+  box-shadow: 0 0.9rem 2.5rem rgba(0, 0, 0, 0.24);
+  backdrop-filter: blur(18px);
+}
+
+.view-memory .environment-switcher {
+  border-color: rgba(17, 21, 16, 0.14);
+  background: rgba(244, 244, 239, 0.94);
+  color: #111510;
+  box-shadow: 0 0.9rem 2.5rem rgba(17, 21, 16, 0.1);
 }
 
 .environment-select-row {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.5rem;
 }
 
 .environment-select {
-  max-width: 13rem;
+  flex: 1;
+  min-width: 0;
+  max-width: 15rem;
   border: 0;
   background: transparent;
   color: inherit;
   font: inherit;
-  font-weight: 700;
+  font-weight: 800;
   outline: none;
   cursor: pointer;
 }
@@ -27,24 +48,60 @@
   background: #f4f4ef;
 }
 
+.environment-switcher > span {
+  padding-left: 0.15rem;
+  color: rgba(244, 244, 239, 0.5);
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.view-memory .environment-switcher > span {
+  color: rgba(17, 21, 16, 0.48);
+}
+
 .add-environment-button {
-  width: 1.65rem;
-  height: 1.65rem;
-  display: inline-grid;
-  place-items: center;
-  border-radius: 50%;
-  border: 1px solid rgba(91, 255, 138, 0.3);
-  background: rgba(91, 255, 138, 0.08);
+  min-width: 7.8rem;
+  height: 2rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0 0.7rem;
+  border-radius: 999px;
+  border: 1px solid rgba(91, 255, 138, 0.42);
+  background: rgba(91, 255, 138, 0.1);
   color: #5bff8a;
   cursor: pointer;
   line-height: 1;
-  font-size: 1rem;
+  font-size: 0.95rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.add-environment-button::after {
+  content: 'New location';
+  font-size: 0.66rem;
+  letter-spacing: 0.04em;
+}
+
+.view-memory .add-environment-button {
+  border-color: rgba(11, 168, 97, 0.34);
+  background: rgba(11, 168, 97, 0.07);
+  color: #087746;
 }
 
 .add-environment-button:hover,
 .add-environment-button:focus-visible {
-  background: rgba(91, 255, 138, 0.16);
-  border-color: rgba(91, 255, 138, 0.55);
+  background: rgba(91, 255, 138, 0.18);
+  border-color: rgba(91, 255, 138, 0.66);
+}
+
+.view-memory .add-environment-button:hover,
+.view-memory .add-environment-button:focus-visible {
+  background: rgba(11, 168, 97, 0.12);
+  border-color: rgba(11, 168, 97, 0.5);
 }
 
 .location-backdrop {
@@ -136,12 +193,25 @@
 
 @media (max-width: 720px) {
   .environment-switcher {
+    top: 8px;
+    width: calc(100vw - 7.5rem);
     min-width: 0;
-    max-width: 11rem;
+    max-width: 23rem;
+    padding: 0.45rem 0.55rem;
   }
 
   .environment-select {
-    max-width: 8.5rem;
+    max-width: none;
+  }
+
+  .add-environment-button {
+    min-width: 2rem;
+    width: 2rem;
+    padding: 0;
+  }
+
+  .add-environment-button::after {
+    content: '';
   }
 
   .location-dialog {
