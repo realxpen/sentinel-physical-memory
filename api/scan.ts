@@ -97,6 +97,7 @@ function parseScanInput(value: unknown): ScanInput {
   const sourceValue = record(value.source, 'source')
   const sourceId = requiredString(sourceValue.id, 'source.id')
   const capturedAt = requiredString(sourceValue.capturedAt, 'source.capturedAt')
+  const metadata = optionalMetadata(sourceValue.metadata)
   const media = record(value.media, 'media')
   const kind = media.kind
   if (kind !== 'image' && kind !== 'video') throw new ScanRequestError(400, 'INVALID_MEDIA', 'media.kind must be image or video')
@@ -132,7 +133,7 @@ function parseScanInput(value: unknown): ScanInput {
 
   return {
     environmentId,
-    source: { id: sourceId, environmentId, modality: kind, uri, capturedAt, durationMs },
+    source: { id: sourceId, environmentId, modality: kind, uri, capturedAt, durationMs, metadata },
     media: { kind, uri, mimeType, durationMs, sizeBytes, extractedFrames },
     options: { maxFrames: extractedFrames?.length ?? 1, sampleIntervalMs: 2000, preserveAudio: false },
   }
@@ -214,6 +215,21 @@ function summarizeError(error: unknown): Record<string, unknown> {
       code: typeof cause.code === 'string' ? cause.code : undefined,
       message: typeof cause.message === 'string' ? cause.message : undefined,
     }
+  }
+  return result
+}
+
+function optionalMetadata(value: unknown): Record<string, string | number | boolean> | undefined {
+  if (value === undefined || value === null) return undefined
+  if (!isRecord(value)) throw new ScanRequestError(400, 'INVALID_REQUEST', 'source.metadata must be an object')
+  const entries = Object.entries(value)
+  if (entries.length > 20) throw new ScanRequestError(400, 'INVALID_REQUEST', 'source.metadata contains too many fields')
+  const result: Record<string, string | number | boolean> = {}
+  for (const [key, candidate] of entries) {
+    if (typeof candidate !== 'string' && typeof candidate !== 'number' && typeof candidate !== 'boolean') {
+      throw new ScanRequestError(400, 'INVALID_REQUEST', `source.metadata.${key} must be a string, number, or boolean`)
+    }
+    result[key] = candidate
   }
   return result
 }
