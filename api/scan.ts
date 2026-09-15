@@ -75,6 +75,7 @@ export default async function handler(req: Request, res: Response) {
       frames: result.frames.map(({ frameId, timestampMs }) => ({ frameId, timestampMs })),
       artifacts: result.artifacts.filter((artifact) => artifact.kind === 'frame').map(({ artifactId, frameId }) => ({ artifactId, frameId })),
       observations: result.observations,
+      conditions: result.conditions,
       state: result.state,
       diff: result.diff,
       memory: updatedMemory,
