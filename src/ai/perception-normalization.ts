@@ -45,6 +45,7 @@ export function normalizePerceptionEvidenceReferences(value: unknown): EvidenceR
       ...value,
       observations: normalizeCollection(value.observations),
       objects: normalizeCollection(value.objects),
+      conditions: normalizeCollection(value.conditions),
       relations: normalizeCollection(value.relations),
     },
     remappedReferences,
