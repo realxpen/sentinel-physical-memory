@@ -1,5 +1,6 @@
 import type { EnvironmentType, PerceptionResult } from '../domain/sentinel.js'
 import { validatePerceptionForScan } from '../ai/perception-schema.js'
+import { groundPerceptionToTrustedFrames } from '../ai/trusted-evidence.js'
 import type { ModelAdapter } from '../ai/model.js'
 import { EnvironmentalMemoryStore } from '../memory/store.js'
 import { InMemoryEnvironmentalMemoryRepository, type EnvironmentalMemoryRepository } from '../memory/repository.js'
@@ -46,7 +47,7 @@ export class ScanPipeline {
     const artifacts = this.createArtifacts(frames, input)
     this.emit(scanId, 'extracting', 55, `${artifacts.filter((artifact) => artifact.kind === 'frame').length} frame artifact(s) prepared`)
 
-    const perception = await this.perceive(scanId, artifacts, input)
+    const perception = await this.perceive(scanId, artifacts, frames, input)
     const observations = perception.observations.map((item) => ({ ...item }))
     const conditions = perception.conditions.map((item) => ({ ...item, objectIds: [...item.objectIds], evidenceIds: [...item.evidenceIds] }))
     this.emit(scanId, 'normalizing', 75, `${observations.length} observation(s), ${conditions.length} condition(s) normalized`)
@@ -85,10 +86,17 @@ export class ScanPipeline {
     memory.createEnvironment({ id: input.environmentId, name, type, description: 'Environment created automatically by the scan pipeline.', createdAt: input.source.capturedAt, updatedAt: input.source.capturedAt, stateIds: [], roomIds: [], objectIds: [], issueIds: [] })
   }
 
-  private async perceive(scanId: string, artifacts: ScanArtifact[], input: ScanInput): Promise<PerceptionResult> {
+  private async perceive(scanId: string, artifacts: ScanArtifact[], frames: ScanFrame[], input: ScanInput): Promise<PerceptionResult> {
     if (!this.model) return { sourceId: input.source.id, observations: [], objects: [], conditions: [], relations: [], evidence: [] }
     const result = await this.model.infer({ role: 'perception', artifacts, prompt: [`Analyze scan ${scanId} for environment ${input.environmentId}.`, `The scan source id is ${input.source.id}.`, `The trusted scan capturedAt is ${input.source.capturedAt}.`, 'Separate direct visual observations from condition interpretations.', 'Identify only visually supported rooms, objects, conditions, and spatial relationships.', 'Create evidence entries for every observation, object, and condition grounded to supplied frames.', 'Return the SENTINEL PerceptionResult JSON schema exactly.'].join('\n') })
-    return validatePerceptionForScan(result, input.environmentId, input.source.id)
+    const grounded = groundPerceptionToTrustedFrames(result, frames, input.source.id, input.source.capturedAt)
+    if (grounded.remappedReferences > 0 || grounded.addedEvidence > 0) {
+      console.warn('SENTINEL_TRUSTED_FRAME_EVIDENCE_GROUNDED', {
+        remappedReferences: grounded.remappedReferences,
+        addedEvidence: grounded.addedEvidence,
+      })
+    }
+    return validatePerceptionForScan(grounded.result, input.environmentId, input.source.id)
   }
 
   private validate(input: ScanInput) { if (!input.environmentId) throw this.error('INVALID_ENVIRONMENT', 'environmentId is required'); if (!input.source?.id) throw this.error('INVALID_SOURCE', 'source.id is required'); if (!input.media.uri) throw this.error('INVALID_MEDIA', 'media.uri is required'); if (!input.media.mimeType) throw this.error('INVALID_MEDIA', 'media.mimeType is required'); if (input.media.kind === 'image' && input.media.durationMs !== undefined) throw this.error('INVALID_MEDIA', 'image media cannot declare durationMs'); if (input.media.kind === 'video' && !input.media.extractedFrames?.length) throw this.error('VIDEO_FRAMES_REQUIRED', 'Video media must provide extracted frames before perception') }
