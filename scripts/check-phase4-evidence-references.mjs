@@ -73,6 +73,40 @@ if (confidenceStrings.value.relations[0].confidence !== 0) throw new Error('rela
 if (confidenceStrings.value.evidence[0].confidence !== 0.88) throw new Error('evidence confidence string was not normalized')
 console.log('PASS  valid decimal confidence strings normalize to finite numbers in [0,1]')
 
+const numericMetadata = normalize({
+  evidence: [{
+    id: 'frame-proof-a',
+    frameIndex: '0',
+    timestampMs: '1250.5',
+    boundingBox: { x: '1', y: '2.5', width: '30', height: '40', frameWidth: '960', frameHeight: '540' },
+  }],
+  observations: [{ evidenceIds: ['evidence_0'], position: { description: 'left side', x: '-0.25', y: '0.5' } }],
+  objects: [{ evidenceIds: ['frame-proof-a'], boundingBox: ['1', '2', '3.5', '4'] }],
+  conditions: [],
+  relations: [],
+})
+if (numericMetadata.value.evidence[0].frameIndex !== 0) throw new Error('string frameIndex was not normalized to integer')
+if (numericMetadata.value.evidence[0].timestampMs !== 1250.5) throw new Error('string timestampMs was not normalized to finite number')
+if (numericMetadata.value.evidence[0].boundingBox.frameWidth !== 960) throw new Error('bounding box frameWidth string was not normalized')
+if (numericMetadata.value.observations[0].position.x !== -0.25) throw new Error('position coordinate string was not normalized')
+if (numericMetadata.value.objects[0].boundingBox[2] !== 3.5) throw new Error('array bounding box numeric string was not normalized')
+if (numericMetadata.value.observations[0].evidenceIds[0] !== 'frame-proof-a') throw new Error('normalized string frameIndex did not participate in evidence placeholder resolution')
+if (numericMetadata.normalizedNumericFields < 12) throw new Error(`expected provider numeric fields to normalize, got ${numericMetadata.normalizedNumericFields}`)
+console.log('PASS  safe numeric metadata strings normalize before strict perception validation')
+
+const unsafeNumericMetadata = normalize({
+  evidence: [{ id: 'proof-zero', frameIndex: '0.5', timestampMs: '12ms', boundingBox: { x: 'left', y: 2, width: 3, height: 4 } }],
+  observations: [{ evidenceIds: ['proof-zero'], position: { description: 'test', x: 'NaN' } }],
+  objects: [],
+  conditions: [],
+  relations: [],
+})
+if (unsafeNumericMetadata.value.evidence[0].frameIndex !== '0.5') throw new Error('fractional frameIndex must remain invalid')
+if (unsafeNumericMetadata.value.evidence[0].timestampMs !== '12ms') throw new Error('unit-bearing timestamp must remain invalid')
+if (unsafeNumericMetadata.value.evidence[0].boundingBox.x !== 'left') throw new Error('non-numeric bounding box value must remain invalid')
+if (unsafeNumericMetadata.value.observations[0].position.x !== 'NaN') throw new Error('NaN coordinate string must remain invalid')
+console.log('PASS  unsafe numeric metadata remains invalid for strict validation')
+
 const unsafeConfidence = normalize({
   evidence: [],
   observations: [],
