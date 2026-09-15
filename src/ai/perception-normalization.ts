@@ -2,6 +2,7 @@ export interface EvidenceReferenceNormalizationResult {
   value: unknown
   remappedReferences: number
   normalizedConfidences: number
+  normalizedNumericFields: number
   normalizedRelations: number
   droppedRelations: number
 }
@@ -56,42 +57,37 @@ const RELATION_TYPE_ALIASES: Record<string, string> = {
 }
 
 /**
- * Repair bounded provider formatting variance without inventing evidence or
- * semantic confidence values.
+ * Repair bounded provider formatting variance without inventing evidence,
+ * identity, or semantic confidence values.
+ *
+ * Safe numeric serialization variance is normalized only for known numeric
+ * schema fields. Plain decimal strings such as "3" or "1250.5" may become
+ * numbers; percentages, labels, NaN/infinity, blank strings, and malformed
+ * values remain untouched so strict validation can reject them.
  *
  * Evidence references are rewritten only when they can be mapped
  * deterministically to an evidence item that already exists in the model
- * response:
- * 1. exact evidence id wins;
- * 2. a numeric placeholder such as evidence_3 maps to the unique evidence item
- *    whose frameIndex is 3;
- * 3. when no evidence item provides that frameIndex, evidence_3 may map to the
- *    existing evidence item at array index 3;
- * 4. a single string evidenceIds value is normalized to a one-item string[] so
- *    provider formatting variance does not discard an otherwise grounded item.
- *
- * Confidence values are normalized only when the provider returned a plain
- * decimal string already representing a valid SENTINEL confidence in [0, 1].
- * Values such as percentages, labels, null, NaN, infinity, or out-of-range
- * numbers remain untouched so the strict validator can reject them.
+ * response. Unknown or ambiguous references remain invalid.
  *
  * Relation types are normalized only for canonical labels or unambiguous
- * synonyms. Directional relations such as on/above/below/front/behind/left/right
- * remain explicit rather than being collapsed into a vague near relation.
- * Unknown relation semantics remain untouched and therefore fail strict
- * validation.
- *
- * A relation without a usable fromId or toId is dropped rather than guessed.
- * Relations are auxiliary graph edges; discarding an unanchored edge preserves
- * the grounded objects/observations while avoiding invented object identity.
+ * synonyms. A relation without a usable fromId or toId is dropped rather than
+ * guessed because relations are auxiliary graph edges.
  */
 export function normalizePerceptionEvidenceReferences(value: unknown): EvidenceReferenceNormalizationResult {
-  if (!isRecord(value)) return { value, remappedReferences: 0, normalizedConfidences: 0, normalizedRelations: 0, droppedRelations: 0 }
+  if (!isRecord(value)) {
+    return {
+      value,
+      remappedReferences: 0,
+      normalizedConfidences: 0,
+      normalizedNumericFields: 0,
+      normalizedRelations: 0,
+      droppedRelations: 0,
+    }
+  }
 
-  const evidence = Array.isArray(value.evidence) ? value.evidence : []
-  const index = buildEvidenceIndex(evidence)
   let remappedReferences = 0
   let normalizedConfidences = 0
+  let normalizedNumericFields = 0
   let normalizedRelations = 0
   let droppedRelations = 0
 
@@ -102,12 +98,49 @@ export function normalizePerceptionEvidenceReferences(value: unknown): EvidenceR
     return { ...item, confidence }
   }
 
+  const normalizeNumericMetadata = (item: Record<string, unknown>): Record<string, unknown> => {
+    let normalized = item
+
+    const replaceField = (
+      target: Record<string, unknown>,
+      key: string,
+      normalizer: (value: unknown) => unknown = normalizeFiniteNumberValue,
+    ): Record<string, unknown> => {
+      if (!(key in target)) return target
+      const next = normalizer(target[key])
+      if (next === target[key]) return target
+      normalizedNumericFields += 1
+      return { ...target, [key]: next }
+    }
+
+    normalized = replaceField(normalized, 'frameIndex', normalizeNonNegativeIntegerValue)
+    normalized = replaceField(normalized, 'timestampMs', normalizeNonNegativeFiniteNumberValue)
+
+    if (isRecord(normalized.position)) {
+      let position = normalized.position
+      for (const key of ['x', 'y', 'z']) position = replaceField(position, key)
+      if (position !== normalized.position) normalized = { ...normalized, position }
+    }
+
+    const boundingBox = normalizeBoundingBoxNumericFields(normalized.boundingBox, () => { normalizedNumericFields += 1 })
+    if (boundingBox !== normalized.boundingBox) normalized = { ...normalized, boundingBox }
+
+    return normalized
+  }
+
+  const normalizeItem = (item: Record<string, unknown>): Record<string, unknown> =>
+    normalizeNumericMetadata(normalizeConfidence(item))
+
+  const rawEvidence = Array.isArray(value.evidence) ? value.evidence : []
+  const normalizedEvidence = rawEvidence.map((item) => isRecord(item) ? normalizeItem(item) : item)
+  const index = buildEvidenceIndex(normalizedEvidence)
+
   const normalizeCollection = (collection: unknown, relationCollection = false): unknown[] => {
     if (!Array.isArray(collection)) return []
     return collection.map((item) => {
       if (!isRecord(item)) return item
 
-      let normalizedItem = normalizeConfidence(item)
+      let normalizedItem = normalizeItem(item)
       if (relationCollection) {
         const type = normalizeRelationType(normalizedItem.type)
         if (type !== normalizedItem.type) {
@@ -128,16 +161,15 @@ export function normalizePerceptionEvidenceReferences(value: unknown): EvidenceR
 
       const evidenceIds = rawEvidenceIds.map((reference) => {
         if (typeof reference !== 'string') return reference
-        const normalized = resolveEvidenceReference(reference, index)
-        if (normalized !== reference) remappedReferences += 1
-        return normalized
+        const normalizedReference = resolveEvidenceReference(reference, index)
+        if (normalizedReference !== reference) remappedReferences += 1
+        return normalizedReference
       })
 
       return { ...normalizedItem, evidenceIds }
     })
   }
 
-  const normalizedEvidence = evidence.map((item) => isRecord(item) ? normalizeConfidence(item) : item)
   const normalizedRelationItems = normalizeCollection(value.relations, true).filter((item) => {
     if (!isRecord(item)) return true
     if (isNonEmptyString(item.fromId) && isNonEmptyString(item.toId)) return true
@@ -156,6 +188,7 @@ export function normalizePerceptionEvidenceReferences(value: unknown): EvidenceR
     },
     remappedReferences,
     normalizedConfidences,
+    normalizedNumericFields,
     normalizedRelations,
     droppedRelations,
   }
@@ -218,6 +251,54 @@ function normalizeConfidenceValue(value: unknown): unknown {
   if (!/^(?:0(?:\.\d+)?|1(?:\.0+)?)$/.test(trimmed)) return value
   const parsed = Number(trimmed)
   return Number.isFinite(parsed) && parsed >= 0 && parsed <= 1 ? parsed : value
+}
+
+function normalizeFiniteNumberValue(value: unknown): unknown {
+  if (typeof value !== 'string') return value
+  const trimmed = value.trim()
+  if (!/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(trimmed)) return value
+  const parsed = Number(trimmed)
+  return Number.isFinite(parsed) ? parsed : value
+}
+
+function normalizeNonNegativeFiniteNumberValue(value: unknown): unknown {
+  const normalized = normalizeFiniteNumberValue(value)
+  return typeof normalized === 'number' && normalized >= 0 ? normalized : value
+}
+
+function normalizeNonNegativeIntegerValue(value: unknown): unknown {
+  if (typeof value !== 'string') return value
+  const trimmed = value.trim()
+  if (!/^\d+$/.test(trimmed)) return value
+  const parsed = Number(trimmed)
+  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : value
+}
+
+function normalizeBoundingBoxNumericFields(value: unknown, onNormalized: () => void): unknown {
+  if (Array.isArray(value)) {
+    let changed = false
+    const normalized = value.map((entry, index) => {
+      if (index > 5) return entry
+      const next = normalizeFiniteNumberValue(entry)
+      if (next !== entry) {
+        changed = true
+        onNormalized()
+      }
+      return next
+    })
+    return changed ? normalized : value
+  }
+
+  if (!isRecord(value)) return value
+  let normalized = value
+  for (const key of ['x', 'y', 'width', 'height', 'frameWidth', 'frameHeight']) {
+    if (!(key in normalized)) continue
+    const next = normalizeFiniteNumberValue(normalized[key])
+    if (next === normalized[key]) continue
+    onNormalized()
+    normalized = { ...normalized, [key]: next }
+  }
+  return normalized
 }
 
 function normalizeRelationType(value: unknown): unknown {
