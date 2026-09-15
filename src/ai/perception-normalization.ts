@@ -1,13 +1,16 @@
 export interface EvidenceReferenceNormalizationResult {
   value: unknown
   remappedReferences: number
+  normalizedConfidences: number
 }
 
 /**
- * Repair model-local evidence reference formatting without inventing evidence.
+ * Repair bounded provider formatting variance without inventing evidence or
+ * semantic confidence values.
  *
- * A reference is rewritten only when it can be mapped deterministically to an
- * evidence item that already exists in the model response:
+ * Evidence references are rewritten only when they can be mapped
+ * deterministically to an evidence item that already exists in the model
+ * response:
  * 1. exact evidence id wins;
  * 2. a numeric placeholder such as evidence_3 maps to the unique evidence item
  *    whose frameIndex is 3;
@@ -16,29 +19,43 @@ export interface EvidenceReferenceNormalizationResult {
  * 4. a single string evidenceIds value is normalized to a one-item string[] so
  *    provider formatting variance does not discard an otherwise grounded item.
  *
- * Missing, non-string, unknown, or ambiguous references are intentionally left
- * invalid so the strict perception validator can reject them.
+ * Confidence values are normalized only when the provider returned a plain
+ * decimal string already representing a valid SENTINEL confidence in [0, 1].
+ * Values such as percentages, labels, null, NaN, infinity, or out-of-range
+ * numbers remain untouched so the strict validator can reject them.
+ *
+ * Missing, non-string, unknown, or ambiguous evidence references are likewise
+ * left invalid so strict perception validation still fails closed.
  */
 export function normalizePerceptionEvidenceReferences(value: unknown): EvidenceReferenceNormalizationResult {
-  if (!isRecord(value)) return { value, remappedReferences: 0 }
+  if (!isRecord(value)) return { value, remappedReferences: 0, normalizedConfidences: 0 }
 
   const evidence = Array.isArray(value.evidence) ? value.evidence : []
   const index = buildEvidenceIndex(evidence)
   let remappedReferences = 0
+  let normalizedConfidences = 0
+
+  const normalizeConfidence = (item: Record<string, unknown>): Record<string, unknown> => {
+    const confidence = normalizeConfidenceValue(item.confidence)
+    if (confidence === item.confidence) return item
+    normalizedConfidences += 1
+    return { ...item, confidence }
+  }
 
   const normalizeCollection = (collection: unknown): unknown[] => {
     if (!Array.isArray(collection)) return []
     return collection.map((item) => {
       if (!isRecord(item)) return item
 
+      const normalizedItem = normalizeConfidence(item)
       let rawEvidenceIds: unknown[]
-      if (Array.isArray(item.evidenceIds)) {
-        rawEvidenceIds = item.evidenceIds
-      } else if (typeof item.evidenceIds === 'string' && item.evidenceIds.trim()) {
-        rawEvidenceIds = [item.evidenceIds]
+      if (Array.isArray(normalizedItem.evidenceIds)) {
+        rawEvidenceIds = normalizedItem.evidenceIds
+      } else if (typeof normalizedItem.evidenceIds === 'string' && normalizedItem.evidenceIds.trim()) {
+        rawEvidenceIds = [normalizedItem.evidenceIds]
         remappedReferences += 1
       } else {
-        return item
+        return normalizedItem
       }
 
       const evidenceIds = rawEvidenceIds.map((reference) => {
@@ -48,9 +65,11 @@ export function normalizePerceptionEvidenceReferences(value: unknown): EvidenceR
         return normalized
       })
 
-      return { ...item, evidenceIds }
+      return { ...normalizedItem, evidenceIds }
     })
   }
+
+  const normalizedEvidence = evidence.map((item) => isRecord(item) ? normalizeConfidence(item) : item)
 
   return {
     value: {
@@ -59,8 +78,10 @@ export function normalizePerceptionEvidenceReferences(value: unknown): EvidenceR
       objects: normalizeCollection(value.objects),
       conditions: normalizeCollection(value.conditions),
       relations: normalizeCollection(value.relations),
+      evidence: normalizedEvidence,
     },
     remappedReferences,
+    normalizedConfidences,
   }
 }
 
@@ -115,6 +136,14 @@ function parseEvidencePlaceholderIndex(value: string): number | undefined {
   if (!match) return undefined
   const parsed = Number(match[1])
   return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : undefined
+}
+
+function normalizeConfidenceValue(value: unknown): unknown {
+  if (typeof value !== 'string') return value
+  const trimmed = value.trim()
+  if (!/^(?:0(?:\.\d+)?|1(?:\.0+)?)$/.test(trimmed)) return value
+  const parsed = Number(trimmed)
+  return Number.isFinite(parsed) && parsed >= 0 && parsed <= 1 ? parsed : value
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
