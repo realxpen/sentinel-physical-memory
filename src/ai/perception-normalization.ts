@@ -2,6 +2,55 @@ export interface EvidenceReferenceNormalizationResult {
   value: unknown
   remappedReferences: number
   normalizedConfidences: number
+  normalizedRelations: number
+}
+
+const SENTINEL_RELATION_TYPES = new Set([
+  'contains',
+  'located_in',
+  'adjacent_to',
+  'near',
+  'attached_to',
+  'part_of',
+  'on',
+  'above',
+  'below',
+  'in_front_of',
+  'behind',
+  'left_of',
+  'right_of',
+  'has_issue',
+  'requires_action',
+  'supports',
+])
+
+const RELATION_TYPE_ALIASES: Record<string, string> = {
+  in: 'located_in',
+  inside: 'located_in',
+  within: 'located_in',
+  located_inside: 'located_in',
+  adjacent: 'adjacent_to',
+  beside: 'adjacent_to',
+  next_to: 'adjacent_to',
+  nextto: 'adjacent_to',
+  nearby: 'near',
+  close_to: 'near',
+  mounted_on: 'attached_to',
+  mounted_to: 'attached_to',
+  fixed_to: 'attached_to',
+  affixed_to: 'attached_to',
+  component_of: 'part_of',
+  partof: 'part_of',
+  on_top_of: 'on',
+  atop: 'on',
+  over: 'above',
+  under: 'below',
+  underneath: 'below',
+  in_front: 'in_front_of',
+  front_of: 'in_front_of',
+  behind_of: 'behind',
+  to_left_of: 'left_of',
+  to_right_of: 'right_of',
 }
 
 /**
@@ -24,16 +73,20 @@ export interface EvidenceReferenceNormalizationResult {
  * Values such as percentages, labels, null, NaN, infinity, or out-of-range
  * numbers remain untouched so the strict validator can reject them.
  *
- * Missing, non-string, unknown, or ambiguous evidence references are likewise
- * left invalid so strict perception validation still fails closed.
+ * Relation types are normalized only for canonical labels or unambiguous
+ * synonyms. Directional relations such as on/above/below/front/behind/left/right
+ * remain explicit rather than being collapsed into a vague near relation.
+ * Unknown relation semantics remain untouched and therefore fail strict
+ * validation.
  */
 export function normalizePerceptionEvidenceReferences(value: unknown): EvidenceReferenceNormalizationResult {
-  if (!isRecord(value)) return { value, remappedReferences: 0, normalizedConfidences: 0 }
+  if (!isRecord(value)) return { value, remappedReferences: 0, normalizedConfidences: 0, normalizedRelations: 0 }
 
   const evidence = Array.isArray(value.evidence) ? value.evidence : []
   const index = buildEvidenceIndex(evidence)
   let remappedReferences = 0
   let normalizedConfidences = 0
+  let normalizedRelations = 0
 
   const normalizeConfidence = (item: Record<string, unknown>): Record<string, unknown> => {
     const confidence = normalizeConfidenceValue(item.confidence)
@@ -42,12 +95,20 @@ export function normalizePerceptionEvidenceReferences(value: unknown): EvidenceR
     return { ...item, confidence }
   }
 
-  const normalizeCollection = (collection: unknown): unknown[] => {
+  const normalizeCollection = (collection: unknown, relationCollection = false): unknown[] => {
     if (!Array.isArray(collection)) return []
     return collection.map((item) => {
       if (!isRecord(item)) return item
 
-      const normalizedItem = normalizeConfidence(item)
+      let normalizedItem = normalizeConfidence(item)
+      if (relationCollection) {
+        const type = normalizeRelationType(normalizedItem.type)
+        if (type !== normalizedItem.type) {
+          normalizedRelations += 1
+          normalizedItem = { ...normalizedItem, type }
+        }
+      }
+
       let rawEvidenceIds: unknown[]
       if (Array.isArray(normalizedItem.evidenceIds)) {
         rawEvidenceIds = normalizedItem.evidenceIds
@@ -77,11 +138,12 @@ export function normalizePerceptionEvidenceReferences(value: unknown): EvidenceR
       observations: normalizeCollection(value.observations),
       objects: normalizeCollection(value.objects),
       conditions: normalizeCollection(value.conditions),
-      relations: normalizeCollection(value.relations),
+      relations: normalizeCollection(value.relations, true),
       evidence: normalizedEvidence,
     },
     remappedReferences,
     normalizedConfidences,
+    normalizedRelations,
   }
 }
 
@@ -107,8 +169,6 @@ function buildEvidenceIndex(evidence: unknown[]): EvidenceIndex {
     if (!byFrameIndex.has(frameIndex)) {
       byFrameIndex.set(frameIndex, id)
     } else if (byFrameIndex.get(frameIndex) !== id) {
-      // Multiple evidence items claim the same frame index. Mark ambiguous and
-      // leave any placeholder reference untouched so validation fails closed.
       byFrameIndex.set(frameIndex, null)
     }
   })
@@ -144,6 +204,13 @@ function normalizeConfidenceValue(value: unknown): unknown {
   if (!/^(?:0(?:\.\d+)?|1(?:\.0+)?)$/.test(trimmed)) return value
   const parsed = Number(trimmed)
   return Number.isFinite(parsed) && parsed >= 0 && parsed <= 1 ? parsed : value
+}
+
+function normalizeRelationType(value: unknown): unknown {
+  if (typeof value !== 'string') return value
+  const normalized = value.trim().toLowerCase().replace(/[\s-]+/g, '_')
+  if (SENTINEL_RELATION_TYPES.has(normalized)) return normalized
+  return RELATION_TYPE_ALIASES[normalized] ?? value
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
