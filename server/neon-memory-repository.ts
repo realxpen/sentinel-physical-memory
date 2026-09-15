@@ -246,9 +246,28 @@ export class NeonEnvironmentalMemoryRepository implements EnvironmentalMemoryRep
       if (!Array.isArray(value[key])) throw new Error(`Neon environmental memory is missing ${key}`)
     }
 
+    const conditions = Array.isArray(value.conditions) ? value.conditions as EnvironmentalMemory['conditions'] : []
+    const states = (value.states as EnvironmentalMemory['states']).map((state) => ({
+      ...state,
+      conditionIds: Array.isArray(state.conditionIds) ? state.conditionIds : [],
+    }))
+    const snapshots = Array.isArray(value.snapshots)
+      ? (value.snapshots as EnvironmentalMemory['snapshots']).map((snapshot) => ({
+          ...snapshot,
+          conditions: Array.isArray(snapshot.conditions) ? snapshot.conditions : [],
+        }))
+      : []
+    const observations = (value.observations as EnvironmentalMemory['observations']).map((observation) => ({
+      ...observation,
+      basis: 'observed' as const,
+    }))
+
     return {
       ...(value as unknown as EnvironmentalMemory),
-      snapshots: Array.isArray(value.snapshots) ? value.snapshots as EnvironmentalMemory['snapshots'] : [],
+      states,
+      snapshots,
+      observations,
+      conditions,
     }
   }
 }
