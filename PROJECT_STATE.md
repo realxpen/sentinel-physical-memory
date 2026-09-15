@@ -1,6 +1,6 @@
 # SENTINEL Project State
 
-Last updated: 2026-09-14
+Last updated: 2026-09-15
 
 ## North star
 
@@ -14,11 +14,11 @@ Hackathon track: **Best Apps and Agents**.
 
 ## Current phase
 
-**Phase 4 — Observation Pipeline Hardening: ACTIVE / ALL LOCAL EXIT GATES PASSED / LATEST-MAIN PRODUCTION VALID-SCAN GATE PENDING**
+**Phase 5 — Perception Quality & Condition Model: ACTIVE / CORE TRUST MODEL IMPLEMENTED / REAL-PHONE VALIDATION NEXT**
 
 ## Phase 3 — COMPLETE
 
-Persistent Environmental Memory passed its engineering, database, deployment and real production scan gates.
+Persistent Environmental Memory passed its engineering, database, deployment, and real production scan gates.
 
 Verified:
 
@@ -28,7 +28,7 @@ Verified:
 - Canonical aggregate + normalized persistence is active.
 - Immutable historical snapshots survive database round-trips.
 - Postgres rejects rewrites of already persisted historical snapshots.
-- Production `/api/health`, `/api/memory`, `/api/scan` and `/api/ask-building` load correctly on Node 22.
+- Production `/api/health`, `/api/memory`, `/api/scan`, and `/api/ask-building` loaded correctly on Node 22 during Phase 3 verification.
 - Real production Scan A and Scan B executed through Nebius Token Factory and persisted through Neon.
 - Fresh memory reads restored server-authoritative state without client resubmission.
 - State A remained immutable after Scan B.
@@ -37,88 +37,41 @@ Verified:
 
 Canonical Phase 3 proof: `Knowledge/Technical/phase-3-production-proof.md`.
 
-## Phase 4 checkpoint
+## Phase 4 — COMPLETE FOR CURRENT AED BUILD TRACK
 
-Current observation path:
+Observation Pipeline Hardening completed its local/engineering and real-phone gates.
 
-`30–60 second phone walkthrough → 8–12 useful browser evidence frames → max 10 Nebius perception images → Neon memory`
-
-Implemented:
+Verified:
 
 - browser candidate-frame sampling with temporal spread;
 - duplicate and low-light rejection;
-- MP4, MOV/M4V and WebM handling with filename MIME fallback;
+- MP4, MOV/M4V, and WebM handling with filename MIME fallback;
 - resize + adaptive JPEG compression under the request budget;
-- hard 5–90 second duration guard with 30–60 seconds preferred;
+- 5–90 second hard duration guard with 30–60 seconds preferred;
 - metadata/seek timeouts and recoverable ingestion errors;
 - `/api/scan` body/media/frame/timestamp/data-URL guards with explicit 413/415/422 responses;
-- structured scan diagnostics;
-- trusted nested scan identity normalization at the Nebius adapter boundary;
-- MiniCPM-V provider cap enforced at max 10 prompt images with temporal coverage preserved;
-- harmless empty optional spatial positions normalized away while required perception schema stays strict;
-- model-specific object categories normalized into SENTINEL's canonical taxonomy;
-- deterministic malformed-JSON repair before strict perception schema validation;
-- deterministic model evidence-reference reconciliation when an existing evidence item can be uniquely matched by exact ID, `frameIndex`, or unambiguous array index; unknown/ambiguous references still fail strict validation;
-- `.env.local` authoritative in local runtime only;
-- Node 22 pinned and `npm run dev:local` added;
-- IPv4-first local DNS handling;
-- local Neon transport diagnostics plus automatic WebSocket/HTTP failover;
-- bounded transient Neon retries with fresh client recreation;
-- safe runtime health diagnostics including deployed Git commit identity;
-- `npm run check:nebius` for non-secret Token Factory auth verification;
-- trusted persistence provenance: source capture time overrides model-invented timestamps and scan-local model IDs are not used as durable global primary keys;
-- canonical scan entities deduplicated before state/diff construction;
-- deterministic CI quality gates for dark, duplicate-heavy, too-few, mixed-quality and healthy walkthrough evidence;
+- MiniCPM-V maximum 10 perception images with temporal coverage preserved;
+- trusted nested scan identity/provenance normalization;
+- optional empty spatial metadata normalization;
+- canonical object-category normalization;
+- deterministic malformed-JSON syntax repair followed by strict semantic validation;
+- deterministic evidence-reference reconciliation only when an existing evidence item can be matched unambiguously;
+- source-owned capture time and durable IDs;
+- canonical scan entity deduplication;
+- local Neon WebSocket/HTTP transport diagnostics, retries, and failover;
+- deterministic CI quality gates for dark, duplicate-heavy, too-few, mixed-quality, and healthy walkthrough evidence;
 - deterministic CI regression gate for model evidence-reference mismatch behavior.
 
-### First real-phone baseline — PASS
+### Real-phone proof
 
-On 2026-09-11, the real browser Observe flow completed with `New Office Walkthrough.mp4`:
+`office-demo` reached:
 
-- duration: **55,901 ms**;
-- evidence sent to perception: **10 frames**;
-- Nebius authentication: **PASS**;
-- MiniCPM-V multimodal inference: **PASS**;
-- objects: **8**;
-- relations: **7**;
-- issues: **0**;
-- persisted state version: **1**;
-- state ID: `state_a6f0b67a-6905-45e1-9fd1-4143385ef11a`;
-- Neon write/read: **PASS**;
-- `/api/memory?environmentId=office-demo`: populated memory + `persistence: neon` — **PASS**;
-- `diffs: []` — expected for baseline State v1;
-- frontend rendered `What SENTINEL observed.` with the persisted objects.
+- **3** persisted states;
+- **2** persisted diffs;
+- current State v3: `state_efde5f1d-4e36-4baf-b8b2-17f311a1c2ef`;
+- rendered `What changed.` Reality Diff.
 
-This proves:
-
-`browser video → evidence extraction → Nebius perception → schema validation → environmental state → Neon persistence → memory restore`
-
-### Provenance hardening after baseline
-
-The first successful response exposed model-invented timestamps and reusable scan-local IDs. Commit `c750f3a` hardened future scans so:
-
-- evidence + observation `capturedAt` use trusted `source.capturedAt`;
-- new object `firstSeenAt` / `lastSeenAt` use trusted scan capture time;
-- evidence and observation IDs are source-scoped;
-- new canonical object and relation IDs are SENTINEL-generated;
-- model object IDs are translated to canonical persisted IDs before relations are saved;
-- evidence references are remapped consistently through observations, objects, issues and relations.
-
-State v1 was deliberately not rewritten; immutable historical snapshots remain authoritative.
-
-### Real-phone repeat scan + Reality Diff — PASS
-
-On 2026-09-14, the hardened local Observe path completed repeat real walkthroughs of `office-demo` and persisted **State v3**:
-
-- state count in Neon: **3**;
-- diff count in Neon: **2**;
-- current/latest state: `state_efde5f1d-4e36-4baf-b8b2-17f311a1c2ef`;
-- latest state version: **3**;
-- comparison source state: `state_730e488f-211d-48f1-9f94-406e2e43caab`;
-- latest Reality Diff changes: **5**;
-- frontend rendered `What changed.` with the before/after comparison — **PASS**.
-
-Latest diff semantics:
+Latest demonstrated Reality Diff:
 
 - `added` — **New: desk** — confidence 0.95;
 - `added` — **New: cable** — confidence 0.90;
@@ -126,59 +79,175 @@ Latest diff semantics:
 - `uncertain` — **Not re-observed: HGC logo** — confidence 0.50;
 - `uncertain` — **Not re-observed: sofa** — confidence 0.50.
 
-The two non-observations intentionally remain `uncertain`; SENTINEL does not claim removal from absence alone.
+The two non-observations remain `uncertain`; absence alone is not treated as proof of removal.
 
-This proves:
-
-`persistent prior state → new real-phone observation → validated/persisted new state → evidence-qualified Reality Diff → rendered Changes UI`
-
-### Poor-input / evidence-quality gate — PASS
-
-Phase 4 now has a pure browser-independent evidence-quality gate and CI regression script.
+### Phase 4 automated gates
 
 `npm run check:phase4-poor-inputs` verifies:
 
-- dark walkthrough candidates fail closed with `LOW_LIGHT_VIDEO`;
-- duplicate-heavy walkthrough candidates fail closed with `INSUFFICIENT_VISUAL_VARIETY`;
-- too-few candidates fail closed with `INSUFFICIENT_VIDEO_EVIDENCE`;
-- mixed-quality input excludes dark evidence but retains 8–12 useful frames;
-- healthy input retains a compact 8–12 frame evidence set.
+- dark walkthrough → `LOW_LIGHT_VIDEO`;
+- duplicate-heavy walkthrough → `INSUFFICIENT_VISUAL_VARIETY`;
+- too-few candidates → `INSUFFICIENT_VIDEO_EVIDENCE`;
+- mixed-quality input excludes dark evidence and keeps a useful compact set;
+- healthy input keeps 8–12 evidence frames.
 
 `npm run check:phase4-evidence-refs` verifies:
 
-- model placeholders such as `evidence_0` map only to already-existing, deterministic evidence IDs;
+- deterministic model placeholders map only to existing evidence;
 - exact IDs remain unchanged;
-- unknown references remain unchanged for strict validation to reject;
-- ambiguous frame-index matches remain unchanged and fail closed.
+- unknown references fail closed;
+- ambiguous frame-index references fail closed.
 
-Latest Sentinel CI includes both gates and the TypeScript/Vite production build. Commit `eb41ae3` CI: **PASS**.
+### Deferred production debt
 
-### Resolved blockers during real-phone gate
+The latest-main Vercel valid-video contract was **not** passed before Phase 4 transition.
 
-- local Neon `ETIMEDOUT` / intermittent WebSocket `ErrorEvent` → transport diagnostics, fresh-client retries and automatic WebSocket/HTTP failover;
-- stale Nebius Token Factory credential → fresh key verified;
-- provider `At most 10 image(s)` error → max-10 perception sampling (`9f7576d`);
-- empty `position.description` → optional empty spatial metadata normalization (`a3843e6`);
-- model-specific unsupported object category → canonical category normalization (`09136d3`);
-- malformed vision-model JSON → deterministic syntax repair followed by the same strict schema validation (`18e5cdb`);
-- duplicate canonical objects inside repeat scans → canonical entity deduplication;
-- production model response referencing `evidence_0` while emitting a differently named existing evidence item → bounded deterministic evidence-reference reconciliation (`c198276`).
+Vercel was rejecting new deployments because of the project build-rate limit. The user explicitly chose not to block the AED build cycle on that infrastructure limit and will pull/test GitHub locally.
 
-### Production status
-
-Production rejection guards are proven:
-
-- unsupported video MIME → 415 `UNSUPPORTED_MEDIA_TYPE` — **PASS**;
-- too-short walkthrough → 422 `VIDEO_TOO_SHORT` — **PASS**;
-- too-few evidence frames → 422 `TOO_FEW_FRAMES` — **PASS**.
-
-The previous valid production contract reached Nebius but failed on an evidence-ID mismatch: `object object_0 references missing evidence evidence_0`. Latest `main` now contains a bounded regression-tested fix.
-
-The production contract workflow now waits until `/api/health.deploymentCommit` exactly matches the GitHub commit under test before running the valid scan, preventing stale-deployment false failures.
-
-Current deployment blocker: GitHub's Vercel status for latest `main` is **failure due to Vercel build-rate limit**. The production contract cannot be marked passed until Vercel deploys latest `main`; do not claim the latest adapter hardening is live before then.
+This is a deferred production re-verification item, not a passed gate. When deployment capacity is available, rerun `.github/workflows/phase4-observation-contract.yml` against the matching `deploymentCommit` and record the result.
 
 Canonical Phase 4 record: `Knowledge/Technical/phase-4-observation-pipeline.md`.
+Archive transition record: `Archive/phase-4-transition-note.md`.
+
+## Phase 5 checkpoint — ACTIVE
+
+### Objective
+
+Separate **what SENTINEL directly observed** from **what SENTINEL inferred**, represent environmental conditions explicitly, and prevent weak perception inference from silently becoming an operational issue.
+
+Trust hierarchy:
+
+- **Observed** — directly supported by supplied evidence;
+- **Inferred** — interpretation of evidence with lower epistemic authority;
+- **Recommended** — reserved for later Action Planner work, not perception.
+
+### Core condition model — IMPLEMENTED
+
+The domain now includes:
+
+- `ClaimBasis = observed | inferred`;
+- `ConditionKind = normal | attention | hazard | damage | maintenance | access | compliance | unknown`;
+- `ConditionStatus = present | uncertain`;
+- `EnvironmentalCondition`;
+- `EnvironmentalState.conditionIds`;
+- `EnvironmentalStateSnapshot.conditions`;
+- `EnvironmentalMemory.conditions`.
+
+Every direct perception `Observation` is explicitly `basis: observed`.
+
+### Perception trust boundary — IMPLEMENTED
+
+The Nebius perception response now has six top-level collections:
+
+`sourceId + observations + objects + conditions + relations + evidence`
+
+Rules enforced:
+
+- observations are direct visible facts only;
+- diagnosis, cause, risk prediction, and recommendation must not be encoded as observations;
+- conditions carry `basis: observed | inferred` and `status: present | uncertain`;
+- inferred conditions default conservatively toward `uncertain`;
+- every condition must reference existing evidence;
+- referenced condition object IDs must exist in the same perception result;
+- trusted scan `capturedAt` replaces model-provided condition time;
+- condition evidence placeholders are normalized only when an existing evidence item can be resolved deterministically;
+- unknown or ambiguous references still fail closed.
+
+### Issue-promotion policy — IMPLEMENTED
+
+The model no longer decides whether a condition becomes an operational issue.
+
+`src/perception/condition-model.ts` owns the policy:
+
+- `normal` → never an issue;
+- `uncertain` → never auto-promoted;
+- no evidence → never auto-promoted;
+- observed threshold = **0.65** confidence;
+- inferred threshold = **0.85** confidence;
+- observed hazard → at most `high`;
+- observed damage / maintenance / access / compliance → `medium`;
+- observed attention / unknown → `low`;
+- inferred conditions → at most `medium`;
+- perception alone can never create a `critical` issue.
+
+The old keyword-regex path that promoted words such as `hazard`, `broken`, or `leak` from free-text observations has been removed for new scans.
+
+### Durable memory — IMPLEMENTED
+
+For new scans:
+
+- condition IDs become source-scoped durable IDs;
+- condition evidence IDs map to durable source-scoped evidence IDs;
+- condition object IDs map to canonical durable object IDs;
+- condition `observedAt` is trusted scan capture time;
+- conditions are included in state membership and immutable snapshots;
+- only policy-qualified conditions become operational issues.
+
+Older Phase 3/4 memory remains backward-compatible:
+
+- missing `conditions` hydrate as `[]`;
+- old states hydrate with `conditionIds: []`;
+- old snapshots hydrate with `conditions: []`;
+- old observations hydrate with `basis: observed`.
+
+The canonical Neon JSON aggregate already stores the new condition data without requiring a runtime database migration.
+
+### Ask the Building — IMPLEMENTED
+
+Reasoning context now includes `RELEVANT CONDITIONS` and explicit trust labels:
+
+- `trust=Observed`
+- `trust=Inferred`
+
+Nemotron is instructed to treat inferred conditions as lower-authority interpretation rather than direct physical fact.
+
+### Phase 5 CI gate — PASS
+
+`npm run check:phase5-conditions` verifies:
+
+- observed evidence-backed hazard can become operational;
+- observed hazard is capped at `high`, never `critical`;
+- hazard maps to safety issue type;
+- strong inferred conditions use the higher threshold and are capped at `medium`;
+- weak inference remains context-only;
+- uncertain conditions never auto-promote;
+- normal conditions remain memory context;
+- conditions must reference existing evidence and objects;
+- missing evidence fails closed;
+- missing object references fail closed.
+
+Sentinel CI run `34952118344` passed:
+
+- Phase 4 poor-input gate;
+- Phase 4 evidence-reference gate;
+- Phase 5 condition trust gate;
+- TypeScript/Vite production build.
+
+Canonical Phase 5 record: `Knowledge/Technical/phase-5-condition-model.md`.
+
+## Phase 5 next proof
+
+Pull latest `main` and validate with a real phone walkthrough containing one deliberately safe and obvious visual condition, for example:
+
+- a loose cable laid across a walkway;
+- a chair deliberately blocking a passage;
+- another harmless staged state with a clear visual signal.
+
+Expected proof:
+
+1. direct visible facts appear under `observations`;
+2. interpretation appears separately under `conditions`;
+3. each condition has the appropriate `basis` and `status`;
+4. condition evidence IDs resolve to supplied frames;
+5. weak/uncertain inference does not become an issue;
+6. a sufficiently supported present condition may be promoted by SENTINEL policy;
+7. Ask Building preserves the Observed/Inferred distinction.
+
+Inspect durable memory at:
+
+`/api/memory?environmentId=office-demo`
+
+Expected new fields include top-level `conditions` and latest-state `conditionIds`.
 
 ## Verified implementation baseline
 
@@ -191,68 +260,39 @@ Canonical Phase 4 record: `Knowledge/Technical/phase-4-observation-pipeline.md`.
 - Contextual Ask and Reality Diff presentation exist.
 - Frontend restores authoritative environmental memory from `/api/memory`.
 - Browser-carried memory is not the persistence authority.
-
-### Scan / observation
-
-- `src/scan/video-ingestion.ts` performs Phase 4 browser hardening.
-- `src/scan/pipeline.ts` loads/saves memory through `EnvironmentalMemoryRepository`.
-- `/api/scan` is repository-backed and reports persistence mode.
-- Perception receives no more than 10 image frames per provider call.
-- Trusted scan identity/provenance comes from SENTINEL request metadata, not model invention.
-- Provider-format normalization is bounded; required semantic/evidence validation remains strict.
-- Poor-input evidence selection is deterministic and continuously verified in CI.
+- Phase 5 condition trust labels are available in API/memory/reasoning context; dedicated visual treatment in the main UI is not yet a Phase 5 exit requirement and can be refined later.
 
 ### AI / Nebius
 
-- Real Nebius Token Factory adapter lives in `src/ai/nebius.ts`.
-- Active base: `https://api.tokenfactory.us-central1.nebius.com/v1`.
-- Perception default: `openbmb/MiniCPM-V-4_5`.
-- Reasoning / Ask default: `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B`.
-- Malformed syntax and provider-local evidence-reference formatting are normalized only at bounded deterministic trust boundaries; semantic/evidence schema validation remains strict afterward.
-- DEC-006 records the production model-routing decision.
+- Perception: `openbmb/MiniCPM-V-4_5`.
+- Reasoning / Ask: `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B`.
+- Active Token Factory base: `https://api.tokenfactory.us-central1.nebius.com/v1`.
+- DEC-006 records model routing.
 
 ### Environmental memory
 
-- `EnvironmentalMemoryStore` remains the domain/state engine.
+- `EnvironmentalMemoryStore` remains the state engine.
 - `EnvironmentalMemoryRepository` remains the persistence contract.
 - `NeonEnvironmentalMemoryRepository` is the active durable implementation.
-- Historical state snapshots are immutable.
-- Database persistence rejects historical snapshot mutation.
-- Durable scan provenance does not trust model-generated time or globally reusable model IDs for new scans.
-- Local persistence can fail over between WebSocket and SQL-over-HTTP without changing the durable memory contract.
+- Historical snapshots remain immutable.
+- Conditions now participate in state snapshots while Phase 7 remains responsible for full condition-aware diff semantics.
 
 ### Diff / Ask
 
-- `EnvironmentalDiffEngine` implements `DiffEngine`.
-- `ChangeType` includes `uncertain`.
+- `EnvironmentalDiffEngine` remains deterministic.
 - Missing prior evidence does not automatically prove removal/resolution.
-- Real-phone repeat scans have produced a non-empty rendered Reality Diff.
-- `AskBuildingService` reads through the async repository.
-- Historical Ask uses selected immutable snapshots.
-
-### Action / verification
-
-- Domain types for action plans and verification exist.
-- `VerificationService` interface exists.
-- Full implementations remain Phase 11/12 work.
-
-## Phase 4 remaining gate
-
-All local engineering, repeated real-phone, Reality Diff, and poor-input gates are now **MET**.
-
-Before Phase 4 can be marked complete:
-
-1. Vercel must deploy latest `main` after the current build-rate limit clears;
-2. `.github/workflows/phase4-observation-contract.yml` must observe the matching `deploymentCommit` and pass the valid request with HTTP 200 + `persistence: neon`.
+- Phase 5 carries conditions through snapshots but does not yet compare condition transitions as first-class diff changes; that belongs to Phase 7.
+- Ask Building now receives condition trust labels.
 
 ## Highest-priority gaps
 
-1. **Latest-main production deployment + valid-video contract.**
-2. Perception quality / condition model — Phase 5 after Phase 4 production closure.
-3. Environmental state history UX/query hardening.
-4. Diff Engine v2 — stable semantic matching and evidence-qualified absence/removal.
-5. Action + verification — complete the closed loop.
-6. Reliability, automated tests, security and least-privilege database-role hardening.
+1. **Phase 5 real-phone Observed vs Inferred condition proof.**
+2. Condition quality tuning based on real model output.
+3. Environmental state history UX/query hardening — Phase 6.
+4. Diff Engine v2 — semantic matching + first-class condition transitions — Phase 7.
+5. Action + verification closed loop — Phases 11/12.
+6. Deferred latest-main Vercel production re-verification.
+7. Reliability, automated tests, security, and least-privilege database-role hardening.
 
 ## Locked decisions
 
@@ -263,11 +303,13 @@ Before Phase 4 can be marked complete:
 - No full metric 3D/BIM requirement for MVP.
 - Evidence-first safety language.
 - UI direction = Living Spatial Intelligence.
+- Observed, Inferred, and Recommended are distinct trust layers.
+- Perception cannot independently create a critical operational issue.
 - All durable memory access goes through `EnvironmentalMemoryRepository`.
-- Neon / Lakebase Postgres is the active durable store (DEC-005).
+- Neon Postgres is the active durable store (DEC-005).
 - Browser-carried memory is not authoritative.
 - Historical states retain immutable snapshots.
-- Production Nebius model routing uses MiniCPM-V for perception and NVIDIA Nemotron 3 Nano 30B-A3B for reasoning (DEC-006).
+- Production model routing uses MiniCPM-V for perception and NVIDIA Nemotron 3 Nano 30B-A3B for reasoning (DEC-006).
 
 ## Phase roadmap
 
@@ -275,8 +317,8 @@ Before Phase 4 can be marked complete:
 - [x] Phase 1 — Freeze the MVP contract
 - [x] Phase 2 — Core architecture cleanup
 - [x] Phase 3 — Persistent Environmental Memory
-- [ ] Phase 4 — Observation pipeline hardening (**all local gates passed; latest-main production valid-scan gate pending**)
-- [ ] Phase 5 — Perception quality and condition model
+- [x] Phase 4 — Observation pipeline hardening (**local/engineering track complete; latest-main Vercel re-verification deferred and tracked**)
+- [ ] Phase 5 — Perception quality and condition model (**ACTIVE — core model + CI passed; real-phone validation next**)
 - [ ] Phase 6 — Environmental state history
 - [ ] Phase 7 — Environmental Diff Engine v2
 - [ ] Phase 8 — Reality Diff UI
@@ -295,20 +337,18 @@ Before Phase 4 can be marked complete:
 
 Phase 3: **COMPLETE**.
 
-Phase 4 engineering implementation: **MET**.
+Phase 4 current AED build track: **COMPLETE**.
 
-Phase 4 production rejection guards: **MET**.
+Phase 4 latest-main Vercel valid-video proof: **DEFERRED / NOT PASSED**.
 
-Phase 4 local runtime + Neon persistence: **MET**.
+Phase 5 core domain + trust policy: **MET**.
 
-Phase 4 first real-phone baseline: **MET**.
+Phase 5 strict condition/evidence validation: **MET**.
 
-Phase 4 trusted provenance hardening: **MET**.
+Phase 5 durable condition memory + Ask context: **MET**.
 
-Phase 4 repeat-scan + Reality Diff real-phone proof: **MET**.
+Phase 5 automated trust gate + build: **CI PASS**.
 
-Phase 4 repeated walkthrough / poor-input / adapter regression proof: **MET / CI PASS**.
+Phase 5 real-phone condition-quality proof: **PENDING**.
 
-Phase 4 latest-main production valid-video proof: **PENDING DEPLOYMENT — VERCEL BUILD-RATE LIMIT**.
-
-**Do not formally advance to Phase 5 until the single remaining production gate passes.**
+**Next gate: pull latest `main`, run the Phase 5 condition test/build locally, then perform one representative real-phone condition walkthrough.**
