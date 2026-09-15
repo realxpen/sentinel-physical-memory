@@ -47,7 +47,8 @@ export class ScanPipeline {
 
     const perception = await this.perceive(scanId, artifacts, input)
     const observations = perception.observations.map((item) => ({ ...item }))
-    this.emit(scanId, 'normalizing', 75, `${observations.length} observation(s) normalized`)
+    const conditions = perception.conditions.map((item) => ({ ...item, objectIds: [...item.objectIds], evidenceIds: [...item.evidenceIds] }))
+    this.emit(scanId, 'normalizing', 75, `${observations.length} observation(s), ${conditions.length} condition(s) normalized`)
 
     const state = memory.ingestScan(input.environmentId, input.source, perception)
     this.emit(scanId, 'memorizing', 88, `Environmental state v${state.version} created`)
@@ -64,7 +65,7 @@ export class ScanPipeline {
     await this.memoryRepository.save(updatedMemory)
 
     this.emit(scanId, 'complete', 100, diff ? `Scan complete: ${diff.changes.length} change(s) detected` : 'Scan pipeline complete')
-    return { scanId, environmentId: input.environmentId, source: input.source, frames, artifacts, observations, state, diff, completedAt: this.now().toISOString() }
+    return { scanId, environmentId: input.environmentId, source: input.source, frames, artifacts, observations, conditions, state, diff, completedAt: this.now().toISOString() }
   }
 
   getMemory(environmentId: string) { return this.memoryRepository.get(environmentId) }
@@ -82,8 +83,8 @@ export class ScanPipeline {
   }
 
   private async perceive(scanId: string, artifacts: ScanArtifact[], input: ScanInput): Promise<PerceptionResult> {
-    if (!this.model) return { sourceId: input.source.id, observations: [], objects: [], relations: [], evidence: [] }
-    const result = await this.model.infer({ role: 'perception', artifacts, prompt: [`Analyze scan ${scanId} for environment ${input.environmentId}.`, `The scan source id is ${input.source.id}.`, 'Identify only visually supported rooms, objects, conditions, and spatial relationships.', 'Create evidence entries for every observation and object grounded to supplied frames.', 'Return the SENTINEL PerceptionResult JSON schema exactly.'].join('\n') })
+    if (!this.model) return { sourceId: input.source.id, observations: [], objects: [], conditions: [], relations: [], evidence: [] }
+    const result = await this.model.infer({ role: 'perception', artifacts, prompt: [`Analyze scan ${scanId} for environment ${input.environmentId}.`, `The scan source id is ${input.source.id}.`, `The trusted scan capturedAt is ${input.source.capturedAt}.`, 'Separate direct visual observations from condition interpretations.', 'Identify only visually supported rooms, objects, conditions, and spatial relationships.', 'Create evidence entries for every observation, object, and condition grounded to supplied frames.', 'Return the SENTINEL PerceptionResult JSON schema exactly.'].join('\n') })
     return validatePerceptionForScan(result, input.environmentId, input.source.id)
   }
 
@@ -104,7 +105,7 @@ export class ScanPipeline {
 
     // Nebius currently accepts at most 10 images in one multimodal prompt.
     // Preserve the whole walkthrough by evenly sampling across the selected
-    // browser evidence instead of simply truncating the last frames.
+    // browser evidence instead of simply truncating the final frames.
     const chosenIndexes = new Set<number>()
     for (let index = 0; index < max; index += 1) {
       chosenIndexes.add(Math.round(index * (eligible.length - 1) / (max - 1)))
