@@ -24,6 +24,8 @@ jobs:
         run: npm run check:provider-boundary
       - name: Verify automatic perception retry
         run: npm run check:perception-retry
+      - name: Verify targeted condition audit
+        run: npm run check:condition-audit
       - name: Verify Phase 5 condition trust gate
         run: npm run check:phase5-conditions
       - name: Build
