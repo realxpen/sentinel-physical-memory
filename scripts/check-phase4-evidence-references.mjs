@@ -8,6 +8,14 @@ function evidenceIds(result, collection, index = 0) {
   return result.value[collection][index].evidenceIds
 }
 
+const relation = (type, evidenceIdsValue, suffix = 'a') => ({
+  id: `rel-${suffix}`,
+  fromId: `obj-from-${suffix}`,
+  toId: `obj-to-${suffix}`,
+  type,
+  evidenceIds: evidenceIdsValue,
+})
+
 const byFrameIndex = normalize({
   evidence: [
     { id: 'frame-proof-a', frameIndex: 0 },
@@ -15,7 +23,7 @@ const byFrameIndex = normalize({
   ],
   observations: [{ evidenceIds: ['evidence_1'] }],
   objects: [{ evidenceIds: ['evidence_0', 'frame-proof-b'] }],
-  relations: [{ evidenceIds: ['evidence:1'] }],
+  relations: [relation('near', ['evidence:1'])],
 })
 if (byFrameIndex.remappedReferences !== 3) throw new Error(`expected 3 frame-index remaps, got ${byFrameIndex.remappedReferences}`)
 if (evidenceIds(byFrameIndex, 'observations')[0] !== 'frame-proof-b') throw new Error('observation frame-index reference was not remapped')
@@ -55,7 +63,7 @@ const confidenceStrings = normalize({
   observations: [{ evidenceIds: ['proof-zero'], confidence: '0.93' }],
   objects: [{ evidenceIds: ['proof-zero'], confidence: '1' }],
   conditions: [{ evidenceIds: ['proof-zero'], confidence: '0.70' }],
-  relations: [{ evidenceIds: ['proof-zero'], confidence: '0' }],
+  relations: [{ ...relation('near', ['proof-zero']), confidence: '0' }],
 })
 if (confidenceStrings.normalizedConfidences !== 5) throw new Error(`expected 5 confidence normalizations, got ${confidenceStrings.normalizedConfidences}`)
 if (confidenceStrings.value.observations[0].confidence !== 0.93) throw new Error('observation confidence string was not normalized')
@@ -90,13 +98,13 @@ const relationAliases = normalize({
   objects: [],
   conditions: [],
   relations: [
-    { type: 'inside', evidenceIds: ['proof-zero'] },
-    { type: 'next to', evidenceIds: ['proof-zero'] },
-    { type: 'mounted-on', evidenceIds: ['proof-zero'] },
-    { type: 'on top of', evidenceIds: ['proof-zero'] },
-    { type: 'front of', evidenceIds: ['proof-zero'] },
-    { type: 'left of', evidenceIds: ['proof-zero'] },
-    { type: 'located_near', evidenceIds: ['proof-zero'] },
+    relation('inside', ['proof-zero'], '1'),
+    relation('next to', ['proof-zero'], '2'),
+    relation('mounted-on', ['proof-zero'], '3'),
+    relation('on top of', ['proof-zero'], '4'),
+    relation('front of', ['proof-zero'], '5'),
+    relation('left of', ['proof-zero'], '6'),
+    relation('located_near', ['proof-zero'], '7'),
   ],
 })
 const expectedRelationTypes = ['located_in', 'adjacent_to', 'attached_to', 'on', 'in_front_of', 'left_of', 'near']
@@ -111,11 +119,28 @@ const unknownRelation = normalize({
   observations: [],
   objects: [],
   conditions: [],
-  relations: [{ type: 'faces_toward', evidenceIds: ['proof-zero'] }],
+  relations: [relation('faces_toward', ['proof-zero'])],
 })
 if (unknownRelation.normalizedRelations !== 0) throw new Error('unknown relation semantics must not be rewritten')
 if (unknownRelation.value.relations[0].type !== 'faces_toward') throw new Error('unknown relation semantic changed unexpectedly')
 console.log('PASS  unknown relation semantics remain invalid for strict validation')
+
+const unanchoredRelations = normalize({
+  evidence: [{ id: 'proof-zero' }],
+  observations: [],
+  objects: [],
+  conditions: [],
+  relations: [
+    relation('near', ['proof-zero'], 'valid'),
+    { id: 'rel-blank-from', fromId: '', toId: 'obj-b', type: 'near', evidenceIds: ['proof-zero'] },
+    { id: 'rel-missing-from', toId: 'obj-b', type: 'near', evidenceIds: ['proof-zero'] },
+    { id: 'rel-blank-to', fromId: 'obj-a', toId: '   ', type: 'near', evidenceIds: ['proof-zero'] },
+  ],
+})
+if (unanchoredRelations.droppedRelations !== 3) throw new Error(`expected 3 unanchored relations to be dropped, got ${unanchoredRelations.droppedRelations}`)
+if (unanchoredRelations.value.relations.length !== 1) throw new Error('unanchored relations should be discarded without losing valid relations')
+if (unanchoredRelations.value.relations[0].id !== 'rel-valid') throw new Error('valid anchored relation was not preserved')
+console.log('PASS  blank or missing relation endpoints are dropped instead of guessed')
 
 const unknown = normalize({
   evidence: [{ id: 'proof-zero', frameIndex: 0 }],
