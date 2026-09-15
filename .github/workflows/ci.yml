@@ -22,5 +22,7 @@ jobs:
         run: npm run check:phase4-poor-inputs
       - name: Verify Phase 4 evidence-reference gate
         run: npm run check:phase4-evidence-refs
+      - name: Verify Phase 5 condition trust gate
+        run: npm run check:phase5-conditions
       - name: Build
         run: npm run build
