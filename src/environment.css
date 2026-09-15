@@ -1,0 +1,150 @@
+.environment-switcher {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 10rem;
+}
+
+.environment-select-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.environment-select {
+  max-width: 13rem;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  outline: none;
+  cursor: pointer;
+}
+
+.environment-select option {
+  color: #0d100e;
+  background: #f4f4ef;
+}
+
+.add-environment-button {
+  width: 1.65rem;
+  height: 1.65rem;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid rgba(91, 255, 138, 0.3);
+  background: rgba(91, 255, 138, 0.08);
+  color: #5bff8a;
+  cursor: pointer;
+  line-height: 1;
+  font-size: 1rem;
+}
+
+.add-environment-button:hover,
+.add-environment-button:focus-visible {
+  background: rgba(91, 255, 138, 0.16);
+  border-color: rgba(91, 255, 138, 0.55);
+}
+
+.location-backdrop {
+  z-index: 80;
+}
+
+.location-dialog {
+  width: min(92vw, 31rem);
+  position: relative;
+  border: 1px solid rgba(91, 255, 138, 0.2);
+  border-radius: 1.5rem;
+  background: #0d100e;
+  color: #f4f4ef;
+  padding: 2rem;
+  box-shadow: 0 2rem 6rem rgba(0, 0, 0, 0.45);
+}
+
+.location-dialog h2 {
+  margin: 0.5rem 0 0.75rem;
+  font-size: clamp(1.8rem, 4vw, 2.5rem);
+  line-height: 0.98;
+}
+
+.location-dialog > p {
+  margin: 0 0 1.5rem;
+  color: rgba(244, 244, 239, 0.62);
+  line-height: 1.55;
+}
+
+.location-dialog label {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.location-dialog label > span {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.13em;
+  color: rgba(244, 244, 239, 0.5);
+}
+
+.location-dialog input,
+.location-dialog select {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid rgba(244, 244, 239, 0.13);
+  border-radius: 0.9rem;
+  background: #131714;
+  color: #f4f4ef;
+  padding: 0.85rem 1rem;
+  font: inherit;
+  outline: none;
+}
+
+.location-dialog input:focus,
+.location-dialog select:focus {
+  border-color: rgba(91, 255, 138, 0.6);
+  box-shadow: 0 0 0 3px rgba(91, 255, 138, 0.08);
+}
+
+.location-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.65rem;
+  margin-top: 1.5rem;
+}
+
+.location-actions button {
+  border: 1px solid rgba(244, 244, 239, 0.12);
+  border-radius: 999px;
+  background: transparent;
+  color: #f4f4ef;
+  padding: 0.7rem 1rem;
+  cursor: pointer;
+}
+
+.location-actions .location-create {
+  border-color: rgba(91, 255, 138, 0.55);
+  background: #5bff8a;
+  color: #080a09;
+  font-weight: 800;
+}
+
+.location-actions .location-create:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+@media (max-width: 720px) {
+  .environment-switcher {
+    min-width: 0;
+    max-width: 11rem;
+  }
+
+  .environment-select {
+    max-width: 8.5rem;
+  }
+
+  .location-dialog {
+    padding: 1.5rem;
+  }
+}
