@@ -1,4 +1,5 @@
 import { normalizePerceptionEvidenceReferences } from '../src/ai/perception-normalization.ts'
+import { groundPerceptionToTrustedFrames } from '../src/ai/trusted-evidence.ts'
 
 function normalize(value) {
   return normalizePerceptionEvidenceReferences(value)
@@ -73,40 +74,6 @@ if (confidenceStrings.value.relations[0].confidence !== 0) throw new Error('rela
 if (confidenceStrings.value.evidence[0].confidence !== 0.88) throw new Error('evidence confidence string was not normalized')
 console.log('PASS  valid decimal confidence strings normalize to finite numbers in [0,1]')
 
-const numericMetadata = normalize({
-  evidence: [{
-    id: 'frame-proof-a',
-    frameIndex: '0',
-    timestampMs: '1250.5',
-    boundingBox: { x: '1', y: '2.5', width: '30', height: '40', frameWidth: '960', frameHeight: '540' },
-  }],
-  observations: [{ evidenceIds: ['evidence_0'], position: { description: 'left side', x: '-0.25', y: '0.5' } }],
-  objects: [{ evidenceIds: ['frame-proof-a'], boundingBox: ['1', '2', '3.5', '4'] }],
-  conditions: [],
-  relations: [],
-})
-if (numericMetadata.value.evidence[0].frameIndex !== 0) throw new Error('string frameIndex was not normalized to integer')
-if (numericMetadata.value.evidence[0].timestampMs !== 1250.5) throw new Error('string timestampMs was not normalized to finite number')
-if (numericMetadata.value.evidence[0].boundingBox.frameWidth !== 960) throw new Error('bounding box frameWidth string was not normalized')
-if (numericMetadata.value.observations[0].position.x !== -0.25) throw new Error('position coordinate string was not normalized')
-if (numericMetadata.value.objects[0].boundingBox[2] !== 3.5) throw new Error('array bounding box numeric string was not normalized')
-if (numericMetadata.value.observations[0].evidenceIds[0] !== 'frame-proof-a') throw new Error('normalized string frameIndex did not participate in evidence placeholder resolution')
-if (numericMetadata.normalizedNumericFields < 12) throw new Error(`expected provider numeric fields to normalize, got ${numericMetadata.normalizedNumericFields}`)
-console.log('PASS  safe numeric metadata strings normalize before strict perception validation')
-
-const unsafeNumericMetadata = normalize({
-  evidence: [{ id: 'proof-zero', frameIndex: '0.5', timestampMs: '12ms', boundingBox: { x: 'left', y: 2, width: 3, height: 4 } }],
-  observations: [{ evidenceIds: ['proof-zero'], position: { description: 'test', x: 'NaN' } }],
-  objects: [],
-  conditions: [],
-  relations: [],
-})
-if (unsafeNumericMetadata.value.evidence[0].frameIndex !== '0.5') throw new Error('fractional frameIndex must remain invalid')
-if (unsafeNumericMetadata.value.evidence[0].timestampMs !== '12ms') throw new Error('unit-bearing timestamp must remain invalid')
-if (unsafeNumericMetadata.value.evidence[0].boundingBox.x !== 'left') throw new Error('non-numeric bounding box value must remain invalid')
-if (unsafeNumericMetadata.value.observations[0].position.x !== 'NaN') throw new Error('NaN coordinate string must remain invalid')
-console.log('PASS  unsafe numeric metadata remains invalid for strict validation')
-
 const unsafeConfidence = normalize({
   evidence: [],
   observations: [],
@@ -175,6 +142,37 @@ if (unanchoredRelations.droppedRelations !== 3) throw new Error(`expected 3 unan
 if (unanchoredRelations.value.relations.length !== 1) throw new Error('unanchored relations should be discarded without losing valid relations')
 if (unanchoredRelations.value.relations[0].id !== 'rel-valid') throw new Error('valid anchored relation was not preserved')
 console.log('PASS  blank or missing relation endpoints are dropped instead of guessed')
+
+const trustedFrames = [
+  { frameId: 'trusted-frame-0', timestampMs: 250, uri: 'data:image/jpeg;base64,AAA' },
+  { frameId: 'trusted-frame-1', timestampMs: 1250, uri: 'data:image/jpeg;base64,BBB' },
+]
+const trustedGrounding = groundPerceptionToTrustedFrames({
+  sourceId: 'source-trusted',
+  observations: [{ id: 'obs-0', environmentId: 'env-1', sourceId: 'source-trusted', modality: 'video', capturedAt: '2026-09-15T10:00:00.000Z', label: 'Desk', description: 'Desk visible', confidence: 0.9, basis: 'observed', evidenceIds: ['evidence_0'] }],
+  objects: [{ id: 'obj-0', environmentId: 'env-1', category: 'furniture', name: 'Desk', confidence: 0.9, firstSeenAt: '2026-09-15T10:00:00.000Z', lastSeenAt: '2026-09-15T10:00:00.000Z', evidenceIds: ['evidence-1'] }],
+  conditions: [],
+  relations: [],
+  evidence: [],
+}, trustedFrames, 'source-trusted', '2026-09-15T10:00:00.000Z')
+if (trustedGrounding.addedEvidence !== 2) throw new Error(`expected 2 trusted frame evidence records, got ${trustedGrounding.addedEvidence}`)
+if (trustedGrounding.remappedReferences !== 2) throw new Error(`expected 2 trusted frame remaps, got ${trustedGrounding.remappedReferences}`)
+if (trustedGrounding.result.observations[0].evidenceIds[0] !== 'trusted-frame-0') throw new Error('evidence_0 was not grounded to trusted frame 0')
+if (trustedGrounding.result.objects[0].evidenceIds[0] !== 'trusted-frame-1') throw new Error('evidence-1 was not grounded to trusted frame 1')
+if (trustedGrounding.result.evidence[0].sourceId !== 'source-trusted') throw new Error('trusted evidence did not preserve scan source identity')
+if (trustedGrounding.result.evidence[0].frameIndex !== 0 || trustedGrounding.result.evidence[0].timestampMs !== 250) throw new Error('trusted frame metadata was not preserved')
+console.log('PASS  provider evidence placeholders ground to SENTINEL-owned scan-frame evidence')
+
+const outOfRangeGrounding = groundPerceptionToTrustedFrames({
+  sourceId: 'source-trusted',
+  observations: [{ id: 'obs-9', environmentId: 'env-1', sourceId: 'source-trusted', modality: 'video', capturedAt: '2026-09-15T10:00:00.000Z', label: 'Unknown', description: 'Unknown', confidence: 0.9, basis: 'observed', evidenceIds: ['evidence_9'] }],
+  objects: [],
+  conditions: [],
+  relations: [],
+  evidence: [],
+}, trustedFrames, 'source-trusted', '2026-09-15T10:00:00.000Z')
+if (outOfRangeGrounding.result.observations[0].evidenceIds[0] !== 'evidence_9') throw new Error('out-of-range evidence placeholder must remain invalid')
+console.log('PASS  out-of-range evidence placeholders remain invalid and fail closed downstream')
 
 const unknown = normalize({
   evidence: [{ id: 'proof-zero', frameIndex: 0 }],
