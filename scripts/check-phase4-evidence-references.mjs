@@ -50,6 +50,40 @@ if (!Array.isArray(evidenceIds(scalar, 'conditions'))) throw new Error('scalar c
 if (evidenceIds(scalar, 'conditions')[0] !== 'proof-zero') throw new Error('scalar condition placeholder did not resolve to existing evidence')
 console.log('PASS  single-string evidenceIds normalize to one-item arrays without inventing evidence')
 
+const confidenceStrings = normalize({
+  evidence: [{ id: 'proof-zero', confidence: ' 0.88 ' }],
+  observations: [{ evidenceIds: ['proof-zero'], confidence: '0.93' }],
+  objects: [{ evidenceIds: ['proof-zero'], confidence: '1' }],
+  conditions: [{ evidenceIds: ['proof-zero'], confidence: '0.70' }],
+  relations: [{ evidenceIds: ['proof-zero'], confidence: '0' }],
+})
+if (confidenceStrings.normalizedConfidences !== 5) throw new Error(`expected 5 confidence normalizations, got ${confidenceStrings.normalizedConfidences}`)
+if (confidenceStrings.value.observations[0].confidence !== 0.93) throw new Error('observation confidence string was not normalized')
+if (confidenceStrings.value.objects[0].confidence !== 1) throw new Error('object confidence string was not normalized')
+if (confidenceStrings.value.conditions[0].confidence !== 0.7) throw new Error('condition confidence string was not normalized')
+if (confidenceStrings.value.relations[0].confidence !== 0) throw new Error('relation confidence string was not normalized')
+if (confidenceStrings.value.evidence[0].confidence !== 0.88) throw new Error('evidence confidence string was not normalized')
+console.log('PASS  valid decimal confidence strings normalize to finite numbers in [0,1]')
+
+const unsafeConfidence = normalize({
+  evidence: [],
+  observations: [],
+  objects: [
+    { evidenceIds: [], confidence: '93%' },
+    { evidenceIds: [], confidence: 'high' },
+    { evidenceIds: [], confidence: null },
+    { evidenceIds: [], confidence: 1.4 },
+  ],
+  conditions: [],
+  relations: [],
+})
+if (unsafeConfidence.normalizedConfidences !== 0) throw new Error('unsafe confidence values must not be normalized')
+if (unsafeConfidence.value.objects[0].confidence !== '93%') throw new Error('percentage confidence must remain invalid')
+if (unsafeConfidence.value.objects[1].confidence !== 'high') throw new Error('label confidence must remain invalid')
+if (unsafeConfidence.value.objects[2].confidence !== null) throw new Error('null required confidence must remain invalid')
+if (unsafeConfidence.value.objects[3].confidence !== 1.4) throw new Error('out-of-range numeric confidence must remain invalid')
+console.log('PASS  unsafe confidence shapes remain invalid for strict validation')
+
 const unknown = normalize({
   evidence: [{ id: 'proof-zero', frameIndex: 0 }],
   observations: [{ evidenceIds: ['evidence_9', 'semantic-label'] }],
