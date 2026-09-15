@@ -96,9 +96,10 @@ const relationAliases = normalize({
     { type: 'on top of', evidenceIds: ['proof-zero'] },
     { type: 'front of', evidenceIds: ['proof-zero'] },
     { type: 'left of', evidenceIds: ['proof-zero'] },
+    { type: 'located_near', evidenceIds: ['proof-zero'] },
   ],
 })
-const expectedRelationTypes = ['located_in', 'adjacent_to', 'attached_to', 'on', 'in_front_of', 'left_of']
+const expectedRelationTypes = ['located_in', 'adjacent_to', 'attached_to', 'on', 'in_front_of', 'left_of', 'near']
 if (relationAliases.normalizedRelations !== expectedRelationTypes.length) throw new Error(`expected ${expectedRelationTypes.length} relation normalizations, got ${relationAliases.normalizedRelations}`)
 for (let index = 0; index < expectedRelationTypes.length; index += 1) {
   if (relationAliases.value.relations[index].type !== expectedRelationTypes[index]) throw new Error(`relation alias ${index} did not normalize safely`)
