@@ -13,14 +13,28 @@ try {
   const environmentId = 'retry-test-environment'
   const sourceId = 'retry-test-source'
   const capturedAt = '2026-09-15T13:30:00.000Z'
-  let attempts = 0
+  let sceneAttempts = 0
+  let auditAttempts = 0
 
   const model = {
     provider: 'test-provider',
     model: 'test-model',
-    async infer() {
-      attempts += 1
-      if (attempts === 1) {
+    async infer(request) {
+      const isAudit = request.prompt.includes('Condition audit for scan')
+      if (isAudit) {
+        auditAttempts += 1
+        return {
+          sourceId,
+          observations: [],
+          objects: [],
+          conditions: [],
+          relations: [],
+          evidence: [],
+        }
+      }
+
+      sceneAttempts += 1
+      if (sceneAttempts === 1) {
         throw new ModelAdapterError({
           code: 'INVALID_PERCEPTION_SCHEMA',
           message: 'simulated malformed first provider response',
@@ -75,12 +89,14 @@ try {
     },
   })
 
-  if (attempts !== 2) throw new Error(`expected exactly 2 perception attempts, got ${attempts}`)
+  if (sceneAttempts !== 2) throw new Error(`expected exactly 2 scene perception attempts, got ${sceneAttempts}`)
+  if (auditAttempts !== 1) throw new Error(`expected one post-scene condition audit, got ${auditAttempts}`)
   if (result.state.version !== 1) throw new Error(`expected State v1 after retry, got v${result.state.version}`)
   if (result.observations.length !== 1) throw new Error(`expected one grounded observation, got ${result.observations.length}`)
 
-  console.log('PASS  malformed first perception response retries automatically once')
+  console.log('PASS  malformed first scene perception response retries automatically once')
   console.log('PASS  retry uses trusted frame grounding and still creates State v1')
+  console.log('PASS  zero-condition result continues into one condition-audit pass')
   console.log('SENTINEL PERCEPTION RETRY VERIFIED')
 } finally {
   await vite.close()
