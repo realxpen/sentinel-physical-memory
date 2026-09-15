@@ -1,4 +1,4 @@
-import type { EnvironmentId, EnvironmentalDiff, EnvironmentalState, Observation, ScanSource } from '../domain/sentinel'
+import type { EnvironmentId, EnvironmentalCondition, EnvironmentalDiff, EnvironmentalState, Observation, ScanSource } from '../domain/sentinel'
 
 export type ScanStage =
   | 'queued'
@@ -57,6 +57,7 @@ export interface PerceptionBatch {
   scanId: string
   artifacts: ScanArtifact[]
   observations: Observation[]
+  conditions: EnvironmentalCondition[]
 }
 
 export interface ScanResult {
@@ -66,6 +67,7 @@ export interface ScanResult {
   frames: ScanFrame[]
   artifacts: ScanArtifact[]
   observations: Observation[]
+  conditions: EnvironmentalCondition[]
   state: EnvironmentalState
   diff?: EnvironmentalDiff
   completedAt: string
