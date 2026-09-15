@@ -3,6 +3,7 @@ export interface EvidenceReferenceNormalizationResult {
   remappedReferences: number
   normalizedConfidences: number
   normalizedRelations: number
+  droppedRelations: number
 }
 
 const SENTINEL_RELATION_TYPES = new Set([
@@ -79,15 +80,20 @@ const RELATION_TYPE_ALIASES: Record<string, string> = {
  * remain explicit rather than being collapsed into a vague near relation.
  * Unknown relation semantics remain untouched and therefore fail strict
  * validation.
+ *
+ * A relation without a usable fromId or toId is dropped rather than guessed.
+ * Relations are auxiliary graph edges; discarding an unanchored edge preserves
+ * the grounded objects/observations while avoiding invented object identity.
  */
 export function normalizePerceptionEvidenceReferences(value: unknown): EvidenceReferenceNormalizationResult {
-  if (!isRecord(value)) return { value, remappedReferences: 0, normalizedConfidences: 0, normalizedRelations: 0 }
+  if (!isRecord(value)) return { value, remappedReferences: 0, normalizedConfidences: 0, normalizedRelations: 0, droppedRelations: 0 }
 
   const evidence = Array.isArray(value.evidence) ? value.evidence : []
   const index = buildEvidenceIndex(evidence)
   let remappedReferences = 0
   let normalizedConfidences = 0
   let normalizedRelations = 0
+  let droppedRelations = 0
 
   const normalizeConfidence = (item: Record<string, unknown>): Record<string, unknown> => {
     const confidence = normalizeConfidenceValue(item.confidence)
@@ -132,6 +138,12 @@ export function normalizePerceptionEvidenceReferences(value: unknown): EvidenceR
   }
 
   const normalizedEvidence = evidence.map((item) => isRecord(item) ? normalizeConfidence(item) : item)
+  const normalizedRelationItems = normalizeCollection(value.relations, true).filter((item) => {
+    if (!isRecord(item)) return true
+    if (isNonEmptyString(item.fromId) && isNonEmptyString(item.toId)) return true
+    droppedRelations += 1
+    return false
+  })
 
   return {
     value: {
@@ -139,12 +151,13 @@ export function normalizePerceptionEvidenceReferences(value: unknown): EvidenceR
       observations: normalizeCollection(value.observations),
       objects: normalizeCollection(value.objects),
       conditions: normalizeCollection(value.conditions),
-      relations: normalizeCollection(value.relations, true),
+      relations: normalizedRelationItems,
       evidence: normalizedEvidence,
     },
     remappedReferences,
     normalizedConfidences,
     normalizedRelations,
+    droppedRelations,
   }
 }
 
@@ -212,6 +225,10 @@ function normalizeRelationType(value: unknown): unknown {
   const normalized = value.trim().toLowerCase().replace(/[\s-]+/g, '_')
   if (SENTINEL_RELATION_TYPES.has(normalized)) return normalized
   return RELATION_TYPE_ALIASES[normalized] ?? value
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
