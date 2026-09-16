@@ -76,6 +76,40 @@ export class EnvironmentalDiffEngine implements DiffEngine {
   }
 
   private sameIssue(a: Issue, b: Issue): boolean { return a.id === b.id || (a.title.trim().toLowerCase() === b.title.trim().toLowerCase() && (a.roomId ?? '') === (b.roomId ?? '')) }
-  private positionChanged(a: SpatialObject, b: SpatialObject): boolean { const pa = a.position; const pb = b.position; if (!pa || !pb) return false; return pa.roomId !== pb.roomId || pa.relativeToId !== pb.relativeToId || pa.description !== pb.description }
+
+  private positionChanged(a: SpatialObject, b: SpatialObject): boolean {
+    const pa = a.position
+    const pb = b.position
+    if (!pa || !pb) return false
+
+    // Structured anchors are the strongest deterministic movement evidence.
+    if (pa.roomId && pb.roomId && pa.roomId !== pb.roomId) return true
+    if (pa.relativeToId && pb.relativeToId && pa.relativeToId !== pb.relativeToId) return true
+
+    // Some vision providers place bounding-box-like coordinate tuples in the
+    // free-text position.description field (for example "0 200 700 800").
+    // Those values move when the camera framing changes and are not physical
+    // world coordinates, so they must never produce a Reality Diff movement.
+    const descriptionA = semanticPositionDescription(pa.description)
+    const descriptionB = semanticPositionDescription(pb.description)
+    return Boolean(descriptionA && descriptionB && descriptionA !== descriptionB)
+  }
+
   private change(from: EnvironmentalSnapshot, to: EnvironmentalSnapshot, type: Change['type'], entityId: string, title: string, description: string, confidence: number, evidenceIds: string[]): Change { return { id: this.id(), environmentId: from.environmentId, fromStateId: from.stateId, toStateId: to.stateId, type, entityId, title, description, confidence, evidenceIds: [...new Set(evidenceIds)] } }
+}
+
+function semanticPositionDescription(value: string | undefined): string | undefined {
+  const normalized = value?.trim().toLowerCase().replace(/\s+/g, ' ')
+  if (!normalized) return undefined
+
+  const coordinateTokens = normalized
+    .replace(/[\[\](),;:]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean)
+
+  if (coordinateTokens.length >= 2 && coordinateTokens.every((token) => /^-?\d+(?:\.\d+)?(?:px|%)?$/.test(token))) {
+    return undefined
+  }
+
+  return normalized
 }
