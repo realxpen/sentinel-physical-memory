@@ -1,4 +1,4 @@
-import type { EnvironmentalCondition, IssueSeverity, IssueType } from '../domain/sentinel.js'
+import type { ConditionKind, EnvironmentalCondition, IssueSeverity, IssueType } from '../domain/sentinel.js'
 
 export interface ConditionAssessment {
   trustLabel: 'Observed' | 'Inferred'
@@ -10,6 +10,15 @@ export interface ConditionAssessment {
 
 const OBSERVED_ISSUE_THRESHOLD = 0.65
 const INFERRED_ISSUE_THRESHOLD = 0.85
+const EXPLICIT_OBSERVED_ACCESS_THRESHOLD = 0.60
+
+const PHYSICAL_OBSTACLE = '(?:box|carton|package|chair|furniture|equipment|object|item|cabinet|table|desk|trolley|cart)'
+const ACCESS_ROUTE = '(?:doorway|door|exit|walkway|passage|aisle|walking path|circulation path)'
+const EXPLICIT_ACCESS_PATTERNS = [
+  new RegExp(`\\b${PHYSICAL_OBSTACLE}\\b.{0,80}\\b(?:in|inside|across|blocking|obstructing|occupying|narrowing)\\b.{0,80}\\b${ACCESS_ROUTE}\\b`, 'i'),
+  new RegExp(`\\b${ACCESS_ROUTE}\\b.{0,80}\\b(?:blocked|obstructed|occupied|narrowed)\\b`, 'i'),
+  new RegExp(`\\b(?:blocking|obstructing|narrowing)\\b.{0,80}\\b${ACCESS_ROUTE}\\b`, 'i'),
+]
 
 /**
  * Phase 5 trust policy.
@@ -19,11 +28,20 @@ const INFERRED_ISSUE_THRESHOLD = 0.85
  * SENTINEL promotes only evidence-backed, present conditions above a bounded
  * confidence threshold. Inferred conditions require stronger confidence and
  * can never become critical/high solely from perception.
+ *
+ * A provider can occasionally label an explicitly described obstruction as
+ * "normal". SENTINEL corrects only a very narrow class of those conflicts:
+ * grounded text that directly places a physical obstacle in/across a doorway,
+ * exit, walkway, passage, aisle, or walking/circulation path. The policy never
+ * raises confidence above the model's own value and does not treat a generic
+ * "box visible in room" statement as an access problem.
  */
 export function assessCondition(condition: EnvironmentalCondition): ConditionAssessment {
   const trustLabel = condition.basis === 'observed' ? 'Observed' : 'Inferred'
+  const effectiveKind = effectiveConditionKind(condition)
+  const explicitAccessCue = effectiveKind === 'access' && condition.kind !== 'access' && hasExplicitAccessCue(condition)
 
-  if (condition.kind === 'normal') {
+  if (effectiveKind === 'normal') {
     return { trustLabel, operational: false, reason: 'Normal conditions are memory context, not issues.' }
   }
 
@@ -35,7 +53,7 @@ export function assessCondition(condition: EnvironmentalCondition): ConditionAss
     return { trustLabel, operational: false, reason: 'A condition without evidence cannot become an issue.' }
   }
 
-  const threshold = condition.basis === 'observed' ? OBSERVED_ISSUE_THRESHOLD : INFERRED_ISSUE_THRESHOLD
+  const threshold = thresholdForCondition(condition, effectiveKind, explicitAccessCue)
   if (condition.confidence < threshold) {
     return {
       trustLabel,
@@ -44,14 +62,16 @@ export function assessCondition(condition: EnvironmentalCondition): ConditionAss
     }
   }
 
-  const issueType = issueTypeForCondition(condition)
-  const severity = severityForCondition(condition)
+  const issueType = issueTypeForKind(effectiveKind)
+  const severity = severityForKind(effectiveKind, condition.basis)
   return {
     trustLabel,
     operational: true,
     issueType,
     severity,
-    reason: `${trustLabel} condition is present, evidence-backed, and above the issue threshold.`,
+    reason: explicitAccessCue
+      ? `${trustLabel} condition contains an explicit grounded access-route obstruction cue and meets the bounded access threshold.`
+      : `${trustLabel} condition is present, evidence-backed, and above the issue threshold.`,
   }
 }
 
@@ -59,8 +79,22 @@ export function conditionTrustLabel(condition: Pick<EnvironmentalCondition, 'bas
   return condition.basis === 'observed' ? 'Observed' : 'Inferred'
 }
 
-export function issueTypeForCondition(condition: Pick<EnvironmentalCondition, 'kind'>): IssueType {
-  switch (condition.kind) {
+/** Return the policy-effective kind without mutating the persisted model claim. */
+export function effectiveConditionKind(condition: Pick<EnvironmentalCondition, 'kind' | 'title' | 'description'>): ConditionKind {
+  if ((condition.kind === 'normal' || condition.kind === 'unknown') && hasExplicitAccessCue(condition)) return 'access'
+  return condition.kind
+}
+
+export function issueTypeForCondition(condition: Pick<EnvironmentalCondition, 'kind' | 'title' | 'description'>): IssueType {
+  return issueTypeForKind(effectiveConditionKind(condition))
+}
+
+export function severityForCondition(condition: Pick<EnvironmentalCondition, 'kind' | 'basis' | 'title' | 'description'>): IssueSeverity {
+  return severityForKind(effectiveConditionKind(condition), condition.basis)
+}
+
+function issueTypeForKind(kind: ConditionKind): IssueType {
+  switch (kind) {
     case 'hazard': return 'safety'
     case 'damage': return 'damage'
     case 'maintenance': return 'maintenance'
@@ -70,13 +104,13 @@ export function issueTypeForCondition(condition: Pick<EnvironmentalCondition, 'k
   }
 }
 
-export function severityForCondition(condition: Pick<EnvironmentalCondition, 'kind' | 'basis'>): IssueSeverity {
-  if (condition.basis === 'inferred') {
-    if (condition.kind === 'attention') return 'low'
+function severityForKind(kind: ConditionKind, basis: EnvironmentalCondition['basis']): IssueSeverity {
+  if (basis === 'inferred') {
+    if (kind === 'attention') return 'low'
     return 'medium'
   }
 
-  switch (condition.kind) {
+  switch (kind) {
     case 'hazard': return 'high'
     case 'damage':
     case 'maintenance':
@@ -86,4 +120,15 @@ export function severityForCondition(condition: Pick<EnvironmentalCondition, 'ki
     case 'unknown': return 'low'
     case 'normal': return 'info'
   }
+}
+
+function thresholdForCondition(condition: EnvironmentalCondition, effectiveKind: ConditionKind, explicitAccessCue: boolean): number {
+  if (condition.basis === 'inferred') return INFERRED_ISSUE_THRESHOLD
+  if (effectiveKind === 'access' && explicitAccessCue) return EXPLICIT_OBSERVED_ACCESS_THRESHOLD
+  return OBSERVED_ISSUE_THRESHOLD
+}
+
+function hasExplicitAccessCue(condition: Pick<EnvironmentalCondition, 'title' | 'description'>): boolean {
+  const text = `${condition.title} ${condition.description}`.replace(/\s+/g, ' ').trim()
+  return EXPLICIT_ACCESS_PATTERNS.some((pattern) => pattern.test(text))
 }
