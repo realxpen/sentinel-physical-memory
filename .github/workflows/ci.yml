@@ -28,5 +28,7 @@ jobs:
         run: npm run check:condition-audit
       - name: Verify Phase 5 condition trust gate
         run: npm run check:phase5-conditions
+      - name: Verify Reality Diff position semantics
+        run: npm run check:diff-position
       - name: Build
         run: npm run build
