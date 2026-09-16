@@ -1,4 +1,4 @@
-import type { EnvironmentType, PerceptionResult } from '../domain/sentinel.js'
+import type { ConditionKind, EnvironmentType, PerceptionResult } from '../domain/sentinel.js'
 import { PerceptionValidationError, validatePerceptionForScan } from '../ai/perception-schema.js'
 import { groundPerceptionToTrustedFrames } from '../ai/trusted-evidence.js'
 import { ModelAdapterError, type ModelAdapter } from '../ai/model.js'
@@ -18,6 +18,7 @@ const defaultId = (prefix: string) => `${prefix}_${crypto.randomUUID()}`
 const MAX_PERCEPTION_IMAGE_FRAMES = 10
 const MAX_PERCEPTION_ATTEMPTS = 2
 const ENVIRONMENT_TYPES = new Set<EnvironmentType>(['office', 'school', 'hotel', 'clinic', 'retail', 'home', 'warehouse', 'construction', 'other'])
+const OPERATIONAL_CONDITION_KINDS = new Set<ConditionKind>(['attention', 'hazard', 'damage', 'maintenance', 'access', 'compliance'])
 
 export class ScanPipeline {
   private readonly now: () => Date
@@ -115,30 +116,45 @@ export class ScanPipeline {
     ].join('\n')
 
     const scene = await this.inferPerceptionPass('scene', scenePrompt, artifacts, frames, input)
-    if (scene.conditions.length > 0) return scene
+    if (hasOperationalConditionCandidate(scene)) return scene
+
+    const sceneObjectSummary = scene.objects.length
+      ? scene.objects.map((item) => `${item.name} (${item.category})`).join(', ')
+      : 'none'
+    const sceneConditionSummary = scene.conditions.length
+      ? scene.conditions.map((item) => `${item.title} [${item.kind}]`).join(', ')
+      : 'none'
 
     const auditPrompt = [
       `Condition audit for scan ${scanId} in environment ${input.environmentId}.`,
       `The scan source id is ${input.source.id}.`,
       `The trusted scan capturedAt is ${input.source.capturedAt}.`,
+      `The scene inventory already identified these visible objects: ${sceneObjectSummary}.`,
+      `The scene inventory reported these conditions: ${sceneConditionSummary}. Benign/normal conditions do not count as a completed facility-condition audit.`,
       'Inspect every supplied frame specifically for visually defensible environmental conditions that a facility or operations manager would care about.',
-      'Check walking paths, doors, exits, floors, desks, furniture, cables, electrical items, equipment, and visible maintenance state.',
-      'Examples of relevant visible conditions include a blocked or narrowed passage, furniture obstructing a normal walkway, a loose cable on a walking surface, a spill/wet floor, visible physical damage, unstable or misplaced equipment, a blocked door/exit, or an obvious maintenance defect.',
-      'Do NOT force a condition. Ordinary furniture arrangement is not a hazard unless the visual evidence supports obstruction or another condition.',
+      'Check walking paths, doors, exits, floors, desks, furniture, boxes/packages, cables, electrical items, equipment, and visible maintenance state.',
+      'Pay special attention to newly introduced or misplaced objects and whether their placement narrows, blocks, or changes a normal circulation path.',
+      'Examples of relevant visible conditions include a blocked or narrowed passage, furniture or a box obstructing a normal walkway, a loose cable on a walking surface, a spill/wet floor, visible physical damage, unstable or misplaced equipment, a blocked door/exit, or an obvious maintenance defect.',
+      'Do NOT force a condition. Ordinary furniture arrangement or a box stored safely out of the walking path is not a hazard unless the visual evidence supports obstruction or another condition.',
       'Use basis="observed" only for the directly visible state. Use basis="inferred" and status="uncertain" when interpreting what the visible state may mean.',
       'Do not recommend actions and do not infer invisible causes or risks.',
       'Reference only the exact supplied FRAME_ID values in evidenceIds. SENTINEL owns frame evidence records.',
-      'Return the full SENTINEL PerceptionResult JSON schema. It is acceptable for conditions to be empty if no condition is visually supported.',
+      'Return the full SENTINEL PerceptionResult JSON schema. It is acceptable for conditions to be empty if no operational condition is visually supported.',
     ].join('\n')
 
     try {
-      console.warn('SENTINEL_CONDITION_AUDIT_STARTED', { scanId, reason: 'scene_pass_returned_zero_conditions' })
+      console.warn('SENTINEL_CONDITION_AUDIT_STARTED', {
+        scanId,
+        reason: scene.conditions.length === 0 ? 'scene_pass_returned_zero_conditions' : 'scene_pass_has_only_benign_conditions',
+        sceneConditions: scene.conditions.map((item) => ({ kind: item.kind, title: item.title })),
+      })
       const audit = await this.inferPerceptionPass('condition-audit', auditPrompt, artifacts, frames, input)
       const merged = mergePerceptionPasses(scene, audit)
       console.warn('SENTINEL_CONDITION_AUDIT_COMPLETED', {
         scanId,
         auditConditions: audit.conditions.length,
         mergedConditions: merged.conditions.length,
+        operationalConditions: merged.conditions.filter((item) => OPERATIONAL_CONDITION_KINDS.has(item.kind)).length,
       })
       return validatePerceptionForScan(merged, input.environmentId, input.source.id)
     } catch (error) {
@@ -260,6 +276,10 @@ export class ScanPipeline {
   private error(code: string, message: string): ScanError {
     return Object.assign(new Error(message), { code, recoverable: false })
   }
+}
+
+function hasOperationalConditionCandidate(result: PerceptionResult): boolean {
+  return result.conditions.some((item) => OPERATIONAL_CONDITION_KINDS.has(item.kind))
 }
 
 function mergePerceptionPasses(scene: PerceptionResult, audit: PerceptionResult): PerceptionResult {
