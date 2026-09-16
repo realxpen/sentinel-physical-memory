@@ -1,4 +1,4 @@
-import { assessCondition } from '../src/perception/condition-model.ts'
+import { assessCondition, effectiveConditionKind } from '../src/perception/condition-model.ts'
 import { PerceptionValidationError, validatePerceptionForScan, validatePerception } from '../src/ai/perception-schema.ts'
 
 const environmentId = 'phase5-test'
@@ -44,8 +44,45 @@ expect('weak inference stays context-only', weakInference.operational === false)
 const uncertainObserved = assessCondition(condition({ status: 'uncertain', confidence: 0.99 }))
 expect('uncertain condition never auto-promotes to issue', uncertainObserved.operational === false)
 
-const normalCondition = assessCondition(condition({ kind: 'normal', title: 'Exit path clear' }))
+const normalCondition = assessCondition(condition({ kind: 'normal', title: 'Exit path clear', description: 'The visible exit path is clear.' }))
 expect('normal condition stays memory context', normalCondition.operational === false)
+
+const benignBox = assessCondition(condition({
+  kind: 'normal',
+  title: 'Supply Box',
+  description: 'A cardboard box labeled SUPPLIES is visible in the room.',
+  confidence: 1,
+}))
+expect('generic box-in-room statement stays benign', benignBox.operational === false)
+expect('generic box-in-room statement keeps normal effective kind', effectiveConditionKind(condition({ kind: 'normal', title: 'Supply Box', description: 'A cardboard box is visible in the room.' })) === 'normal')
+
+const doorwayBox = condition({
+  kind: 'normal',
+  title: 'Supply Box',
+  description: "A cardboard box labeled 'SUPPLIES' is visible in the doorway.",
+  confidence: 0.60,
+})
+const doorwayAssessment = assessCondition(doorwayBox)
+expect('explicit physical obstacle in doorway is policy-classified as access', effectiveConditionKind(doorwayBox) === 'access')
+expect('grounded observed doorway obstruction can become operational at bounded 0.60 threshold', doorwayAssessment.operational === true)
+expect('explicit doorway obstruction maps to access issue type', doorwayAssessment.issueType === 'access')
+expect('explicit doorway obstruction remains medium severity', doorwayAssessment.severity === 'medium')
+
+const weakDoorwayBox = assessCondition(condition({
+  kind: 'normal',
+  title: 'Supply Box',
+  description: 'A cardboard box is visible in the doorway.',
+  confidence: 0.59,
+}))
+expect('explicit doorway obstruction below bounded threshold stays context-only', weakDoorwayBox.operational === false)
+
+const personInDoorway = assessCondition(condition({
+  kind: 'normal',
+  title: 'Person',
+  description: 'A person is visible in the doorway.',
+  confidence: 0.95,
+}))
+expect('transient person-in-doorway statement is not treated as physical access obstruction', personInDoorway.operational === false)
 
 const perception = validatePerception({
   sourceId,
