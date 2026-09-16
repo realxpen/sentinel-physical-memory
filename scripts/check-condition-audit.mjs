@@ -31,7 +31,7 @@ try {
             modality: 'video',
             capturedAt,
             label: 'Office furniture visible',
-            description: 'A desk and chair are visible.',
+            description: 'A desk, chair, and supply box are visible.',
             confidence: 0.95,
             basis: 'observed',
             evidenceIds: ['evidence_0'],
@@ -45,8 +45,29 @@ try {
             firstSeenAt: capturedAt,
             lastSeenAt: capturedAt,
             evidenceIds: ['evidence_0'],
+          }, {
+            id: 'box-scene',
+            environmentId,
+            category: 'obstruction',
+            name: 'supply box',
+            confidence: 0.98,
+            firstSeenAt: capturedAt,
+            lastSeenAt: capturedAt,
+            evidenceIds: ['evidence_0'],
           }],
-          conditions: [],
+          conditions: [{
+            id: 'condition-normal',
+            environmentId,
+            kind: 'normal',
+            title: 'Normal office environment',
+            description: 'The scene appears to be an office.',
+            status: 'present',
+            basis: 'observed',
+            confidence: 0.9,
+            objectIds: [],
+            evidenceIds: ['evidence_0'],
+            observedAt: capturedAt,
+          }],
           relations: [],
           evidence: [],
         }
@@ -60,17 +81,17 @@ try {
           sourceId,
           modality: 'video',
           capturedAt,
-          label: 'Chair across walkway',
-          description: 'A chair is positioned across the visible walking path.',
+          label: 'Supply box across walkway',
+          description: 'A supply box is positioned across the visible walking path.',
           confidence: 0.94,
           basis: 'observed',
           evidenceIds: ['evidence_0'],
         }],
         objects: [{
-          id: 'chair-audit',
+          id: 'box-audit',
           environmentId,
-          category: 'furniture',
-          name: 'chair',
+          category: 'obstruction',
+          name: 'supply box',
           confidence: 0.94,
           firstSeenAt: capturedAt,
           lastSeenAt: capturedAt,
@@ -81,11 +102,11 @@ try {
           environmentId,
           kind: 'access',
           title: 'Walkway obstructed',
-          description: 'A chair visibly narrows or blocks the walking path.',
+          description: 'A supply box visibly narrows or blocks the walking path.',
           status: 'present',
           basis: 'observed',
           confidence: 0.92,
-          objectIds: ['chair-audit'],
+          objectIds: ['box-audit'],
           evidenceIds: ['evidence_0'],
           observedAt: capturedAt,
         }],
@@ -122,15 +143,19 @@ try {
 
   if (prompts.length !== 2) throw new Error(`expected scene + condition audit passes, got ${prompts.length}`)
   if (!prompts[1].includes('walking paths, doors, exits, floors')) throw new Error('condition audit prompt is missing facility-condition focus')
-  if (result.conditions.length !== 1) throw new Error(`expected one audited condition, got ${result.conditions.length}`)
-  if (result.conditions[0].title !== 'Walkway obstructed') throw new Error('audited condition did not survive merge')
-  if (result.conditions[0].evidenceIds[0] !== 'condition-audit-frame-0') throw new Error('audited condition was not grounded to trusted frame')
-  if (result.state.conditionIds.length !== 1) throw new Error('audited condition was not persisted into State v1')
+  if (!prompts[1].includes('supply box (obstruction)')) throw new Error('condition audit prompt is missing scene-object context')
+  if (!prompts[1].includes('Normal office environment [normal]')) throw new Error('condition audit prompt is missing benign-condition context')
+  if (result.conditions.length !== 2) throw new Error(`expected benign + audited conditions, got ${result.conditions.length}`)
+  const obstruction = result.conditions.find((item) => item.title === 'Walkway obstructed')
+  if (!obstruction) throw new Error('audited condition did not survive merge')
+  if (obstruction.evidenceIds[0] !== 'condition-audit-frame-0') throw new Error('audited condition was not grounded to trusted frame')
+  if (result.state.conditionIds.length !== 2) throw new Error('benign and audited conditions were not persisted into State v1')
   if (result.state.issueIds.length !== 1) throw new Error('supported observed access condition was not promoted by SENTINEL policy')
 
-  console.log('PASS  zero-condition scene triggers targeted facility-condition audit')
+  console.log('PASS  benign-only scene still triggers targeted facility-condition audit')
+  console.log('PASS  condition audit receives scene object + benign-condition context')
   console.log('PASS  audited condition remains grounded to SENTINEL-owned frame evidence')
-  console.log('PASS  audited condition persists into state and issue policy remains SENTINEL-owned')
+  console.log('PASS  audited access condition persists and issue policy remains SENTINEL-owned')
   console.log('SENTINEL CONDITION AUDIT VERIFIED')
 } finally {
   await vite.close()
