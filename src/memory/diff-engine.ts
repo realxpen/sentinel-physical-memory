@@ -1,5 +1,5 @@
 import type { Change, EnvironmentalCondition, EnvironmentalDiff, Issue, SpatialObject } from '../domain/sentinel'
-import { objectsSemanticallyMatch } from './object-identity.js'
+import { matchObjectsConservatively } from './object-identity.js'
 
 export interface EnvironmentalSnapshot {
   stateId: string
@@ -33,9 +33,12 @@ export class EnvironmentalDiffEngine implements DiffEngine {
   compare(from: EnvironmentalSnapshot, to: EnvironmentalSnapshot): EnvironmentalDiff {
     if (from.environmentId !== to.environmentId) throw new Error('Cannot compare states from different environments')
     const changes: Change[] = []
+    const currentToPrevious = matchObjectsConservatively(from.objects, to.objects)
+    const matchedPrevious = new Set(currentToPrevious.values())
 
-    for (const current of to.objects) {
-      const previous = this.matchObject(current, from.objects)
+    for (const [currentIndex, current] of to.objects.entries()) {
+      const previousIndex = currentToPrevious.get(currentIndex)
+      const previous = previousIndex === undefined ? undefined : from.objects[previousIndex]
       if (!previous) {
         changes.push(this.change(from, to, 'added', current.id, `New: ${current.name}`, `${current.name} was not present in the previous state.`, current.confidence, current.evidenceIds))
         continue
@@ -48,8 +51,8 @@ export class EnvironmentalDiffEngine implements DiffEngine {
       }
     }
 
-    for (const previous of from.objects) {
-      if (!this.matchObject(previous, to.objects)) {
+    for (const [previousIndex, previous] of from.objects.entries()) {
+      if (!matchedPrevious.has(previousIndex)) {
         changes.push(this.change(from, to, 'uncertain', previous.id, `Not re-observed: ${previous.name}`, `${previous.name} was present previously but was not re-observed in the current scan. Absence alone is not sufficient evidence that it was removed.`, Math.min(previous.confidence, 0.5), previous.evidenceIds))
       }
     }
@@ -70,10 +73,6 @@ export class EnvironmentalDiffEngine implements DiffEngine {
     }
 
     return { id: `diff_${crypto.randomUUID()}`, environmentId: from.environmentId, fromStateId: from.stateId, toStateId: to.stateId, createdAt: this.now().toISOString(), changes, summary: changes.length ? `${changes.length} environmental change(s) detected.` : 'No material environmental changes detected.' }
-  }
-
-  private matchObject(item: SpatialObject, candidates: SpatialObject[]): SpatialObject | undefined {
-    return candidates.find((candidate) => candidate.id === item.id) ?? candidates.find((candidate) => objectsSemanticallyMatch(candidate, item))
   }
 
   private sameIssue(a: Issue, b: Issue): boolean { return a.id === b.id || (a.title.trim().toLowerCase() === b.title.trim().toLowerCase() && (a.roomId ?? '') === (b.roomId ?? '')) }

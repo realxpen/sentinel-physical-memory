@@ -6,7 +6,6 @@ export interface ConditionDerivationResult {
 }
 
 const OBSTACLE_NAME = /\b(?:pallet jack|pallet|trolley|cart|box|carton|chair|cabinet|desk|table|equipment|object)\b/i
-const IN_FRONT_OF = /\b(?:in front of|directly in front of|parked in front of|positioned in front of|across|blocking|obstructing)\b/i
 const EXIT_CUE = /\b(?:emergency exit|exit sign|exit door)\b/i
 
 /**
@@ -88,10 +87,9 @@ type GroundedFact = {
 
 function findExitEvidenceForDoor(perception: PerceptionResult, door: SpatialObject): GroundedFact | undefined {
   const doorNames = entityAliases(door)
-  const candidates: Array<Observation | SpatialObject | EnvironmentalCondition> = [
+  const candidates: Array<Observation | SpatialObject> = [
     ...perception.observations,
     ...perception.objects,
-    ...perception.conditions,
   ]
 
   for (const item of candidates) {
@@ -112,36 +110,52 @@ function findObstaclePlacementEvidence(
 ): GroundedFact | undefined {
   const obstacleNames = entityAliases(obstacle)
   const doorNames = entityAliases(door)
-  const candidates: Array<Observation | SpatialObject | EnvironmentalCondition> = [
+  const candidates: Array<Observation | SpatialObject> = [
     ...perception.observations,
     ...perception.objects,
-    ...perception.conditions,
   ]
 
   for (const item of candidates) {
     const text = semanticText(item)
-    if (!IN_FRONT_OF.test(text)) continue
-    if (!obstacleNames.some((name) => text.includes(name))) continue
-    if (!doorNames.some((name) => text.includes(name))) continue
+    const placement = explicitObstaclePlacement(text, obstacleNames, doorNames)
+    if (!placement) continue
     if (item.evidenceIds.length === 0) continue
-
-    const phrase = text.includes('blocking') || text.includes('obstructing')
-      ? 'blocking'
-      : text.includes('across')
-        ? 'across'
-        : 'in front of'
-
-    return { confidence: item.confidence, evidenceIds: item.evidenceIds, phrase }
+    return { confidence: item.confidence, evidenceIds: item.evidenceIds, phrase: placement }
   }
 
   return undefined
 }
 
 function hasExistingAccessCondition(conditions: EnvironmentalCondition[], objectIds: string[]): boolean {
-  const ids = new Set(objectIds)
   return conditions.some((condition) =>
-    condition.kind === 'access' && condition.objectIds.some((id) => ids.has(id)),
+    condition.kind === 'access' && objectIds.every((id) => condition.objectIds.includes(id)),
   )
+}
+
+function explicitObstaclePlacement(text: string, obstacleNames: string[], doorNames: string[]): string | undefined {
+  for (const obstacleName of obstacleNames) {
+    for (const doorName of doorNames) {
+      const obstacle = escapedPhrase(obstacleName)
+      const door = escapedPhrase(doorName)
+      const forward = new RegExp(`\\b${obstacle}\\b.{0,48}\\b(in front of|directly in front of|parked in front of|positioned in front of|across|blocking|obstructing)\\b.{0,32}\\b${door}\\b`)
+      const passive = new RegExp(`\\b${door}\\b.{0,32}\\b(blocked|obstructed)\\s+by\\b.{0,32}\\b${obstacle}\\b`)
+      const forwardMatch = text.match(forward)
+      if (forwardMatch) return normalizePlacementPhrase(forwardMatch[1])
+      const passiveMatch = text.match(passive)
+      if (passiveMatch) return normalizePlacementPhrase(passiveMatch[1])
+    }
+  }
+  return undefined
+}
+
+function normalizePlacementPhrase(value: string): string {
+  if (value === 'blocking' || value === 'blocked' || value === 'obstructing' || value === 'obstructed') return 'blocking'
+  if (value === 'across') return 'across'
+  return 'in front of'
+}
+
+function escapedPhrase(value: string): string {
+  return value.split(' ').map((token) => token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('\\s+')
 }
 
 function entityAliases(item: SpatialObject): string[] {

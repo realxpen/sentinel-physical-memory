@@ -75,9 +75,29 @@ try {
   const negative = deriveOperationalConditions(safePlacement, capturedAt)
   if (negative.derivedConditions.length !== 0) throw new Error('safe placement must not derive an access obstruction')
 
+  const reversedPlacement = structuredClone(base)
+  reversedPlacement.observations[1].description = 'The green door is in front of the orange pallet jack.'
+  reversedPlacement.objects[1].description = 'orange pallet jack near the green door'
+  const reversed = deriveOperationalConditions(reversedPlacement, capturedAt)
+  if (reversed.derivedConditions.length !== 0) throw new Error('reversed spatial direction must not derive an access obstruction')
+
+  const inferredExitOnly = structuredClone(base)
+  inferredExitOnly.observations = inferredExitOnly.observations.filter((item) => item.id !== 'obs_exit')
+  inferredExitOnly.objects[0].name = 'green door'
+  inferredExitOnly.objects[0].description = 'green double door with orange frame'
+  inferredExitOnly.conditions.push({
+    id: 'inferred_exit', environmentId, kind: 'compliance', title: 'Possible emergency exit',
+    description: 'The green door may be an emergency exit.', status: 'uncertain', basis: 'inferred',
+    confidence: 1, objectIds: ['door_1'], evidenceIds: ['frame_door'], observedAt: capturedAt,
+  })
+  const inferredOnly = deriveOperationalConditions(inferredExitOnly, capturedAt)
+  if (inferredOnly.derivedConditions.length !== 0) throw new Error('an inferred condition must not be reused as direct exit grounding')
+
   console.log('PASS  grounded exit signage + obstacle placement derives one inferred access condition')
   console.log('PASS  derived condition preserves evidence and stays below source confidence')
   console.log('PASS  safe obstacle placement does not create an access condition')
+  console.log('PASS  reversed spatial language does not invert obstacle direction')
+  console.log('PASS  inferred conditions are not reused as direct grounding facts')
   console.log('SENTINEL CONDITION DERIVATION GATE VERIFIED')
 } finally {
   await vite.close()

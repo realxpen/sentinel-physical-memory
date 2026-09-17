@@ -7,8 +7,9 @@ const vite = await createServer({
 })
 
 try {
-  const { objectsSemanticallyMatch } = await vite.ssrLoadModule('/src/memory/object-identity.ts')
+  const { matchObjectsConservatively, objectsSemanticallyMatch } = await vite.ssrLoadModule('/src/memory/object-identity.ts')
   const { EnvironmentalDiffEngine } = await vite.ssrLoadModule('/src/memory/diff-engine.ts')
+  const { EnvironmentalMemoryStore } = await vite.ssrLoadModule('/src/memory/store.ts')
 
   const environmentId = 'warehouse-identity-test'
   const at = '2026-09-17T13:15:54.989Z'
@@ -35,6 +36,69 @@ try {
   }
   if (objectsSemanticallyMatch(object('door1', 'door', 'emergency exit door'), object('door2', 'door', 'service door'))) {
     throw new Error('generic doors must not fuzzy-match')
+  }
+  if (objectsSemanticallyMatch(
+    object('jack-boxes', 'equipment', 'orange pallet jack', 'orange pallet jack parked beside cardboard boxes'),
+    object('boxes', 'other', 'brown boxes'),
+  )) {
+    throw new Error('description mentions must not redefine the primary object family')
+  }
+  if (objectsSemanticallyMatch(
+    object('door-sign', 'door', 'green door', 'green door below an emergency exit sign'),
+    object('sign', 'signage', 'emergency exit sign'),
+  )) {
+    throw new Error('a door mentioning nearby signage must not become an exit-sign object')
+  }
+
+  const repeatedPrevious = [
+    object('boxes-left', 'other', 'cardboard boxes'),
+    object('boxes-right', 'other', 'brown boxes'),
+  ]
+  const repeatedCurrent = [object('boxes-now', 'other', 'warehouse boxes')]
+  if (matchObjectsConservatively(repeatedPrevious, repeatedCurrent).size !== 0) {
+    throw new Error('ambiguous repeated objects must not reuse one semantic family match')
+  }
+
+  const store = new EnvironmentalMemoryStore({ now: () => new Date(at) })
+  store.createEnvironment({
+    id: environmentId, name: 'Warehouse identity test', type: 'warehouse',
+    createdAt: at, updatedAt: at, stateIds: [], roomIds: [], objectIds: [], issueIds: [],
+  })
+  const source = (id) => ({ id, environmentId, modality: 'image', uri: `${id}.jpg`, capturedAt: at })
+  const perception = (sourceId, objects) => ({
+    sourceId,
+    observations: [],
+    objects,
+    conditions: [],
+    relations: [],
+    evidence: objects.map((item) => ({
+      id: item.evidenceIds[0], type: 'frame', sourceId, capturedAt: at, description: item.name,
+    })),
+  })
+  const baselineState = store.ingestScan(
+    environmentId,
+    source('baseline'),
+    perception('baseline', [object('shelf-old', 'furniture', 'metal shelving')]),
+  )
+  const comparisonState = store.ingestScan(
+    environmentId,
+    source('comparison'),
+    perception('comparison', [object('shelf-new', 'furniture', 'orange metal shelves')]),
+  )
+  if (baselineState.objectIds[0] !== comparisonState.objectIds[0]) {
+    throw new Error('unique aliases must reuse the durable canonical object id')
+  }
+
+  const repeatedState = store.ingestScan(
+    environmentId,
+    source('repeated'),
+    perception('repeated', [
+      object('boxes-a', 'other', 'cardboard boxes'),
+      object('boxes-b', 'other', 'brown boxes'),
+    ]),
+  )
+  if (new Set(repeatedState.objectIds).size !== 2) {
+    throw new Error('repeated objects in one scan must retain distinct durable ids')
   }
 
   const baseline = aliases.map(([left]) => left).concat([
@@ -63,6 +127,9 @@ try {
 
   console.log('PASS  provider naming aliases map to conservative durable object families')
   console.log('PASS  chairs/desks/doors remain outside fuzzy identity matching')
+  console.log('PASS  secondary description mentions do not redefine object identity')
+  console.log('PASS  repeated ambiguous objects are not collapsed into one match')
+  console.log('PASS  memory reuses unique aliases and preserves repeated object instances')
   console.log('PASS  warehouse alias drift collapses to one real added pallet jack')
   console.log('SENTINEL OBJECT IDENTITY GATE VERIFIED')
 } finally {

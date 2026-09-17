@@ -1,7 +1,7 @@
 import type { EnvironmentalCondition, EnvironmentalDiff, EnvironmentalMemory, EnvironmentalState, EnvironmentalStateSnapshot, Environment, EnvironmentRelation, Evidence, Issue, ScanSource, SpatialObject, PerceptionResult } from '../domain/sentinel.js'
 import { assessCondition } from '../perception/condition-model.js'
 import { EnvironmentalDiffEngine, type DiffEngine } from './diff-engine.js'
-import { objectsSemanticallyMatch } from './object-identity.js'
+import { matchObjectsConservatively } from './object-identity.js'
 
 export interface MemoryIds { state: () => string; object: () => string; issue: () => string; relation: () => string; evidence: () => string; diff: () => string }
 export interface MemoryStoreDependencies { now?: () => Date; ids?: Partial<MemoryIds>; diffEngine?: DiffEngine }
@@ -93,7 +93,7 @@ export class EnvironmentalMemoryStore {
     this.upsertEvidence(memory, evidence)
 
     const normalizedObjects = perception.objects.map((item) => ({ ...item, evidenceIds: remapEvidenceIds(item.evidenceIds) }))
-    const canonicalObjectsByInput = normalizedObjects.map((item) => this.upsertObject(memory, item, capturedAt))
+    const canonicalObjectsByInput = this.upsertObjects(memory, normalizedObjects, capturedAt)
     const objectIdMap = new Map(perception.objects.map((item, index) => [item.id, canonicalObjectsByInput[index].id]))
     const objects = uniqueById(canonicalObjectsByInput)
 
@@ -158,14 +158,28 @@ export class EnvironmentalMemoryStore {
     return this.clone(diff)
   }
 
-  private upsertObject(memory: EnvironmentalMemory, incoming: SpatialObject, capturedAt: string): SpatialObject {
-    const existing = memory.objects.find((item) => objectsSemanticallyMatch(item, incoming))
-    if (!existing) {
-      const created = { ...incoming, id: this.ids.object(), firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: [...incoming.evidenceIds] }
-      memory.objects.push(created)
-      return created
-    }
-    existing.description = incoming.description ?? existing.description; existing.position = incoming.position ?? existing.position; existing.boundingBox = incoming.boundingBox ?? existing.boundingBox; existing.state = incoming.state ?? existing.state; existing.confidence = incoming.confidence; existing.lastSeenAt = capturedAt; existing.evidenceIds = unique([...existing.evidenceIds, ...incoming.evidenceIds]); return existing
+  private upsertObjects(memory: EnvironmentalMemory, incoming: SpatialObject[], capturedAt: string): SpatialObject[] {
+    const existing = [...memory.objects]
+    const matches = matchObjectsConservatively(existing, incoming)
+
+    return incoming.map((item, index) => {
+      const previousIndex = matches.get(index)
+      if (previousIndex === undefined) {
+        const created = { ...item, id: this.ids.object(), firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: [...item.evidenceIds] }
+        memory.objects.push(created)
+        return created
+      }
+
+      const matched = existing[previousIndex]
+      matched.description = item.description ?? matched.description
+      matched.position = item.position ?? matched.position
+      matched.boundingBox = item.boundingBox ?? matched.boundingBox
+      matched.state = item.state ?? matched.state
+      matched.confidence = item.confidence
+      matched.lastSeenAt = capturedAt
+      matched.evidenceIds = unique([...matched.evidenceIds, ...item.evidenceIds])
+      return matched
+    })
   }
 
   private upsertIssuesFromConditions(memory: EnvironmentalMemory, conditions: EnvironmentalCondition[], capturedAt: string): Issue[] {
