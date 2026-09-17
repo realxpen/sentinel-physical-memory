@@ -28,7 +28,11 @@ jobs:
         run: npm run check:condition-audit
       - name: Verify Phase 5 condition trust gate
         run: npm run check:phase5-conditions
+      - name: Verify grounded operational condition derivation
+        run: npm run check:condition-derivation
       - name: Verify Reality Diff position semantics
         run: npm run check:diff-position
+      - name: Verify conservative object identity
+        run: npm run check:object-identity
       - name: Build
         run: npm run build
