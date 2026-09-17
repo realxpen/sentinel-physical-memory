@@ -1,7 +1,7 @@
 # Phase 5 — Perception Quality & Condition Model
 
-Date: 2026-09-15
-Status: **ACTIVE — CORE TRUST MODEL IMPLEMENTED / REAL-PHONE VALIDATION NEXT**
+Date: 2026-09-17
+Status: **ACTIVE — CORE TRUST MODEL IMPLEMENTED / CONTROLLED WAREHOUSE DERIVATION FIX VERIFIED IN CI / REAL-SCAN RE-RUN NEXT**
 
 ## Goal
 
@@ -15,7 +15,7 @@ Phase 5 sharpens the trust boundary established in Phase 1:
 
 ## Domain model
 
-The physical-memory domain now includes:
+The physical-memory domain includes:
 
 - `ClaimBasis = observed | inferred`
 - `ConditionKind = normal | attention | hazard | damage | maintenance | access | compliance | unknown`
@@ -27,21 +27,11 @@ The physical-memory domain now includes:
 
 Every `Observation` is explicitly `basis: observed`.
 
-A condition carries:
-
-- environment identity;
-- condition kind;
-- title + description;
-- `present` or `uncertain` status;
-- `observed` or `inferred` basis;
-- confidence;
-- related object IDs;
-- evidence IDs;
-- trusted observation time.
+A condition carries environment identity, kind, title/description, status, basis, confidence, related object IDs, evidence IDs, and trusted observation time.
 
 ## Perception contract
 
-The Nebius perception contract now returns six top-level collections:
+The Nebius perception contract returns:
 
 `sourceId + observations + objects + conditions + relations + evidence`
 
@@ -52,17 +42,46 @@ Prompt rules:
 3. conditions describe states of the environment;
 4. `basis=observed` is used only when the condition itself is directly visible;
 5. `basis=inferred` is used when interpreting what evidence may mean;
-6. inferred conditions should normally be `uncertain` unless the evidence is unusually direct;
+6. inferred conditions should normally be `uncertain` unless evidence is unusually direct;
 7. every observation, object, and condition must reference existing evidence;
 8. conditions may reference only objects emitted in the same perception result.
 
 Trusted scan `capturedAt` overrides model-provided condition time at the adapter/memory boundary.
 
+## Condition audit
+
+A benign scene pass no longer suppresses a facility-condition review. When the scene contains no operational condition candidate, SENTINEL runs one targeted condition audit over the same trusted frames.
+
+The audit explicitly checks access routes, doors/exits, walking surfaces, boxes/furniture, cables/electrical items, equipment placement, visible damage, and maintenance state. It is still instructed not to force a condition when evidence does not support one.
+
+## Deterministic grounded condition derivation
+
+Real controlled warehouse testing exposed an important model behavior: MiniCPM correctly described the relevant physical facts but failed to compose them into an operational condition.
+
+The persisted comparison scan contained grounded observations equivalent to:
+
+- `orange pallet jack` — “An orange pallet jack in front of the green door.”
+- `emergency exit sign` — “An emergency exit sign above the green door.”
+
+The model still returned only a benign `normal` condition.
+
+SENTINEL now owns a narrow deterministic derivation layer in `src/perception/condition-derivation.ts`.
+
+It may derive an inferred `access` condition only when:
+
+- an evidence-backed door is explicitly associated with emergency-exit signage;
+- an evidence-backed physical obstacle is explicitly described in front of/across/blocking that same named door;
+- both facts belong to the same grounded perception result;
+- confidence remains above the inferred-condition threshold after SENTINEL applies a downward confidence bound;
+- no equivalent access condition already exists.
+
+The derived claim remains **Inferred**, not Observed. SENTINEL does not increase source confidence or invent evidence.
+
+For the warehouse case, two source facts at 1.00 confidence produce a bounded derived confidence of 0.90.
+
 ## Issue-promotion policy
 
-The model does **not** decide whether a condition becomes an operational issue.
-
-`src/perception/condition-model.ts` owns that policy.
+The model does **not** decide whether a condition becomes an operational issue. `src/perception/condition-model.ts` owns that policy.
 
 A condition cannot auto-promote when:
 
@@ -74,7 +93,8 @@ A condition cannot auto-promote when:
 Thresholds:
 
 - observed condition: **0.65** minimum confidence;
-- inferred condition: **0.85** minimum confidence.
+- inferred condition: **0.85** minimum confidence;
+- explicitly grounded observed access cue: **0.60** minimum confidence.
 
 Severity policy:
 
@@ -84,87 +104,89 @@ Severity policy:
 - inferred conditions → at most `medium`;
 - perception alone can never create a `critical` issue.
 
-This is intentionally conservative. Critical escalation belongs to later rule/reasoning layers with stronger evidence and human review.
+## Conservative semantic object identity
+
+The same controlled warehouse test also exposed provider naming drift that inflated Reality Diff:
+
+- `metal shelving` ↔ `shelves` / `orange metal shelves`
+- `cardboard boxes` ↔ `boxes` / `brown boxes`
+- `concrete floor` ↔ `warehouse floor`
+- `white ceiling` ↔ `warehouse ceiling`
+- `fire extinguisher` moving between `equipment` and `safety`
+- generic exit signage descriptions ↔ `emergency exit sign`
+
+`src/memory/object-identity.ts` now provides a deliberately small semantic identity whitelist for those durable families. It is used by both memory upsert and the deterministic diff engine.
+
+This is **not** general fuzzy matching. Chairs, desks, people, and generic doors remain excluded because repeated-instance identity belongs to Phase 7.
 
 ## Memory behavior
 
-Conditions are now durable physical memory:
+Conditions are durable physical memory:
 
-- scan-local condition IDs are source-scoped before persistence;
-- condition evidence IDs are remapped to durable source-scoped evidence IDs;
-- condition object IDs are mapped to canonical durable object IDs;
-- condition `observedAt` is the trusted scan capture time;
-- conditions are included in environmental states and immutable state snapshots;
-- operational issues are generated from policy-qualified conditions, not keyword matching over free-text observations.
+- scan-local condition IDs become source-scoped IDs;
+- evidence IDs map to durable source-scoped evidence IDs;
+- condition object IDs map to canonical durable object IDs;
+- `observedAt` uses trusted scan capture time;
+- conditions are included in states and immutable snapshots;
+- only policy-qualified conditions become operational issues.
 
-The old regex path that treated words such as `hazard`, `broken`, or `leak` inside observation text as an issue has been removed for new scans.
-
-Existing persisted Phase 3/4 memories remain backward-compatible:
-
-- missing `conditions` hydrate as `[]`;
-- old states hydrate `conditionIds: []`;
-- old snapshots hydrate `conditions: []`;
-- old observations hydrate with `basis: observed`.
-
-The canonical JSON aggregate already persists the new condition data without a database migration. A dedicated normalized condition table is optional future database hardening rather than a runtime requirement for this phase.
+Older Phase 3/4 memory remains backward-compatible. Historical snapshots and already-persisted noisy diffs are not rewritten.
 
 ## Ask the Building integration
 
-Reasoning context now contains a `RELEVANT CONDITIONS` section with explicit trust labels:
+Reasoning context contains `RELEVANT CONDITIONS` with explicit trust labels:
 
 - `trust=Observed`
 - `trust=Inferred`
 
-Nemotron is instructed to treat observed conditions as direct evidence and inferred conditions as lower-authority interpretation.
+Nemotron must treat inferred conditions as lower-authority interpretation rather than direct physical fact.
 
-## Automated gate
+## Automated gates
 
-`npm run check:phase5-conditions`
+`npm run check:phase5-conditions` verifies the core trust/promotion policy.
 
-verifies:
+`npm run check:condition-derivation` verifies:
 
-- observed evidence-backed hazard promotes to an issue;
-- observed hazard is capped at `high`, never `critical`;
-- hazard maps to the safety issue type;
-- strong inferred conditions require the higher threshold and are capped at `medium`;
-- weak inference remains context-only;
-- uncertain conditions never auto-promote;
-- normal conditions remain memory context;
-- valid conditions must reference existing evidence and objects;
-- missing evidence fails closed;
-- missing object references fail closed.
+- grounded exit signage + grounded obstacle placement derives exactly one inferred access condition;
+- derived evidence contains both supporting fact sources;
+- confidence remains below source confidence;
+- the strong derived condition promotes only through SENTINEL policy;
+- safe placement does not create an access condition.
 
-Sentinel CI runs this gate before the TypeScript/Vite build.
+`npm run check:object-identity` verifies:
 
-## Current checkpoint
+- the conservative warehouse alias families match;
+- ambiguous movable furniture and generic doors do not fuzzy-match;
+- a baseline/comparison alias-drift scenario collapses to one real added pallet jack instead of many false additions/removals.
 
-Implemented:
+`npm run check:diff-position` continues to verify that image-coordinate drift cannot create false physical movement.
 
-- domain condition model;
-- strict condition schema validation;
-- perception prompt separation between observations and conditions;
-- evidence-reference normalization extended to conditions;
-- conservative issue-promotion policy;
-- durable condition memory + snapshot integration;
-- backward-compatible Neon hydration;
-- Ask Building trust labels;
-- Phase 5 automated trust gate;
-- full TypeScript/Vite build passing in CI.
+Sentinel CI run `35227712643` passed all Phase 4 gates, perception retry, condition audit, Phase 5 trust, condition derivation, Reality Diff position semantics, conservative object identity, and the TypeScript/Vite build.
+
+## Controlled warehouse checkpoint
+
+Environment: `warehouse`
+
+State v1 persisted a clean warehouse baseline with visible shelving, boxes, concrete floor, emergency-exit door/signage, fire extinguisher, and normal conditions.
+
+State v2 persisted the comparison scan and correctly detected a new `orange pallet jack` in front of the green door, but the pre-fix build produced no operational condition and an inflated 19-change diff because of provider naming drift.
+
+That historical v1→v2 diff remains immutable. The code now contains deterministic fixes for both root causes.
 
 ## Next Phase 5 proof
 
-Use a real walkthrough containing a deliberately visible condition, for example a cable across a walkway or another safe staged visual state.
+Pull latest `main` and re-run the warehouse comparison through the updated build.
 
-Verify:
+Expected new proof:
 
-1. direct visual facts appear under observations;
-2. condition appears separately under `conditions`;
-3. its `basis` is appropriate (`observed` or `inferred`);
-4. evidence IDs resolve to supplied frames;
-5. only policy-qualified conditions become issues;
-6. weak/uncertain inference remains memory context;
-7. Ask Building preserves the Observed/Inferred distinction.
+1. direct pallet-jack and exit-sign facts remain Observed;
+2. SENTINEL emits one derived Inferred access condition with grounded evidence;
+3. the condition promotes to a medium access issue only because it satisfies the policy threshold;
+4. obvious provider naming aliases no longer dominate Reality Diff;
+5. Ask Building preserves the Observed/Inferred distinction.
+
+For a clean demo-quality A/B, create a fresh warehouse validation environment after pulling the fix, then scan the baseline and comparison videos once each. Existing historical states should not be rewritten.
 
 ## Phase 5 exit condition
 
-**Real phone scans consistently produce evidence-grounded observations and conditions with correct trust labels; weak inference does not become an operational issue; strong supported conditions persist across memory and are available to reasoning without collapsing observation, interpretation, and recommendation into one claim.**
+**Real or controlled realistic scans consistently produce evidence-grounded observations and conditions with correct trust labels; weak inference does not become an operational issue; strong supported conditions persist across memory and are available to reasoning without collapsing observation, interpretation, and recommendation into one claim.**
