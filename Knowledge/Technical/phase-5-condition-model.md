@@ -1,7 +1,7 @@
 # Phase 5 — Perception Quality & Condition Model
 
 Date: 2026-09-17
-Status: **ACTIVE — CORE TRUST MODEL IMPLEMENTED / CONTROLLED WAREHOUSE DERIVATION FIX VERIFIED IN CI / REAL-SCAN RE-RUN NEXT**
+Status: **ACTIVE — CORE TRUST MODEL IMPLEMENTED / WAREHOUSE POLICY HARDENING VERIFIED IN CI / REAL-SCAN RE-RUN NEXT**
 
 ## Goal
 
@@ -65,20 +65,22 @@ The persisted comparison scan contained grounded observations equivalent to:
 
 The model still returned only a benign `normal` condition.
 
-SENTINEL now owns a narrow deterministic derivation layer in `src/perception/condition-derivation.ts`.
+SENTINEL owns a narrow deterministic derivation layer in `src/perception/condition-derivation.ts`.
 
 It may derive an inferred `access` condition only when:
 
-- an evidence-backed door is explicitly associated with emergency-exit signage;
+- an evidence-backed door is explicitly associated with **independent** emergency-exit signage or another separate grounded exit fact;
 - an evidence-backed physical obstacle is explicitly described in front of/across/blocking that same named door;
 - the obstacle-to-door direction is explicit (reversed spatial wording does not qualify);
 - both facts belong to the same grounded perception result;
 - confidence remains above the inferred-condition threshold after SENTINEL applies a downward confidence bound;
 - no equivalent access condition already exists.
 
+A door object's own name or description — for example `green emergency exit door` — cannot self-ground its emergency-exit role for this derivation. The separate exit-sign observation/object is required. A bounded color-anchored door alias may connect `green emergency exit door` to grounded text that says `green door`, but that alias does not replace the independent exit fact.
+
 The derivation may use grounded observations and objects, but it cannot reuse another inferred condition as if it were direct grounding. The derived claim remains **Inferred**, not Observed. SENTINEL does not increase source confidence or invent evidence.
 
-For the warehouse case, two source facts at 1.00 confidence produce a bounded derived confidence of 0.90.
+For the controlled warehouse evidence, source facts at 1.00 confidence produce a bounded derived confidence of 0.90. The inferred threshold remains 0.85; the warehouse fix does **not** weaken the trust threshold.
 
 ## Issue-promotion policy
 
@@ -97,6 +99,8 @@ Thresholds:
 - inferred condition: **0.85** minimum confidence;
 - explicitly grounded observed access cue: **0.60** minimum confidence.
 
+The 0.60 exception is limited to directly observed, explicitly grounded access-route obstruction wording. It does not apply to SENTINEL-derived inferred conditions.
+
 Severity policy:
 
 - observed hazard → at most `high`;
@@ -107,18 +111,30 @@ Severity policy:
 
 ## Conservative semantic object identity
 
-The same controlled warehouse test also exposed provider naming drift that inflated Reality Diff:
+The same controlled warehouse test exposed provider naming drift that inflated Reality Diff:
 
 - `metal shelving` ↔ `shelves` / `orange metal shelves`
 - `cardboard boxes` ↔ `boxes` / `brown boxes`
+- `green emergency exit door` ↔ `green door`
 - `concrete floor` ↔ `warehouse floor`
 - `white ceiling` ↔ `warehouse ceiling`
 - `fire extinguisher` moving between `equipment` and `safety`
 - generic exit signage descriptions ↔ `emergency exit sign`
 
-`src/memory/object-identity.ts` now provides a deliberately small semantic identity whitelist for those durable families. It is used by both memory upsert and the deterministic diff engine.
+`src/memory/object-identity.ts` provides a deliberately small semantic identity whitelist for those durable families. It is used by both memory upsert and the deterministic diff engine.
 
-This is **not** general fuzzy matching. Family classification is name-led so a nearby object mentioned only in a description cannot redefine identity. Alias matches must also be unique in both directions; repeated ambiguous objects remain separate instead of one candidate being reused for several instances. Chairs, desks, people, and generic doors remain excluded because richer repeated-instance identity belongs to Phase 7.
+This is **not** general fuzzy matching. Family classification remains name-led so a nearby object mentioned only in a description cannot redefine identity. Cross-scan aliases must still be unique in both directions; repeated ambiguous objects remain separate instead of one candidate being reused for several instances.
+
+Doors are not generically fuzzy-matched. Only a visible color anchor such as `green ... door` may form a door alias family, and the normal one-to-one uniqueness rule still applies. Thus `green emergency exit door` ↔ `green door` is supported while unanchored `emergency exit door` ↔ `service door` is not.
+
+Provider scene/audit passes can also emit semantic duplicates inside the **same scan**. Memory now consolidates those aliases only when all of the following hold:
+
+- they already satisfy the conservative semantic identity rule;
+- they share at least one trusted frame evidence ID;
+- their structured/semantic positions do not conflict;
+- they are not merely identical name/category detections being collapsed because they coexist.
+
+This lets obvious duplicate labels such as `shelves` + `orange metal shelves`, or `green emergency exit door` + `green door`, resolve to one durable object when grounded to the same physical evidence. Repeated objects without shared grounding or with conflicting positions remain distinct. Richer repeated-instance identity remains Phase 7 work.
 
 ## Memory behavior
 
@@ -131,7 +147,7 @@ Conditions are durable physical memory:
 - conditions are included in states and immutable snapshots;
 - only policy-qualified conditions become operational issues.
 
-Older Phase 3/4 memory remains backward-compatible. Historical snapshots and already-persisted noisy diffs are not rewritten.
+Object alias consolidation applies only while ingesting future scans. Older Phase 3/4/5 snapshots and already-persisted noisy diffs are not rewritten.
 
 ## Ask the Building integration
 
@@ -148,48 +164,52 @@ Nemotron must treat inferred conditions as lower-authority interpretation rather
 
 `npm run check:condition-derivation` verifies:
 
-- grounded exit signage + grounded obstacle placement derives exactly one inferred access condition;
+- independently grounded exit signage + grounded obstacle placement derives exactly one inferred access condition;
+- `green emergency exit door` can bind to grounded `green door` wording without lowering the inferred threshold;
 - derived evidence contains both supporting fact sources;
 - confidence remains below source confidence;
 - the strong derived condition promotes only through SENTINEL policy;
 - safe placement does not create an access condition;
 - reversed spatial wording does not invert the obstruction relation;
+- a door name cannot self-ground emergency-exit identity;
 - inferred conditions are not reused as direct grounding facts.
 
 `npm run check:object-identity` verifies:
 
 - the conservative warehouse alias families match;
-- ambiguous movable furniture and generic doors do not fuzzy-match;
+- color-anchored door aliases match while unanchored generic doors do not;
 - secondary description mentions do not redefine the primary object family;
+- same-scan aliases consolidate only with shared evidence and compatible position;
 - repeated ambiguous objects retain separate durable identities;
-- unique aliases reuse a canonical durable object ID;
+- unique aliases reuse canonical durable shelf/door IDs;
 - a baseline/comparison alias-drift scenario collapses to one real added pallet jack instead of many false additions/removals.
 
 `npm run check:diff-position` continues to verify that image-coordinate drift cannot create false physical movement.
 
-Sentinel CI run `35234538554` passed all Phase 4 gates, perception retry, condition audit, Phase 5 trust, hardened condition derivation, Reality Diff position semantics, conservative one-to-one object identity, and the TypeScript/Vite build.
+Sentinel CI run `35253466573` passed the full repository gate suite on commit `f1f24211e06132798a2681a88351b6a3f399e8a2`, including Phase 4 quality gates, provider grounding, perception retry, condition audit, Phase 5 trust, independent exit derivation, Reality Diff position semantics, conservative object identity, and the TypeScript/Vite production build.
 
 ## Controlled warehouse checkpoint
 
 Environment: `env_warehouse_6dba83ca`
 
-State v1 persisted a clean warehouse baseline with visible shelving, boxes, concrete floor, emergency-exit door/signage, fire extinguisher, and normal conditions.
+State v1 persisted a clean warehouse baseline with visible shelving, boxes, concrete floor, emergency-exit door/signage, fire extinguisher, and normal conditions. It also exposed provider duplication such as `green emergency exit door` and `green door` in the same historical snapshot.
 
-State v2 persisted the comparison scan and correctly detected a new `orange pallet jack` in front of the green door, but the pre-fix build produced no operational condition and an inflated 19-change diff because of provider naming drift.
+State v2 persisted the comparison scan and correctly detected a new `orange pallet jack` in front of the green door plus a separate emergency-exit-sign observation, but the pre-fix build produced no operational condition and an inflated Reality Diff dominated by naming drift.
 
-That historical v1→v2 diff remains immutable. The code now contains deterministic fixes for both root causes.
+Those historical states/diffs remain immutable. Current `main` now contains deterministic fixes for the two root causes plus the same-scan duplicate alias pattern exposed by the persisted warehouse data.
 
 ## Next Phase 5 proof
 
-Pull latest `main` and re-run the warehouse comparison through the updated build.
+Pull latest `main` and re-run the warehouse baseline/comparison through the updated build.
 
 Expected new proof:
 
 1. direct pallet-jack and exit-sign facts remain Observed;
-2. SENTINEL emits one derived Inferred access condition with grounded evidence;
-3. the condition promotes to a medium access issue only because it satisfies the policy threshold;
-4. obvious provider naming aliases no longer dominate Reality Diff;
-5. Ask Building preserves the Observed/Inferred distinction.
+2. SENTINEL emits one derived Inferred access condition only because the exit role is independently grounded;
+3. the condition retains both grounded evidence sources and promotes to a medium access issue at the unchanged inferred threshold;
+4. obvious provider aliases — including the green door, shelving, boxes, floor, ceiling, extinguisher and exit-sign families — no longer dominate Reality Diff;
+5. the pallet jack remains the meaningful added object;
+6. Ask Building preserves the Observed/Inferred distinction.
 
 For a clean demo-quality A/B, create a fresh warehouse validation environment after pulling the fix, then scan the baseline and comparison videos once each. Existing historical states should not be rewritten.
 
