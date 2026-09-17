@@ -14,7 +14,7 @@ Hackathon track: **Best Apps and Agents**.
 
 ## Current phase
 
-**Phase 5 — Perception Quality & Condition Model: ACTIVE / WAREHOUSE POLICY FIXES VERIFIED / REAL-SCAN RE-RUN NEXT**
+**Phase 5 — Perception Quality & Condition Model: ACTIVE / WAREHOUSE POLICY HARDENING VERIFIED / REAL-SCAN RE-RUN NEXT**
 
 ## Phase 3 — COMPLETE
 
@@ -166,13 +166,30 @@ The model no longer decides whether a condition becomes an operational issue.
 - no evidence → never auto-promoted;
 - observed threshold = **0.65** confidence;
 - inferred threshold = **0.85** confidence;
+- explicitly grounded observed access cue threshold = **0.60** confidence;
 - observed hazard → at most `high`;
 - observed damage / maintenance / access / compliance → `medium`;
 - observed attention / unknown → `low`;
 - inferred conditions → at most `medium`;
 - perception alone can never create a `critical` issue.
 
+The 0.60 access exception is limited to directly observed explicit access-route obstruction wording. It does not lower the 0.85 threshold for deterministic inferred conditions.
+
 The old keyword-regex path that promoted words such as `hazard`, `broken`, or `leak` from free-text observations has been removed for new scans.
+
+### Grounded structured access reasoning — IMPLEMENTED / HARDENED
+
+The warehouse comparison exposed a composition failure rather than a basic perception failure: MiniCPM directly observed both the pallet jack placement and the exit signage but returned no operational condition.
+
+SENTINEL now deterministically derives an Inferred `access` condition only when:
+
+- a separate evidence-backed observation/object independently grounds the door as an emergency exit;
+- an evidence-backed obstacle is explicitly in front of/across/blocking that same door;
+- the spatial direction is obstacle → door, not reversed;
+- confidence remains above the unchanged inferred threshold after a downward bound;
+- no equivalent access condition already exists.
+
+A door named `green emergency exit door` cannot self-ground its own exit role. A bounded color-anchored alias may connect that object to grounded wording such as `green door`, but independent exit signage is still required.
 
 ### Durable memory — IMPLEMENTED
 
@@ -193,6 +210,25 @@ Older Phase 3/4 memory remains backward-compatible:
 - old observations hydrate with `basis: observed`.
 
 The canonical Neon JSON aggregate already stores the new condition data without requiring a runtime database migration.
+
+### Conservative object identity — IMPLEMENTED / HARDENED
+
+Future scans now resolve a small whitelist of obvious provider aliases without general fuzzy matching.
+
+Supported warehouse families include:
+
+- shelving/racking naming drift;
+- plural box/carton aggregate naming drift;
+- floor and ceiling naming drift;
+- fire-extinguisher category drift;
+- exit-sign naming drift;
+- color-anchored door drift such as `green emergency exit door` ↔ `green door`.
+
+Cross-scan matching remains unique one-to-one. Unanchored generic door names remain excluded.
+
+Within a single scan, scene/audit aliases consolidate only when they share trusted frame evidence and do not contradict position. Identical name/category detections are not collapsed merely because they coexist. Repeated objects without shared grounding remain separate.
+
+This applies only to future ingestion. Historical snapshots and persisted diffs are immutable and are not rewritten.
 
 ### Ask the Building — IMPLEMENTED
 
@@ -218,21 +254,19 @@ Nemotron is instructed to treat inferred conditions as lower-authority interpret
 - missing evidence fails closed;
 - missing object references fail closed.
 
-Sentinel CI run `34952118344` passed:
+The hardened warehouse regression suite additionally verifies:
 
-- Phase 4 poor-input gate;
-- Phase 4 evidence-reference gate;
-- Phase 5 condition trust gate;
-- TypeScript/Vite production build.
+- independent emergency-exit grounding is required;
+- `green emergency exit door` can bind to grounded `green door` wording without weakening the inferred threshold;
+- the door object cannot self-ground its own emergency role;
+- safe/reversed placement does not create obstruction;
+- inference chaining is rejected;
+- color-anchored door aliases are allowed while unanchored generic doors remain excluded;
+- same-scan aliases require shared evidence + compatible position;
+- repeated ambiguous objects remain separate;
+- warehouse alias drift collapses to the real pallet-jack addition rather than fake add/not-reobserved noise.
 
-The later warehouse hardening run `35234538554` also passed the full suite after adding:
-
-- grounded emergency-exit obstruction derivation;
-- directional relation checks that reject reversed spatial wording;
-- a no-inference-chaining boundary for deterministic derivation;
-- conservative name-led object aliases;
-- unique one-to-one matching for memory and Reality Diff;
-- repeated-object preservation and description-contamination regressions.
+Sentinel CI run `35253466573` passed the full repository suite on commit `f1f24211e06132798a2681a88351b6a3f399e8a2`, including Phase 4 quality gates, provider grounding, perception retry, condition audit, Phase 5 trust, condition derivation, Reality Diff position semantics, conservative object identity, and the TypeScript/Vite production build.
 
 Canonical Phase 5 record: `Knowledge/Technical/phase-5-condition-model.md`.
 
@@ -240,18 +274,25 @@ Canonical Phase 5 record: `Knowledge/Technical/phase-5-condition-model.md`.
 
 Environment: `env_warehouse_6dba83ca`.
 
-The persisted comparison scan directly observed an orange pallet jack in front of a green door and independently observed emergency-exit signage above that door. The pre-fix state still produced zero operational conditions and about 19 changes dominated by provider naming drift.
+Neon inspection confirms the persisted comparison source directly observed:
 
-Current `main` now owns both missing behaviors deterministically:
+- `orange pallet jack` — **“An orange pallet jack in front of the green door.”** — confidence 1.00;
+- `emergency exit sign` — **“An emergency exit sign above the green door.”** — confidence 1.00.
 
-- compose the two grounded physical facts into one bounded Inferred access condition;
-- match only a small set of obvious object aliases when the candidate is unique in both directions.
+The historical baseline also exposed same-scan provider duplication such as both `green emergency exit door` and `green door`, while the comparison emitted several semantic aliases for shelves/boxes/floor/ceiling.
 
-Historical states and diffs remain immutable.
+The pre-hardening state still produced zero operational issues and an inflated Reality Diff. Those historical states/diffs remain immutable.
+
+Current `main` now owns the missing behaviors deterministically:
+
+- compose independently grounded exit identity + obstacle placement into one bounded Inferred access condition;
+- connect the verbose/short green-door wording without allowing the door to self-ground its emergency role;
+- consolidate obvious same-scan aliases only when shared trusted evidence and compatible position support one physical identity;
+- use the same conservative identity families across durable memory and Reality Diff.
 
 ## Phase 5 next proof
 
-Pull latest `main` and re-run the warehouse comparison through the updated build. For a clean demo-quality A/B result, use a fresh warehouse validation environment and scan the baseline and comparison once each.
+Pull latest `main` and run a **fresh** warehouse validation environment so historical snapshots are not rewritten. Scan the clean baseline once and the obstructed comparison once.
 
 Expected proof:
 
@@ -259,15 +300,15 @@ Expected proof:
 2. one derived access condition appears as Inferred and Present;
 3. the condition retains both grounded evidence sources;
 4. policy promotes it to a medium access issue, never critical;
-5. shelving/boxes/floor/ceiling/extinguisher/sign aliases do not dominate Reality Diff;
+5. green-door/shelving/boxes/floor/ceiling/extinguisher/sign aliases do not dominate Reality Diff;
 6. the pallet jack remains the meaningful added object;
 7. Ask Building preserves the Observed/Inferred distinction.
 
-Inspect durable memory at:
+Inspect durable memory using the fresh validation environment ID via:
 
-`/api/memory?environmentId=office-demo`
+`/api/memory?environmentId=<fresh-warehouse-environment-id>`
 
-Expected new fields include top-level `conditions` and latest-state `conditionIds`.
+Expected fields include top-level `conditions`, latest-state `conditionIds`, the derived access condition, and a medium access issue when the grounded facts satisfy policy.
 
 ## Verified implementation baseline
 
@@ -306,10 +347,10 @@ Expected new fields include top-level `conditions` and latest-state `conditionId
 
 ## Highest-priority gaps
 
-1. **Phase 5 controlled warehouse re-scan on the hardened policy build.**
+1. **Phase 5 fresh controlled warehouse baseline/comparison re-scan on the hardened policy build.**
 2. Condition quality tuning based on real model output.
 3. Environmental state history UX/query hardening — Phase 6.
-4. Diff Engine v2 — semantic matching + first-class condition transitions — Phase 7.
+4. Diff Engine v2 — richer repeated-instance matching + first-class condition transitions — Phase 7.
 5. Action + verification closed loop — Phases 11/12.
 6. Deferred latest-main Vercel production re-verification.
 7. Reliability, automated tests, security, and least-privilege database-role hardening.
@@ -325,6 +366,9 @@ Expected new fields include top-level `conditions` and latest-state `conditionId
 - UI direction = Living Spatial Intelligence.
 - Observed, Inferred, and Recommended are distinct trust layers.
 - Perception cannot independently create a critical operational issue.
+- Derived access reasoning requires independent grounded exit identity plus explicit obstacle placement.
+- Inferred condition threshold remains 0.85; the 0.60 access exception is observed-only.
+- Object aliases remain whitelist-based, evidence-conscious, and conservative; historical memory is never rewritten.
 - All durable memory access goes through `EnvironmentalMemoryRepository`.
 - Neon Postgres is the active durable store (DEC-005).
 - Browser-carried memory is not authoritative.
@@ -338,7 +382,7 @@ Expected new fields include top-level `conditions` and latest-state `conditionId
 - [x] Phase 2 — Core architecture cleanup
 - [x] Phase 3 — Persistent Environmental Memory
 - [x] Phase 4 — Observation pipeline hardening (**local/engineering track complete; latest-main Vercel re-verification deferred and tracked**)
-- [ ] Phase 5 — Perception quality and condition model (**ACTIVE — warehouse policy fixes + CI passed; clean warehouse re-scan next**)
+- [ ] Phase 5 — Perception quality and condition model (**ACTIVE — warehouse policy hardening + CI passed; fresh warehouse re-scan next**)
 - [ ] Phase 6 — Environmental state history
 - [ ] Phase 7 — Environmental Diff Engine v2
 - [ ] Phase 8 — Reality Diff UI
@@ -367,8 +411,8 @@ Phase 5 strict condition/evidence validation: **MET**.
 
 Phase 5 durable condition memory + Ask context: **MET**.
 
-Phase 5 hardened trust/derivation/identity gates + build: **CI PASS (`35234538554`)**.
+Phase 5 hardened trust/independent-derivation/identity gates + build: **CI PASS (`35253466573`)**.
 
 Phase 5 post-fix warehouse condition-quality proof: **PENDING**.
 
-**Next gate: pull latest `main`, run the Phase 5 gates/build locally, then perform a clean warehouse baseline/comparison re-scan and evaluate the new Memory state.**
+**Next gate: pull latest `main`, run the Phase 5 gates/build locally, then perform a fresh warehouse baseline/comparison re-scan and evaluate the new Memory state.**
