@@ -17,6 +17,7 @@
     "check:perception-retry": "node --experimental-strip-types ./scripts/check-perception-retry.mjs",
     "check:condition-audit": "node --experimental-strip-types ./scripts/check-condition-audit.mjs",
     "check:phase5-conditions": "node --experimental-strip-types ./scripts/check-phase5-condition-model.mjs",
+    "check:condition-derivation": "node ./scripts/check-condition-derivation.mjs",
     "check:diff-position": "node ./scripts/check-diff-position.mjs",
     "build": "tsc -b && vite build",
     "preview": "vite preview"
