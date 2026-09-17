@@ -1,7 +1,7 @@
 import type { EnvironmentalCondition, EnvironmentalDiff, EnvironmentalMemory, EnvironmentalState, EnvironmentalStateSnapshot, Environment, EnvironmentRelation, Evidence, Issue, ScanSource, SpatialObject, PerceptionResult } from '../domain/sentinel.js'
 import { assessCondition } from '../perception/condition-model.js'
 import { EnvironmentalDiffEngine, type DiffEngine } from './diff-engine.js'
-import { matchObjectsConservatively } from './object-identity.js'
+import { matchObjectsConservatively, sameScanObjectsCanConsolidate } from './object-identity.js'
 
 export interface MemoryIds { state: () => string; object: () => string; issue: () => string; relation: () => string; evidence: () => string; diff: () => string }
 export interface MemoryStoreDependencies { now?: () => Date; ids?: Partial<MemoryIds>; diffEngine?: DiffEngine }
@@ -160,26 +160,41 @@ export class EnvironmentalMemoryStore {
 
   private upsertObjects(memory: EnvironmentalMemory, incoming: SpatialObject[], capturedAt: string): SpatialObject[] {
     const existing = [...memory.objects]
-    const matches = matchObjectsConservatively(existing, incoming)
+    const groups = groupSameScanObjectAliases(incoming)
+    const representatives = groups.map((group) => incoming[group[0]])
+    const matches = matchObjectsConservatively(existing, representatives)
+    const canonicalByGroup: SpatialObject[] = []
 
-    return incoming.map((item, index) => {
-      const previousIndex = matches.get(index)
+    groups.forEach((group, groupIndex) => {
+      const representative = representatives[groupIndex]
+      const previousIndex = matches.get(groupIndex)
+      let canonical: SpatialObject
+
       if (previousIndex === undefined) {
-        const created = { ...item, id: this.ids.object(), firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: [...item.evidenceIds] }
-        memory.objects.push(created)
-        return created
+        canonical = {
+          ...representative,
+          id: this.ids.object(),
+          firstSeenAt: capturedAt,
+          lastSeenAt: capturedAt,
+          evidenceIds: [...representative.evidenceIds],
+        }
+        memory.objects.push(canonical)
+      } else {
+        canonical = existing[previousIndex]
+        applyCurrentObservation(canonical, representative, capturedAt)
       }
 
-      const matched = existing[previousIndex]
-      matched.description = item.description ?? matched.description
-      matched.position = item.position ?? matched.position
-      matched.boundingBox = item.boundingBox ?? matched.boundingBox
-      matched.state = item.state ?? matched.state
-      matched.confidence = item.confidence
-      matched.lastSeenAt = capturedAt
-      matched.evidenceIds = unique([...matched.evidenceIds, ...item.evidenceIds])
-      return matched
+      for (const memberIndex of group.slice(1)) {
+        mergeAliasEvidence(canonical, incoming[memberIndex], capturedAt)
+      }
+      canonicalByGroup[groupIndex] = canonical
     })
+
+    const canonicalByInput = new Array<SpatialObject>(incoming.length)
+    groups.forEach((group, groupIndex) => {
+      for (const inputIndex of group) canonicalByInput[inputIndex] = canonicalByGroup[groupIndex]
+    })
+    return canonicalByInput
   }
 
   private upsertIssuesFromConditions(memory: EnvironmentalMemory, conditions: EnvironmentalCondition[], capturedAt: string): Issue[] {
@@ -230,6 +245,42 @@ export class EnvironmentalMemoryStore {
   private defaultSummary(objects: SpatialObject[], conditions: EnvironmentalCondition[], issues: Issue[], relations: EnvironmentRelation[]): string { return `${objects.length} object(s), ${conditions.length} condition(s), ${issues.length} issue(s), ${relations.length} relation(s) recorded.` }
   private clone<T>(value: T): T { return structuredClone(value) }
 }
+
+function groupSameScanObjectAliases(incoming: SpatialObject[]): number[][] {
+  const groups: number[][] = []
+
+  for (let index = 0; index < incoming.length; index += 1) {
+    const compatibleGroups = groups.filter((group) =>
+      group.every((memberIndex) => sameScanObjectsCanConsolidate(incoming[memberIndex], incoming[index])),
+    )
+
+    if (compatibleGroups.length === 1) compatibleGroups[0].push(index)
+    else groups.push([index])
+  }
+
+  return groups
+}
+
+function applyCurrentObservation(target: SpatialObject, incoming: SpatialObject, capturedAt: string): void {
+  target.description = incoming.description ?? target.description
+  target.position = incoming.position ?? target.position
+  target.boundingBox = incoming.boundingBox ?? target.boundingBox
+  target.state = incoming.state ?? target.state
+  target.confidence = incoming.confidence
+  target.lastSeenAt = capturedAt
+  target.evidenceIds = unique([...target.evidenceIds, ...incoming.evidenceIds])
+}
+
+function mergeAliasEvidence(target: SpatialObject, alias: SpatialObject, capturedAt: string): void {
+  target.description = target.description ?? alias.description
+  target.position = target.position ?? alias.position
+  target.boundingBox = target.boundingBox ?? alias.boundingBox
+  target.state = target.state ?? alias.state
+  target.confidence = Math.max(target.confidence, alias.confidence)
+  target.lastSeenAt = capturedAt
+  target.evidenceIds = unique([...target.evidenceIds, ...alias.evidenceIds])
+}
+
 function sourceScopedId(sourceId: string, kind: string, rawId: string): string { return `${sourceId}:${kind}:${rawId}` }
 function unique(values: string[]): string[] { return [...new Set(values)] }
 function uniqueById<T extends { id: string }>(values: T[]): T[] { const seen = new Set<string>(); return values.filter((value) => { if (seen.has(value.id)) return false; seen.add(value.id); return true }) }
