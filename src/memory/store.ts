@@ -1,6 +1,7 @@
 import type { EnvironmentalCondition, EnvironmentalDiff, EnvironmentalMemory, EnvironmentalState, EnvironmentalStateSnapshot, Environment, EnvironmentRelation, Evidence, Issue, ScanSource, SpatialObject, PerceptionResult } from '../domain/sentinel.js'
 import { assessCondition } from '../perception/condition-model.js'
 import { EnvironmentalDiffEngine, type DiffEngine } from './diff-engine.js'
+import { objectsSemanticallyMatch } from './object-identity.js'
 
 export interface MemoryIds { state: () => string; object: () => string; issue: () => string; relation: () => string; evidence: () => string; diff: () => string }
 export interface MemoryStoreDependencies { now?: () => Date; ids?: Partial<MemoryIds>; diffEngine?: DiffEngine }
@@ -158,7 +159,7 @@ export class EnvironmentalMemoryStore {
   }
 
   private upsertObject(memory: EnvironmentalMemory, incoming: SpatialObject, capturedAt: string): SpatialObject {
-    const existing = memory.objects.find((item) => item.name.toLowerCase() === incoming.name.toLowerCase() && item.category === incoming.category)
+    const existing = memory.objects.find((item) => objectsSemanticallyMatch(item, incoming))
     if (!existing) {
       const created = { ...incoming, id: this.ids.object(), firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: [...incoming.evidenceIds] }
       memory.objects.push(created)
