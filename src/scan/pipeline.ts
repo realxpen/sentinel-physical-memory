@@ -4,6 +4,7 @@ import { groundPerceptionToTrustedFrames } from '../ai/trusted-evidence.js'
 import { ModelAdapterError, type ModelAdapter } from '../ai/model.js'
 import { EnvironmentalMemoryStore } from '../memory/store.js'
 import { InMemoryEnvironmentalMemoryRepository, type EnvironmentalMemoryRepository } from '../memory/repository.js'
+import { deriveOperationalConditions } from '../perception/condition-derivation.js'
 import type { ScanArtifact, ScanError, ScanFrame, ScanInput, ScanProgress, ScanResult } from './types.js'
 
 export interface ScanPipelineDependencies {
@@ -49,7 +50,23 @@ export class ScanPipeline {
     const artifacts = this.createArtifacts(frames, input)
     this.emit(scanId, 'extracting', 55, `${artifacts.filter((artifact) => artifact.kind === 'frame').length} frame artifact(s) prepared`)
 
-    const perception = await this.perceive(scanId, artifacts, frames, input)
+    const perceived = await this.perceive(scanId, artifacts, frames, input)
+    const derived = deriveOperationalConditions(perceived, input.source.capturedAt)
+    const perception = validatePerceptionForScan(derived.result, input.environmentId, input.source.id)
+    if (derived.derivedConditions.length > 0) {
+      console.warn('SENTINEL_DERIVED_CONDITIONS', {
+        scanId,
+        count: derived.derivedConditions.length,
+        conditions: derived.derivedConditions.map((item) => ({
+          kind: item.kind,
+          title: item.title,
+          basis: item.basis,
+          confidence: item.confidence,
+          objectIds: item.objectIds,
+        })),
+      })
+    }
+
     const observations = perception.observations.map((item) => ({ ...item }))
     const conditions = perception.conditions.map((item) => ({ ...item, objectIds: [...item.objectIds], evidenceIds: [...item.evidenceIds] }))
     this.emit(scanId, 'normalizing', 75, `${observations.length} observation(s), ${conditions.length} condition(s) normalized`)
