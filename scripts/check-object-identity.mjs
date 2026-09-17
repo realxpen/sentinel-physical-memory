@@ -7,15 +7,16 @@ const vite = await createServer({
 })
 
 try {
-  const { matchObjectsConservatively, objectsSemanticallyMatch } = await vite.ssrLoadModule('/src/memory/object-identity.ts')
+  const { matchObjectsConservatively, objectsSemanticallyMatch, sameScanObjectsCanConsolidate } = await vite.ssrLoadModule('/src/memory/object-identity.ts')
   const { EnvironmentalDiffEngine } = await vite.ssrLoadModule('/src/memory/diff-engine.ts')
   const { EnvironmentalMemoryStore } = await vite.ssrLoadModule('/src/memory/store.ts')
 
   const environmentId = 'warehouse-identity-test'
   const at = '2026-09-17T13:15:54.989Z'
-  const object = (id, category, name, description = name) => ({
+  const object = (id, category, name, description = name, overrides = {}) => ({
     id, environmentId, category, name, description, confidence: 1,
     firstSeenAt: at, lastSeenAt: at, evidenceIds: [`e_${id}`],
+    ...overrides,
   })
 
   const aliases = [
@@ -25,6 +26,7 @@ try {
     [object('a4', 'other', 'white ceiling'), object('b4', 'other', 'warehouse ceiling')],
     [object('a5', 'equipment', 'fire extinguisher'), object('b5', 'safety', 'fire extinguisher')],
     [object('a6', 'signage', 'white sign', 'White sign with a green exit symbol above the door.'), object('b6', 'signage', 'emergency exit sign')],
+    [object('a7', 'door', 'green emergency exit door'), object('b7', 'door', 'green door')],
   ]
 
   for (const [left, right] of aliases) {
@@ -35,7 +37,7 @@ try {
     throw new Error('ambiguous movable furniture must not fuzzy-match')
   }
   if (objectsSemanticallyMatch(object('door1', 'door', 'emergency exit door'), object('door2', 'door', 'service door'))) {
-    throw new Error('generic doors must not fuzzy-match')
+    throw new Error('generic doors without a shared visible anchor must not fuzzy-match')
   }
   if (objectsSemanticallyMatch(
     object('jack-boxes', 'equipment', 'orange pallet jack', 'orange pallet jack parked beside cardboard boxes'),
@@ -48,6 +50,17 @@ try {
     object('sign', 'signage', 'emergency exit sign'),
   )) {
     throw new Error('a door mentioning nearby signage must not become an exit-sign object')
+  }
+
+  const sameDoorEvidence = ['e_green_door_shared']
+  const verboseDoor = object('door-verbose', 'door', 'green emergency exit door', 'green door with exit sign above', { evidenceIds: sameDoorEvidence, position: { description: 'center' } })
+  const shortDoor = object('door-short', 'door', 'green door', 'green double door', { evidenceIds: sameDoorEvidence })
+  if (!sameScanObjectsCanConsolidate(verboseDoor, shortDoor)) {
+    throw new Error('grounded same-scan green-door aliases should consolidate')
+  }
+  const conflictingDoor = object('door-conflict', 'door', 'green door', 'green service door', { evidenceIds: sameDoorEvidence, position: { description: 'left' } })
+  if (sameScanObjectsCanConsolidate(verboseDoor, conflictingDoor)) {
+    throw new Error('same-scan aliases with conflicting semantic positions must remain separate')
   }
 
   const repeatedPrevious = [
@@ -65,28 +78,56 @@ try {
     createdAt: at, updatedAt: at, stateIds: [], roomIds: [], objectIds: [], issueIds: [],
   })
   const source = (id) => ({ id, environmentId, modality: 'image', uri: `${id}.jpg`, capturedAt: at })
-  const perception = (sourceId, objects) => ({
-    sourceId,
-    observations: [],
-    objects,
-    conditions: [],
-    relations: [],
-    evidence: objects.map((item) => ({
-      id: item.evidenceIds[0], type: 'frame', sourceId, capturedAt: at, description: item.name,
-    })),
-  })
-  const baselineState = store.ingestScan(
-    environmentId,
-    source('baseline'),
-    perception('baseline', [object('shelf-old', 'furniture', 'metal shelving')]),
-  )
-  const comparisonState = store.ingestScan(
-    environmentId,
-    source('comparison'),
-    perception('comparison', [object('shelf-new', 'furniture', 'orange metal shelves')]),
-  )
-  if (baselineState.objectIds[0] !== comparisonState.objectIds[0]) {
-    throw new Error('unique aliases must reuse the durable canonical object id')
+  const perception = (sourceId, objects) => {
+    const evidenceIds = [...new Set(objects.flatMap((item) => item.evidenceIds))]
+    return {
+      sourceId,
+      observations: [],
+      objects,
+      conditions: [],
+      relations: [],
+      evidence: evidenceIds.map((id) => ({
+        id, type: 'frame', sourceId, capturedAt: at, description: id,
+      })),
+    }
+  }
+
+  const baselineObjects = [
+    object('shelf-old', 'furniture', 'metal shelving'),
+    object('door-old-verbose', 'door', 'green emergency exit door', 'green door with exit sign above', { evidenceIds: ['e_baseline_door'], position: { description: 'center' } }),
+    object('door-old-short', 'door', 'green door', 'green double door', { evidenceIds: ['e_baseline_door'] }),
+  ]
+  const baselineState = store.ingestScan(environmentId, source('baseline'), perception('baseline', baselineObjects))
+  if (new Set(baselineState.objectIds).size !== 2) {
+    throw new Error(`same-scan grounded door aliases should collapse to one durable door, got ${baselineState.objectIds.length} state objects`)
+  }
+
+  const comparisonObjects = [
+    object('shelf-new-short', 'furniture', 'shelves', 'shelves on both sides', { evidenceIds: ['e_comparison_shelf'] }),
+    object('shelf-new-specific', 'furniture', 'orange metal shelves', 'orange metal shelves on both sides', { evidenceIds: ['e_comparison_shelf'] }),
+    object('door-new', 'door', 'green door', 'green double door'),
+    object('jack-new', 'equipment', 'orange pallet jack', 'orange pallet jack in front of the green door'),
+  ]
+  const comparisonState = store.ingestScan(environmentId, source('comparison'), perception('comparison', comparisonObjects))
+  if (new Set(comparisonState.objectIds).size !== 3) {
+    throw new Error(`comparison aliases should resolve to shelf + door + pallet jack, got ${comparisonState.objectIds.length} state objects`)
+  }
+
+  const baselineMemory = store.get(environmentId)
+  const baselineSnapshot = baselineMemory?.snapshots.find((item) => item.stateId === baselineState.id)
+  const comparisonSnapshot = baselineMemory?.snapshots.find((item) => item.stateId === comparisonState.id)
+  if (!baselineSnapshot || !comparisonSnapshot) throw new Error('expected immutable snapshots for identity regression')
+
+  const baselineDoorId = baselineSnapshot.objects.find((item) => item.category === 'door')?.id
+  const comparisonDoorId = comparisonSnapshot.objects.find((item) => item.category === 'door')?.id
+  if (!baselineDoorId || baselineDoorId !== comparisonDoorId) {
+    throw new Error('green emergency exit door -> green door must reuse one durable door id')
+  }
+
+  const baselineShelfId = baselineSnapshot.objects.find((item) => /shel/.test(item.name))?.id
+  const comparisonShelfId = comparisonSnapshot.objects.find((item) => /shel/.test(item.name))?.id
+  if (!baselineShelfId || baselineShelfId !== comparisonShelfId) {
+    throw new Error('same-scan shelf aliases must still reuse the baseline durable shelf id')
   }
 
   const repeatedState = store.ingestScan(
@@ -98,14 +139,11 @@ try {
     ]),
   )
   if (new Set(repeatedState.objectIds).size !== 2) {
-    throw new Error('repeated objects in one scan must retain distinct durable ids')
+    throw new Error('repeated objects without shared grounding must retain distinct durable ids')
   }
 
-  const baseline = aliases.map(([left]) => left).concat([
-    object('door', 'door', 'green door'),
-  ])
+  const baseline = aliases.map(([left]) => left)
   const comparison = aliases.map(([, right]) => right).concat([
-    object('door', 'door', 'green door'),
     object('jack', 'equipment', 'orange pallet jack', 'orange pallet jack in front of the green door'),
   ])
 
@@ -126,10 +164,11 @@ try {
   if (uncertain.length !== 0) throw new Error(`semantic aliases must not create not-re-observed noise: ${uncertain.map((change) => change.title).join(', ')}`)
 
   console.log('PASS  provider naming aliases map to conservative durable object families')
-  console.log('PASS  chairs/desks/doors remain outside fuzzy identity matching')
+  console.log('PASS  color-anchored door aliases match while unanchored generic doors remain excluded')
   console.log('PASS  secondary description mentions do not redefine object identity')
+  console.log('PASS  grounded same-scan aliases consolidate only with shared evidence and compatible position')
   console.log('PASS  repeated ambiguous objects are not collapsed into one match')
-  console.log('PASS  memory reuses unique aliases and preserves repeated object instances')
+  console.log('PASS  memory reuses durable shelf/door identities across provider naming drift')
   console.log('PASS  warehouse alias drift collapses to one real added pallet jack')
   console.log('SENTINEL OBJECT IDENTITY GATE VERIFIED')
 } finally {
