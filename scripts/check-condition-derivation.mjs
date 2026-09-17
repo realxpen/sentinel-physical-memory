@@ -26,7 +26,7 @@ try {
     }],
     objects: [
       {
-        id: 'door_1', environmentId, category: 'door', name: 'green door',
+        id: 'door_1', environmentId, category: 'door', name: 'green emergency exit door',
         description: 'green double door with orange frame', confidence: 1,
         firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: ['frame_door'],
       },
@@ -81,10 +81,14 @@ try {
   const reversed = deriveOperationalConditions(reversedPlacement, capturedAt)
   if (reversed.derivedConditions.length !== 0) throw new Error('reversed spatial direction must not derive an access obstruction')
 
-  const inferredExitOnly = structuredClone(base)
-  inferredExitOnly.observations = inferredExitOnly.observations.filter((item) => item.id !== 'obs_exit')
-  inferredExitOnly.objects[0].name = 'green door'
-  inferredExitOnly.objects[0].description = 'green double door with orange frame'
+  const doorNameOnly = structuredClone(base)
+  doorNameOnly.observations = doorNameOnly.observations.filter((item) => item.id !== 'obs_exit')
+  const selfGrounded = deriveOperationalConditions(doorNameOnly, capturedAt)
+  if (selfGrounded.derivedConditions.length !== 0) {
+    throw new Error('an emergency-exit phrase in the door object itself must not replace independent exit grounding')
+  }
+
+  const inferredExitOnly = structuredClone(doorNameOnly)
   inferredExitOnly.conditions.push({
     id: 'inferred_exit', environmentId, kind: 'compliance', title: 'Possible emergency exit',
     description: 'The green door may be an emergency exit.', status: 'uncertain', basis: 'inferred',
@@ -93,10 +97,12 @@ try {
   const inferredOnly = deriveOperationalConditions(inferredExitOnly, capturedAt)
   if (inferredOnly.derivedConditions.length !== 0) throw new Error('an inferred condition must not be reused as direct exit grounding')
 
-  console.log('PASS  grounded exit signage + obstacle placement derives one inferred access condition')
+  console.log('PASS  independently grounded exit signage + obstacle placement derives one inferred access condition')
+  console.log('PASS  green emergency exit door aliases to grounded green-door wording without lowering confidence policy')
   console.log('PASS  derived condition preserves evidence and stays below source confidence')
   console.log('PASS  safe obstacle placement does not create an access condition')
   console.log('PASS  reversed spatial language does not invert obstacle direction')
+  console.log('PASS  door naming alone cannot self-ground emergency-exit identity')
   console.log('PASS  inferred conditions are not reused as direct grounding facts')
   console.log('SENTINEL CONDITION DERIVATION GATE VERIFIED')
 } finally {
