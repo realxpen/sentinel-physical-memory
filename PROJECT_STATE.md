@@ -104,6 +104,8 @@ The latest-main Vercel valid-video contract was **not** passed before Phase 4 tr
 
 Vercel was rejecting new deployments because of the project build-rate limit. The user explicitly chose not to block the AED build cycle on that infrastructure limit and will pull/test GitHub locally.
 
+The post-warehouse-fix re-check, Phase 4 Observation Contract run `35234538587`, failed only its deployment-freshness wait: production still reported commit `597545a0e2193330d5513935825a68a6b01fb0f6` after ten minutes instead of the expected `5aa75049c75d3723a06979e47400d1fd73a8288c`. No video-contract assertion ran. This keeps the item deferred; it does not invalidate the green Phase 5 repository gates.
+
 This is a deferred production re-verification item, not a passed gate. When deployment capacity is available, rerun `.github/workflows/phase4-observation-contract.yml` against the matching `deploymentCommit` and record the result.
 
 Canonical Phase 4 record: `Knowledge/Technical/phase-4-observation-pipeline.md`.
