@@ -1,6 +1,6 @@
 # SENTINEL Project State
 
-Last updated: 2026-09-15
+Last updated: 2026-09-17
 
 ## North star
 
@@ -14,7 +14,7 @@ Hackathon track: **Best Apps and Agents**.
 
 ## Current phase
 
-**Phase 5 — Perception Quality & Condition Model: ACTIVE / CORE TRUST MODEL IMPLEMENTED / REAL-PHONE VALIDATION NEXT**
+**Phase 5 — Perception Quality & Condition Model: ACTIVE / WAREHOUSE POLICY FIXES VERIFIED / REAL-SCAN RE-RUN NEXT**
 
 ## Phase 3 — COMPLETE
 
@@ -223,24 +223,42 @@ Sentinel CI run `34952118344` passed:
 - Phase 5 condition trust gate;
 - TypeScript/Vite production build.
 
+The later warehouse hardening run `35234538554` also passed the full suite after adding:
+
+- grounded emergency-exit obstruction derivation;
+- directional relation checks that reject reversed spatial wording;
+- a no-inference-chaining boundary for deterministic derivation;
+- conservative name-led object aliases;
+- unique one-to-one matching for memory and Reality Diff;
+- repeated-object preservation and description-contamination regressions.
+
 Canonical Phase 5 record: `Knowledge/Technical/phase-5-condition-model.md`.
+
+## Phase 5 controlled warehouse checkpoint
+
+Environment: `env_warehouse_6dba83ca`.
+
+The persisted comparison scan directly observed an orange pallet jack in front of a green door and independently observed emergency-exit signage above that door. The pre-fix state still produced zero operational conditions and about 19 changes dominated by provider naming drift.
+
+Current `main` now owns both missing behaviors deterministically:
+
+- compose the two grounded physical facts into one bounded Inferred access condition;
+- match only a small set of obvious object aliases when the candidate is unique in both directions.
+
+Historical states and diffs remain immutable.
 
 ## Phase 5 next proof
 
-Pull latest `main` and validate with a real phone walkthrough containing one deliberately safe and obvious visual condition, for example:
-
-- a loose cable laid across a walkway;
-- a chair deliberately blocking a passage;
-- another harmless staged state with a clear visual signal.
+Pull latest `main` and re-run the warehouse comparison through the updated build. For a clean demo-quality A/B result, use a fresh warehouse validation environment and scan the baseline and comparison once each.
 
 Expected proof:
 
-1. direct visible facts appear under `observations`;
-2. interpretation appears separately under `conditions`;
-3. each condition has the appropriate `basis` and `status`;
-4. condition evidence IDs resolve to supplied frames;
-5. weak/uncertain inference does not become an issue;
-6. a sufficiently supported present condition may be promoted by SENTINEL policy;
+1. direct pallet-jack and exit-sign facts remain Observed;
+2. one derived access condition appears as Inferred and Present;
+3. the condition retains both grounded evidence sources;
+4. policy promotes it to a medium access issue, never critical;
+5. shelving/boxes/floor/ceiling/extinguisher/sign aliases do not dominate Reality Diff;
+6. the pallet jack remains the meaningful added object;
 7. Ask Building preserves the Observed/Inferred distinction.
 
 Inspect durable memory at:
@@ -286,7 +304,7 @@ Expected new fields include top-level `conditions` and latest-state `conditionId
 
 ## Highest-priority gaps
 
-1. **Phase 5 real-phone Observed vs Inferred condition proof.**
+1. **Phase 5 controlled warehouse re-scan on the hardened policy build.**
 2. Condition quality tuning based on real model output.
 3. Environmental state history UX/query hardening — Phase 6.
 4. Diff Engine v2 — semantic matching + first-class condition transitions — Phase 7.
@@ -318,7 +336,7 @@ Expected new fields include top-level `conditions` and latest-state `conditionId
 - [x] Phase 2 — Core architecture cleanup
 - [x] Phase 3 — Persistent Environmental Memory
 - [x] Phase 4 — Observation pipeline hardening (**local/engineering track complete; latest-main Vercel re-verification deferred and tracked**)
-- [ ] Phase 5 — Perception quality and condition model (**ACTIVE — core model + CI passed; real-phone validation next**)
+- [ ] Phase 5 — Perception quality and condition model (**ACTIVE — warehouse policy fixes + CI passed; clean warehouse re-scan next**)
 - [ ] Phase 6 — Environmental state history
 - [ ] Phase 7 — Environmental Diff Engine v2
 - [ ] Phase 8 — Reality Diff UI
@@ -347,8 +365,8 @@ Phase 5 strict condition/evidence validation: **MET**.
 
 Phase 5 durable condition memory + Ask context: **MET**.
 
-Phase 5 automated trust gate + build: **CI PASS**.
+Phase 5 hardened trust/derivation/identity gates + build: **CI PASS (`35234538554`)**.
 
-Phase 5 real-phone condition-quality proof: **PENDING**.
+Phase 5 post-fix warehouse condition-quality proof: **PENDING**.
 
-**Next gate: pull latest `main`, run the Phase 5 condition test/build locally, then perform one representative real-phone condition walkthrough.**
+**Next gate: pull latest `main`, run the Phase 5 gates/build locally, then perform a clean warehouse baseline/comparison re-scan and evaluate the new Memory state.**

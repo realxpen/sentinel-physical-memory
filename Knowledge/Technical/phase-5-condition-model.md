@@ -71,11 +71,12 @@ It may derive an inferred `access` condition only when:
 
 - an evidence-backed door is explicitly associated with emergency-exit signage;
 - an evidence-backed physical obstacle is explicitly described in front of/across/blocking that same named door;
+- the obstacle-to-door direction is explicit (reversed spatial wording does not qualify);
 - both facts belong to the same grounded perception result;
 - confidence remains above the inferred-condition threshold after SENTINEL applies a downward confidence bound;
 - no equivalent access condition already exists.
 
-The derived claim remains **Inferred**, not Observed. SENTINEL does not increase source confidence or invent evidence.
+The derivation may use grounded observations and objects, but it cannot reuse another inferred condition as if it were direct grounding. The derived claim remains **Inferred**, not Observed. SENTINEL does not increase source confidence or invent evidence.
 
 For the warehouse case, two source facts at 1.00 confidence produce a bounded derived confidence of 0.90.
 
@@ -117,7 +118,7 @@ The same controlled warehouse test also exposed provider naming drift that infla
 
 `src/memory/object-identity.ts` now provides a deliberately small semantic identity whitelist for those durable families. It is used by both memory upsert and the deterministic diff engine.
 
-This is **not** general fuzzy matching. Chairs, desks, people, and generic doors remain excluded because repeated-instance identity belongs to Phase 7.
+This is **not** general fuzzy matching. Family classification is name-led so a nearby object mentioned only in a description cannot redefine identity. Alias matches must also be unique in both directions; repeated ambiguous objects remain separate instead of one candidate being reused for several instances. Chairs, desks, people, and generic doors remain excluded because richer repeated-instance identity belongs to Phase 7.
 
 ## Memory behavior
 
@@ -151,21 +152,26 @@ Nemotron must treat inferred conditions as lower-authority interpretation rather
 - derived evidence contains both supporting fact sources;
 - confidence remains below source confidence;
 - the strong derived condition promotes only through SENTINEL policy;
-- safe placement does not create an access condition.
+- safe placement does not create an access condition;
+- reversed spatial wording does not invert the obstruction relation;
+- inferred conditions are not reused as direct grounding facts.
 
 `npm run check:object-identity` verifies:
 
 - the conservative warehouse alias families match;
 - ambiguous movable furniture and generic doors do not fuzzy-match;
+- secondary description mentions do not redefine the primary object family;
+- repeated ambiguous objects retain separate durable identities;
+- unique aliases reuse a canonical durable object ID;
 - a baseline/comparison alias-drift scenario collapses to one real added pallet jack instead of many false additions/removals.
 
 `npm run check:diff-position` continues to verify that image-coordinate drift cannot create false physical movement.
 
-Sentinel CI run `35227712643` passed all Phase 4 gates, perception retry, condition audit, Phase 5 trust, condition derivation, Reality Diff position semantics, conservative object identity, and the TypeScript/Vite build.
+Sentinel CI run `35234538554` passed all Phase 4 gates, perception retry, condition audit, Phase 5 trust, hardened condition derivation, Reality Diff position semantics, conservative one-to-one object identity, and the TypeScript/Vite build.
 
 ## Controlled warehouse checkpoint
 
-Environment: `warehouse`
+Environment: `env_warehouse_6dba83ca`
 
 State v1 persisted a clean warehouse baseline with visible shelving, boxes, concrete floor, emergency-exit door/signage, fire extinguisher, and normal conditions.
 
