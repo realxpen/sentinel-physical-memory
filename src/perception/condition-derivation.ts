@@ -7,6 +7,7 @@ export interface ConditionDerivationResult {
 
 const OBSTACLE_NAME = /\b(?:pallet jack|pallet|trolley|cart|box|carton|chair|cabinet|desk|table|equipment|object)\b/i
 const EXIT_CUE = /\b(?:emergency exit|exit sign|exit door)\b/i
+const DOOR_COLOR = /\b(green|red|blue|orange|yellow|white|black|brown|gray|grey)\b/i
 
 /**
  * Deterministic Phase 5 derivation from already-grounded perception facts.
@@ -57,7 +58,7 @@ export function deriveOperationalConditions(
         environmentId: door.environmentId,
         kind: 'access',
         title: 'Emergency exit access obstructed',
-        description: `${obstacle.name} is observed ${placementEvidence.phrase} ${door.name}, which is identified by grounded exit signage as an emergency exit.`,
+        description: `${obstacle.name} is observed ${placementEvidence.phrase} ${door.name}, which is independently identified by grounded exit signage as an emergency exit.`,
         status: 'present',
         basis: 'inferred',
         confidence,
@@ -89,7 +90,7 @@ function findExitEvidenceForDoor(perception: PerceptionResult, door: SpatialObje
   const doorNames = entityAliases(door)
   const candidates: Array<Observation | SpatialObject> = [
     ...perception.observations,
-    ...perception.objects,
+    ...perception.objects.filter((item) => item.id !== door.id),
   ]
 
   for (const item of candidates) {
@@ -162,7 +163,20 @@ function entityAliases(item: SpatialObject): string[] {
   const aliases = [normalize(item.name)]
   const description = normalize(item.description ?? '')
   if (description && description.length <= 80) aliases.push(description)
+
+  if (item.category === 'door') {
+    const canonicalDoor = colorAnchoredDoorAlias(item.name) ?? colorAnchoredDoorAlias(item.description ?? '')
+    if (canonicalDoor) aliases.push(canonicalDoor)
+  }
+
   return unique(aliases.filter((value) => value.length >= 3))
+}
+
+function colorAnchoredDoorAlias(value: string): string | undefined {
+  const normalized = normalize(value)
+  if (!/\bdoor\b/.test(normalized)) return undefined
+  const color = normalized.match(DOOR_COLOR)?.[1]
+  return color ? `${color.toLowerCase()} door` : undefined
 }
 
 function semanticText(item: Observation | SpatialObject | EnvironmentalCondition): string {
