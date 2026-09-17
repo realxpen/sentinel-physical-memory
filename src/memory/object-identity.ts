@@ -1,6 +1,7 @@
 import type { SpatialObject } from '../domain/sentinel.js'
 
-type ObjectFamily = 'shelving' | 'box' | 'floor' | 'ceiling' | 'fire-extinguisher' | 'exit-sign'
+type DoorColor = 'green' | 'red' | 'blue' | 'orange' | 'yellow' | 'white' | 'black' | 'brown' | 'gray'
+type ObjectFamily = 'shelving' | 'box' | 'floor' | 'ceiling' | 'fire-extinguisher' | 'exit-sign' | `door:${DoorColor}`
 
 /**
  * Conservative semantic identity for recurring provider naming variance.
@@ -8,8 +9,10 @@ type ObjectFamily = 'shelving' | 'box' | 'floor' | 'ceiling' | 'fire-extinguishe
  * This is intentionally a small whitelist, not fuzzy matching. It only merges
  * object families where different surface descriptions routinely refer to the
  * same durable scene concept (for example "metal shelving" vs "shelves").
- * Ambiguous instance-heavy objects such as chairs, desks, people, and generic
- * doors are deliberately excluded; Phase 7 instance identity will handle them.
+ * Ambiguous instance-heavy objects such as chairs, desks, and people are
+ * deliberately excluded. Doors are matched only through a visible color
+ * anchor (for example "green emergency exit door" vs "green door") and still
+ * depend on the one-to-one uniqueness rule below.
  */
 export function objectsSemanticallyMatch(a: SpatialObject, b: SpatialObject): boolean {
   if (a.id === b.id) return true
@@ -30,9 +33,26 @@ export function semanticObjectIdentityKey(item: SpatialObject): string {
 }
 
 /**
+ * Same-scan aliases may collapse only when they are semantic variants, share
+ * at least one trusted evidence frame, and do not contradict structured or
+ * semantic position. This is intentionally stricter than cross-scan matching:
+ * two detections in the same frame can still be different physical instances,
+ * so identical name/category pairs are never collapsed merely for coexisting.
+ */
+export function sameScanObjectsCanConsolidate(a: SpatialObject, b: SpatialObject): boolean {
+  if (!objectsSemanticallyMatch(a, b)) return false
+
+  const sameSurfaceIdentity = normalize(a.name) === normalize(b.name) && a.category === b.category
+  if (sameSurfaceIdentity) return false
+
+  if (!a.evidenceIds.some((id) => b.evidenceIds.includes(id))) return false
+  return positionsCompatible(a, b)
+}
+
+/**
  * Produces one-to-one matches only when both sides have a unique compatible
  * candidate. Repeated generic objects therefore stay unmatched instead of one
- * shelf/box candidate being reused to hide several distinct instances.
+ * shelf/box/door candidate being reused to hide several distinct instances.
  */
 export function matchObjectsConservatively(
   previous: SpatialObject[],
@@ -87,7 +107,18 @@ function semanticFamily(item: SpatialObject): ObjectFamily | undefined {
   if (/\b(?:concrete |warehouse )?floor\b/.test(name)) return 'floor'
   if (/\b(?:white |warehouse |high )?ceiling\b/.test(name)) return 'ceiling'
 
+  if (item.category === 'door' && /\bdoor\b/.test(name)) {
+    const color = doorColor(name)
+    if (color) return `door:${color}`
+  }
+
   return undefined
+}
+
+function doorColor(value: string): DoorColor | undefined {
+  const match = value.match(/\b(green|red|blue|orange|yellow|white|black|brown|gray|grey)\b/)
+  if (!match) return undefined
+  return match[1] === 'grey' ? 'gray' : match[1] as DoorColor
 }
 
 function categoriesCompatibleForExactName(a: SpatialObject, b: SpatialObject): boolean {
@@ -100,6 +131,37 @@ function categoriesCompatibleForExactName(a: SpatialObject, b: SpatialObject): b
   }
 
   return false
+}
+
+function positionsCompatible(a: SpatialObject, b: SpatialObject): boolean {
+  const positionA = a.position
+  const positionB = b.position
+  if (!positionA || !positionB) return true
+
+  if (positionA.roomId && positionB.roomId && positionA.roomId !== positionB.roomId) return false
+  if (positionA.relativeToId && positionB.relativeToId && positionA.relativeToId !== positionB.relativeToId) return false
+
+  const descriptionA = semanticPositionDescription(positionA.description)
+  const descriptionB = semanticPositionDescription(positionB.description)
+  if (descriptionA && descriptionB && descriptionA !== descriptionB) return false
+
+  return true
+}
+
+function semanticPositionDescription(value: string | undefined): string | undefined {
+  const normalized = normalize(value ?? '')
+  if (!normalized) return undefined
+
+  const coordinateTokens = normalized
+    .replace(/[\[\](),;:]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean)
+
+  if (coordinateTokens.length >= 2 && coordinateTokens.every((token) => /^-?\d+(?:\.\d+)?(?:px|%)?$/.test(token))) {
+    return undefined
+  }
+
+  return normalized
 }
 
 function normalize(value: string): string {
