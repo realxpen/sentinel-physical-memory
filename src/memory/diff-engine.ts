@@ -1,4 +1,5 @@
 import type { Change, EnvironmentalCondition, EnvironmentalDiff, Issue, SpatialObject } from '../domain/sentinel'
+import { objectsSemanticallyMatch } from './object-identity.js'
 
 export interface EnvironmentalSnapshot {
   stateId: string
@@ -72,7 +73,7 @@ export class EnvironmentalDiffEngine implements DiffEngine {
   }
 
   private matchObject(item: SpatialObject, candidates: SpatialObject[]): SpatialObject | undefined {
-    return candidates.find((candidate) => candidate.id === item.id) ?? candidates.find((candidate) => candidate.category === item.category && candidate.name.trim().toLowerCase() === item.name.trim().toLowerCase())
+    return candidates.find((candidate) => candidate.id === item.id) ?? candidates.find((candidate) => objectsSemanticallyMatch(candidate, item))
   }
 
   private sameIssue(a: Issue, b: Issue): boolean { return a.id === b.id || (a.title.trim().toLowerCase() === b.title.trim().toLowerCase() && (a.roomId ?? '') === (b.roomId ?? '')) }
