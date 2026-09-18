@@ -47,7 +47,7 @@ Phase 3 persists environments, states, immutable state snapshots, objects, obser
 
 A state is an immutable historical claim. Updating a remembered object's current normalized record must not alter what State v1 believed.
 
-Each accepted scan captures the object/issue values that belonged to that state. `hydrate()` restores these exact snapshots after a database round-trip. Historical Ask and Diff use them rather than today's mutable entity values.
+Each accepted scan captures the object/condition/issue/relation values that belonged to that state. `hydrate()` restores these exact snapshots after a database round-trip. Historical retrieval, Ask and Diff use them rather than today's mutable entity values.
 
 The Neon save function additionally enforces two database invariants:
 
@@ -76,15 +76,26 @@ Neon API-created login roles in this project inherit `neon_superuser`, so the cu
 
 ## Core queries
 
-- current memory for environment
-- state by ID/version
-- previous/current state pair
-- immutable state snapshot
-- diffs by state pair
-- evidence by ID
-- current/historical facts for Ask
+Phase 6 makes state history explicit through `src/memory/history.ts` and `GET /api/states`.
 
-The Phase 3 repository initially retrieves the canonical aggregate. Later performance phases may specialize these queries without changing the application contract.
+Supported retrieval semantics:
+
+- current state;
+- previous state;
+- state by ID;
+- state by date/time = latest state captured at or before the requested timestamp;
+- full immutable state snapshot;
+- lightweight ordered timeline.
+
+A selected historical record includes the state, immutable snapshot, scan-specific observations/evidence/sources, and previous/next state IDs for navigation.
+
+The repository still retrieves the canonical aggregate for the MVP. Later performance phases may specialize these queries without changing the application contract.
+
+## Phase 6 relation-snapshot compatibility
+
+New states snapshot relations alongside objects, conditions and issues.
+
+Pre-Phase-6 persisted snapshots may not contain relation snapshots. Those hydrate as `relations: []` instead of being reconstructed from today's mutable relation record. SENTINEL prefers an explicit historical gap over silently rewriting the past.
 
 ## Phase 3 exit condition
 

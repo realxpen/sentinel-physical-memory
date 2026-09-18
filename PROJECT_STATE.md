@@ -14,7 +14,7 @@ Hackathon track: **Best Apps and Agents**.
 
 ## Current phase
 
-**Phase 6 — Environmental State History: READY / PHASE 5 COMPLETE**
+**Phase 7 — Environmental Diff Engine v2: READY / PHASE 6 COMPLETE**
 
 ## Phase 3 — COMPLETE
 
@@ -579,6 +579,118 @@ Transition record:
 
 `Archive/phase-5-transition-note.md`
 
+## Phase 6 — COMPLETE
+
+### Objective
+
+Make time a first-class product feature without sacrificing historical truth.
+
+Phase 6 implements reliable retrieval of:
+
+- current state;
+- previous state;
+- state by ID;
+- state by date/time.
+
+The date/time selector uses **latest state captured at or before the requested timestamp**.
+
+### Immutable historical snapshot contract — IMPLEMENTED
+
+`EnvironmentalStateSnapshot` now preserves:
+
+- objects;
+- conditions;
+- issues;
+- relations.
+
+Historical retrieval never reconstructs a past state from today's mutable canonical objects/relations.
+
+Older pre-Phase-6 snapshots that do not contain relation snapshots hydrate with `relations: []` rather than leaking today's mutated relation values backward into history.
+
+`src/memory/history.ts` owns deterministic history selection and returns defensive clones.
+
+### State History API — IMPLEMENTED
+
+`GET /api/states?environmentId=<id>`
+
+returns the lightweight timeline.
+
+Supported selectors:
+
+- `selector=current`;
+- `selector=previous`;
+- `stateId=<state-id>`;
+- `at=<ISO-date-time>`.
+
+Only one selector may be supplied per request. Missing environments/states fail explicitly rather than silently falling back to current memory.
+
+### Memory timeline UI — IMPLEMENTED
+
+The existing **Memory** destination now includes **State history** without adding another primary navigation item.
+
+Users can:
+
+- inspect the current immutable state;
+- inspect the previous state;
+- open any state by timeline card / state ID;
+- jump to the latest state at or before a chosen date/time;
+- move older/newer inside the historical-state drawer;
+- inspect the exact objects, conditions, issues and relation count captured in that state.
+
+The UI explicitly labels historical inspection as immutable truth and does not replace the current-memory canvas with a generic dashboard.
+
+### Automated gate — PASS
+
+`npm run check:phase6-history` verifies:
+
+- current selector;
+- previous selector;
+- state-by-ID selector;
+- state-by-date selector;
+- exact timestamp inclusion;
+- no state before first capture;
+- immutable object values after later canonical updates;
+- immutable relation confidence/evidence after later scans;
+- defensive-clone behavior;
+- invalid date rejection.
+
+Sentinel CI run `35349163148` passed the complete repository suite and production build on commit `5df1b881e160ee8b0f12b858af41431eea673a08`.
+
+### Real persisted-history proof — Neon
+
+The final Phase 5 warehouse environment also proves the Phase 6 historical invariant against durable Neon snapshots:
+
+Environment: `env_warehouse5_cbe5dde8`.
+
+- State v1: `state_c60cc223-9f0b-4519-beae-69a447b4c50e`;
+- State v2: `state_d8db8374-fd23-403b-ae05-c791fb96a97b`.
+
+The same durable object IDs retain different values in each immutable snapshot.
+
+Example — `green emergency exit door`:
+
+- v1 description: **“A green door with a window and a silver handle.”**
+- v2 description: **“Green emergency exit door with white text and a green exit sign above it.”**
+
+Example — `green exit sign`:
+
+- v1: **“A green emergency exit sign above the green door.”**
+- v2: **“Green exit sign with a white figure and arrow above the green emergency exit door.”**
+
+The durable object IDs are the same across the two states, while each snapshot keeps the value that belonged to that moment. This is the required Phase 6 proof that today's canonical update does not rewrite yesterday's state.
+
+### Phase 6 exit condition — MET
+
+Two historical states can be inspected independently and return their correct past values. Current/previous/by-ID/by-date retrieval is deterministic, state snapshots are immutable, and the Memory experience exposes time directly.
+
+Canonical technical record:
+
+`Knowledge/Technical/phase-6-state-history.md`
+
+Transition record:
+
+`Archive/phase-6-transition-note.md`
+
 ## Verified implementation baseline
 
 ### Frontend
@@ -604,8 +716,10 @@ Transition record:
 - `EnvironmentalMemoryStore` remains the state engine.
 - `EnvironmentalMemoryRepository` remains the persistence contract.
 - `NeonEnvironmentalMemoryRepository` is the active durable implementation.
-- Historical snapshots remain immutable.
-- Conditions now participate in state snapshots while Phase 7 remains responsible for full condition-aware diff semantics.
+- Historical snapshots remain immutable and now snapshot relations as well as objects, conditions and issues.
+- `src/memory/history.ts` provides current / previous / by-ID / at-or-before-time retrieval over immutable snapshots.
+- `/api/states` exposes the Phase 6 history contract.
+- Conditions remain available in snapshots while Phase 7 is responsible for first-class condition transition diff semantics.
 
 ### Diff / Ask
 
@@ -616,8 +730,8 @@ Transition record:
 
 ## Highest-priority gaps
 
-1. **Phase 6 — Environmental state history: current / previous / state-by-ID / state-by-date queries with immutable snapshots.**
-2. Diff Engine v2 — richer repeated-instance matching + first-class condition transitions — Phase 7.
+1. **Phase 7 — Environmental Diff Engine v2: richer repeated-instance matching + first-class condition transitions.**
+2. Phase 8 — Reality Diff UI refinement around the stronger Phase 7 diff semantics.
 3. Action + verification closed loop — Phases 11/12.
 4. Reliability, automated tests, security, and least-privilege database-role hardening.
 
@@ -651,8 +765,8 @@ Transition record:
 - [x] Phase 3 — Persistent Environmental Memory
 - [x] Phase 4 — Observation pipeline hardening (**COMPLETE — local/real-phone + exact latest-main production contract passed**)
 - [x] Phase 5 — Perception quality and condition model (**COMPLETE — sixth fresh warehouse proof passed clean condition/issue/diff gate**)
-- [ ] Phase 6 — Environmental state history (**NEXT**)
-- [ ] Phase 7 — Environmental Diff Engine v2
+- [x] Phase 6 — Environmental state history (**COMPLETE — immutable current/previous/by-ID/by-date retrieval + Memory timeline**)
+- [ ] Phase 7 — Environmental Diff Engine v2 (**NEXT**)
 - [ ] Phase 8 — Reality Diff UI
 - [ ] Phase 9 — Spatial Memory experience
 - [ ] Phase 10 — Ask the Building product layer
@@ -701,4 +815,12 @@ Phase 5 sixth fresh warehouse proof (`env_warehouse5_cbe5dde8`): **PASS — 2 CO
 
 Phase 5: **COMPLETE**.
 
-**Next gate: begin Phase 6 — Environmental State History. Preserve immutable snapshots and add reliable current / previous / by-ID / by-date state retrieval without changing Phase 5 perception policy.**
+Phase 6 immutable state-history gate: **PASS (`npm run check:phase6-history`)**.
+
+Phase 6 full repository build: **CI PASS (`35349163148`, commit `5df1b881`)**.
+
+Phase 6 real Neon immutable-history proof (`env_warehouse5_cbe5dde8`): **PASS — same durable object IDs retain distinct v1/v2 snapshot values**.
+
+Phase 6: **COMPLETE**.
+
+**Next gate: begin Phase 7 — Environmental Diff Engine v2. Add first-class condition transitions and richer repeated-instance matching without weakening Phase 5 trust or Phase 6 immutable history.**

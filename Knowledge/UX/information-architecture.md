@@ -21,7 +21,7 @@ Contains:
 - semantic/spatial memory canvas
 - remembered objects/conditions/relations
 - evidence access
-- timeline/history entry points
+- first-class immutable state timeline/history
 - contextual Ask conclusions
 
 ## Observe
@@ -48,6 +48,20 @@ Contains:
 - verification outcome
 
 ## Contextual layers
+
+### State history
+
+Lives inside **Memory**, not as a fourth primary navigation destination.
+
+Supports:
+
+- current state;
+- previous state;
+- state-by-ID through timeline cards;
+- latest state at or before a selected date/time;
+- older/newer navigation inside an immutable-state drawer.
+
+The state-history drawer shows the exact snapshot values captured at that moment, including objects, conditions, issues and relation count. It must clearly communicate that historical truth is not reconstructed from today's canonical objects.
 
 ### Evidence drawer
 
