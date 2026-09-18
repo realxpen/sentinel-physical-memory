@@ -3,7 +3,9 @@ import { createRoot } from 'react-dom/client'
 import './styles.css'
 import './integration.css'
 import './environment.css'
+import './history.css'
 import type { AskBuildingResponse, EnvironmentalCondition, EnvironmentalDiff, EnvironmentalMemory, EnvironmentalState, EnvironmentType, Observation } from './domain/sentinel'
+import type { EnvironmentalStateHistoryEntry, EnvironmentalStateHistoryRecord } from './memory/history'
 import { createEnvironmentProfile, DEFAULT_ENVIRONMENT, ENVIRONMENT_TYPES, loadActiveEnvironmentId, loadEnvironmentDirectory, saveActiveEnvironmentId, saveEnvironmentDirectory, type EnvironmentProfile } from './environment/directory'
 import { ingestVideoFile } from './scan/video-ingestion'
 
@@ -19,6 +21,16 @@ interface ScanResponse {
 
 interface MemoryResponse {
   memory: EnvironmentalMemory | null
+  persistence: 'neon' | 'volatile'
+  message?: string
+}
+
+interface StateHistoryResponse {
+  environmentId: string
+  currentStateId: string | null
+  previousStateId: string | null
+  states: EnvironmentalStateHistoryEntry[]
+  selection?: EnvironmentalStateHistoryRecord
   persistence: 'neon' | 'volatile'
   message?: string
 }
@@ -56,6 +68,10 @@ function App() {
   const [question, setQuestion] = useState('')
   const [askStatus, setAskStatus] = useState('')
   const [answer, setAnswer] = useState<AskBuildingResponse | null>(null)
+  const [history, setHistory] = useState<EnvironmentalStateHistoryEntry[]>([])
+  const [historySelection, setHistorySelection] = useState<EnvironmentalStateHistoryRecord | null>(null)
+  const [historyStatus, setHistoryStatus] = useState('')
+  const [historyAt, setHistoryAt] = useState('')
 
   const activeEnvironment = environments.find((item) => item.id === activeEnvironmentId) ?? environments[0] ?? DEFAULT_ENVIRONMENT
   const isWorking = status.startsWith('Observing') || status.startsWith('Understanding') || status.startsWith('Remembering')
@@ -75,6 +91,10 @@ function App() {
     setMemory(null)
     setAnswer(null)
     setSelectedObservation(null)
+    setHistory([])
+    setHistorySelection(null)
+    setHistoryStatus('')
+    setHistoryAt('')
     setError('')
     setStatus(`Loading ${activeEnvironment.name} memory`)
 
@@ -98,6 +118,36 @@ function App() {
     void restoreEnvironmentalMemory()
     return () => { cancelled = true }
   }, [activeEnvironment.id, activeEnvironment.name])
+
+  useEffect(() => {
+    if (!memory) {
+      setHistory([])
+      setHistorySelection(null)
+      setHistoryStatus('')
+      return
+    }
+
+    let cancelled = false
+    setHistoryStatus('Loading immutable state history…')
+
+    async function restoreStateHistory() {
+      try {
+        const response = await fetch(`/api/states?environmentId=${encodeURIComponent(memory!.environment.id)}`, { headers: { Accept: 'application/json' } })
+        const payload = await response.json() as StateHistoryResponse
+        if (!response.ok) throw new Error(payload.message ?? 'Unable to restore environmental state history')
+        if (cancelled) return
+        setHistory(payload.states)
+        setHistoryStatus('')
+      } catch (historyError) {
+        if (cancelled) return
+        setHistory([])
+        setHistoryStatus(historyError instanceof Error ? historyError.message : 'Unable to restore environmental state history')
+      }
+    }
+
+    void restoreStateHistory()
+    return () => { cancelled = true }
+  }, [memory?.environment.id, memory?.states.length])
 
   function switchEnvironment(environmentId: string) {
     if (environmentId === activeEnvironment.id) return
@@ -160,6 +210,37 @@ function App() {
       setStatus('Observation interrupted')
       setError(scanError instanceof Error ? scanError.message : 'Unknown scan error')
     }
+  }
+
+  async function inspectHistoricalState(query: { selector?: 'current' | 'previous'; stateId?: string; at?: string }) {
+    if (!memory) return
+    setHistoryStatus('Opening immutable state snapshot…')
+
+    try {
+      const params = new URLSearchParams({ environmentId: memory.environment.id })
+      if (query.selector) params.set('selector', query.selector)
+      if (query.stateId) params.set('stateId', query.stateId)
+      if (query.at) params.set('at', query.at)
+
+      const response = await fetch(`/api/states?${params.toString()}`, { headers: { Accept: 'application/json' } })
+      const payload = await response.json() as StateHistoryResponse
+      if (!response.ok || !payload.selection) throw new Error(payload.message ?? 'Historical state was not found')
+      setHistory(payload.states)
+      setHistorySelection(payload.selection)
+      setHistoryStatus('')
+    } catch (historyError) {
+      setHistoryStatus(historyError instanceof Error ? historyError.message : 'Unable to inspect historical state')
+    }
+  }
+
+  function inspectHistoricalDate() {
+    if (!historyAt) return
+    const parsed = new Date(historyAt)
+    if (!Number.isFinite(parsed.getTime())) {
+      setHistoryStatus('Choose a valid date and time.')
+      return
+    }
+    void inspectHistoricalState({ at: parsed.toISOString() })
   }
 
   async function askBuilding(event: FormEvent<HTMLFormElement>) {
@@ -240,6 +321,46 @@ function App() {
           <button className="observe-cta" type="button" onClick={() => inputRef.current?.click()}><span className="observe-orb"><i /></span><span><strong>{memory ? 'Observe again' : 'Observe environment'}</strong><small>{memory ? `Create the next ${activeEnvironment.name} state` : `Create ${activeEnvironment.name} memory v1`}</small></span></button>
         </div>
 
+        {memory && <section className="history-section" aria-label="Environmental state history">
+          <div className="section-heading history-heading">
+            <div>
+              <span className="eyebrow">TIME / IMMUTABLE MEMORY</span>
+              <h2>State history.</h2>
+              <p>Each observation creates a locked environmental snapshot. Inspect what SENTINEL believed then—not today's mutated object values.</p>
+            </div>
+            <div className="history-quick-actions">
+              <button type="button" onClick={() => void inspectHistoricalState({ selector: 'current' })}>Current</button>
+              <button type="button" disabled={history.length < 2} onClick={() => void inspectHistoricalState({ selector: 'previous' })}>Previous</button>
+            </div>
+          </div>
+
+          <div className="history-time-query">
+            <label htmlFor="history-at">Jump to state at or before</label>
+            <div>
+              <input id="history-at" type="datetime-local" value={historyAt} onChange={(event) => setHistoryAt(event.target.value)} />
+              <button type="button" disabled={!historyAt} onClick={inspectHistoricalDate}>Inspect time</button>
+            </div>
+          </div>
+
+          {historyStatus && <div className="history-status" role="status">{historyStatus}</div>}
+
+          <div className="history-track">
+            {history.map((entry) => (
+              <button className={entry.isCurrent ? 'history-card current' : 'history-card'} type="button" key={entry.stateId} onClick={() => void inspectHistoricalState({ stateId: entry.stateId })}>
+                <span className="history-version">STATE v{entry.version}</span>
+                <strong>{formatStateTimestamp(entry.capturedAt)}</strong>
+                <small>{entry.summary}</small>
+                <div className="history-counts">
+                  <span>{entry.objectCount} objects</span>
+                  <span>{entry.conditionCount} conditions</span>
+                  <span>{entry.issueCount} issues</span>
+                </div>
+                <em>{entry.isCurrent ? 'Current memory' : 'Immutable snapshot'} ↗</em>
+              </button>
+            ))}
+          </div>
+        </section>}
+
         {result && <section className="evidence-section">
           <div className="section-heading"><div><span className="eyebrow">EVIDENCE / CURRENT STATE</span><h2>What SENTINEL observed.</h2></div><span className="scan-id">{result.scanId}</span></div>
           <div className="observation-list">{result.observations.length === 0 ? <div className="empty-observation">No grounded observations were returned for this walkthrough.</div> : result.observations.map((item, index) => <button className="observation-row" type="button" key={`${item.label}-${index}`} onClick={() => setSelectedObservation(index)}><span className="observation-index">{String(index + 1).padStart(2, '0')}</span><span className="observation-copy"><strong>{item.label}</strong><small>{item.description}</small></span><span className="observation-confidence">{Math.round(item.confidence * 100)}%</span><span className="arrow">↗</span></button>)}</div>
@@ -258,6 +379,55 @@ function App() {
         <button className="wide-observe" type="button" onClick={() => inputRef.current?.click()}><span>Observe {activeEnvironment.name} again</span><span>Build the next environmental state ↗</span></button>
       </section>}
 
+      {historySelection && <div className="drawer-backdrop" role="presentation" onClick={() => setHistorySelection(null)}>
+        <aside className="evidence-drawer history-drawer" role="dialog" aria-modal="true" aria-label={`State v${historySelection.state.version} historical snapshot`} onClick={(event) => event.stopPropagation()}>
+          <button className="drawer-close" type="button" onClick={() => setHistorySelection(null)}>×</button>
+          <span className="eyebrow">{historySelection.isCurrent ? 'CURRENT STATE' : 'HISTORICAL STATE'} / IMMUTABLE SNAPSHOT</span>
+          <h2>State v{historySelection.state.version}</h2>
+          <p className="history-captured">{formatStateTimestamp(historySelection.state.capturedAt)} · {historySelection.state.id}</p>
+          <p>{historySelection.state.summary}</p>
+
+          <div className="history-snapshot-meta">
+            <span>{historySelection.snapshot.objects.length} objects</span>
+            <span>{historySelection.snapshot.conditions.length} conditions</span>
+            <span>{historySelection.snapshot.issues.length} issues</span>
+            <span>{historySelection.snapshot.relations.length} relations</span>
+          </div>
+
+          <div className="history-lock-note">
+            <span>Historical truth</span>
+            <strong>This view reads the values captured in this state snapshot.</strong>
+            <p>Later scans can update today's canonical objects, but they cannot rewrite what this state believed.</p>
+          </div>
+
+          <div className="history-drawer-nav">
+            <button type="button" disabled={!historySelection.previousStateId} onClick={() => historySelection.previousStateId && void inspectHistoricalState({ stateId: historySelection.previousStateId })}>← Older state</button>
+            <button type="button" disabled={!historySelection.nextStateId} onClick={() => historySelection.nextStateId && void inspectHistoricalState({ stateId: historySelection.nextStateId })}>Newer state →</button>
+          </div>
+
+          <div className="history-snapshot-section">
+            <span className="eyebrow">OBJECTS AS REMEMBERED</span>
+            <div className="history-snapshot-list">
+              {historySelection.snapshot.objects.length === 0 ? <p>No objects belonged to this state.</p> : historySelection.snapshot.objects.map((item) => <div key={item.id}><strong>{item.name}</strong><small>{item.category} · {Math.round(item.confidence * 100)}%</small><p>{item.description ?? item.state ?? 'No additional state description.'}</p></div>)}
+            </div>
+          </div>
+
+          <div className="history-snapshot-section">
+            <span className="eyebrow">CONDITIONS</span>
+            <div className="history-snapshot-list">
+              {historySelection.snapshot.conditions.length === 0 ? <p>No conditions belonged to this state.</p> : historySelection.snapshot.conditions.map((item) => <div key={item.id}><strong>{item.title}</strong><small>{item.basis} · {item.kind} · {Math.round(item.confidence * 100)}%</small><p>{item.description}</p></div>)}
+            </div>
+          </div>
+
+          {historySelection.snapshot.issues.length > 0 && <div className="history-snapshot-section">
+            <span className="eyebrow">OPERATIONAL ISSUES</span>
+            <div className="history-snapshot-list">
+              {historySelection.snapshot.issues.map((item) => <div key={item.id}><strong>{item.title}</strong><small>{item.severity} · {item.status} · {Math.round(item.confidence * 100)}%</small><p>{item.description}</p></div>)}
+            </div>
+          </div>
+        </aside>
+      </div>}
+
       {observation && <div className="drawer-backdrop" role="presentation" onClick={() => setSelectedObservation(null)}><aside className="evidence-drawer" role="dialog" aria-modal="true" aria-label={`${observation.label} evidence`} onClick={(event) => event.stopPropagation()}><button className="drawer-close" type="button" onClick={() => setSelectedObservation(null)}>×</button><span className="eyebrow">OBSERVED / EVIDENCE-BACKED</span><h2>{observation.label}</h2><p>{observation.description}</p><Confidence value={observation.confidence} /><div className="evidence-rule" /><div className="evidence-note"><span>What this means</span><strong>SENTINEL stores this as an observation, not a professional diagnosis.</strong><p>Interpretation and recommended action remain separate from what the visual evidence directly supports.</p></div></aside></div>}
 
       {showEnvironmentDialog && <div className="drawer-backdrop location-backdrop" role="presentation" onClick={() => setShowEnvironmentDialog(false)}><form className="location-dialog" onSubmit={addEnvironment} onClick={(event) => event.stopPropagation()}><button className="drawer-close" type="button" onClick={() => setShowEnvironmentDialog(false)}>×</button><span className="eyebrow">NEW PHYSICAL MEMORY</span><h2>Add another location.</h2><p>Each location gets its own environment ID, scans, state history, Reality Diffs and questions. Scanning a new location will not overwrite {activeEnvironment.name}.</p><label><span>Location name</span><input autoFocus value={newEnvironmentName} onChange={(event) => setNewEnvironmentName(event.target.value)} placeholder="e.g. Head Office, Warehouse A" maxLength={80} /></label><label><span>Space type</span><select value={newEnvironmentType} onChange={(event) => setNewEnvironmentType(event.target.value as EnvironmentType)}>{ENVIRONMENT_TYPES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label><div className="location-actions"><button type="button" onClick={() => setShowEnvironmentDialog(false)}>Cancel</button><button className="location-create" type="submit" disabled={!newEnvironmentName.trim()}>Create location</button></div></form></div>}
@@ -274,6 +444,15 @@ function App() {
       <input ref={inputRef} hidden type="file" accept="video/*" onChange={(event) => { const file = event.target.files?.[0]; if (file) void handleVideo(file); event.target.value = '' }} />
     </main>
   )
+}
+
+function formatStateTimestamp(value: string): string {
+  const date = new Date(value)
+  if (!Number.isFinite(date.getTime())) return value
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(date)
 }
 
 createRoot(document.getElementById('root')!).render(<StrictMode><App /></StrictMode>)
