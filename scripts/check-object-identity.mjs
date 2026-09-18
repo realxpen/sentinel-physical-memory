@@ -21,8 +21,7 @@ try {
 
   const aliases = [
     [object('a1', 'furniture', 'metal shelving'), object('b1', 'furniture', 'orange metal shelves')],
-    [object('a2', 'furniture', 'cardboard boxes'), object('b2', 'other', 'brown boxes')],
-    [object('a2b', 'furniture', 'cardboard boxes'), object('b2b', 'furniture', 'boxed items')],
+    [object('a2', 'furniture', 'cardboard boxes'), object('b2', 'furniture', 'boxed items')],
     [object('a3', 'other', 'concrete floor'), object('b3', 'other', 'warehouse floor')],
     [object('a4', 'other', 'white ceiling'), object('b4', 'other', 'warehouse ceiling')],
     [object('a5', 'equipment', 'fire extinguisher'), object('b5', 'safety', 'fire extinguisher')],
@@ -32,6 +31,13 @@ try {
 
   for (const [left, right] of aliases) {
     if (!objectsSemanticallyMatch(left, right)) throw new Error(`expected semantic alias match: ${left.name} -> ${right.name}`)
+  }
+
+  if (!objectsSemanticallyMatch(
+    object('box-cardboard', 'furniture', 'cardboard boxes'),
+    object('box-brown', 'other', 'brown boxes'),
+  )) {
+    throw new Error('cardboard boxes -> brown boxes should remain a supported isolated alias')
   }
 
   if (objectsSemanticallyMatch(object('chair1', 'furniture', 'chair'), object('chair2', 'furniture', 'desk'))) {
