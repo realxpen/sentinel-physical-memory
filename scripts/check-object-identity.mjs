@@ -22,6 +22,7 @@ try {
   const aliases = [
     [object('a1', 'furniture', 'metal shelving'), object('b1', 'furniture', 'orange metal shelves')],
     [object('a2', 'furniture', 'cardboard boxes'), object('b2', 'other', 'brown boxes')],
+    [object('a2b', 'furniture', 'cardboard boxes'), object('b2b', 'furniture', 'boxed items')],
     [object('a3', 'other', 'concrete floor'), object('b3', 'other', 'warehouse floor')],
     [object('a4', 'other', 'white ceiling'), object('b4', 'other', 'warehouse ceiling')],
     [object('a5', 'equipment', 'fire extinguisher'), object('b5', 'safety', 'fire extinguisher')],
@@ -63,6 +64,16 @@ try {
     throw new Error('same-scan aliases with conflicting semantic positions must remain separate')
   }
 
+  const exactSceneDoor = object('door-scene', 'door', 'green double door', 'green double door', { evidenceIds: sameDoorEvidence })
+  const exactAuditDoor = object('audit_door-audit', 'door', 'green double door', 'green double door', { evidenceIds: sameDoorEvidence })
+  if (!sameScanObjectsCanConsolidate(exactSceneDoor, exactAuditDoor)) {
+    throw new Error('exact scene/audit duplicates with shared grounding should consolidate')
+  }
+  const exactScenePeer = object('door-peer', 'door', 'green double door', 'green double door', { evidenceIds: sameDoorEvidence })
+  if (sameScanObjectsCanConsolidate(exactSceneDoor, exactScenePeer)) {
+    throw new Error('same-pass exact duplicates must remain separate to protect repeated physical instances')
+  }
+
   const repeatedPrevious = [
     object('boxes-left', 'other', 'cardboard boxes'),
     object('boxes-right', 'other', 'brown boxes'),
@@ -93,8 +104,10 @@ try {
   }
 
   const baselineObjects = [
-    object('shelf-old', 'furniture', 'metal shelving'),
+    object('shelf-old', 'furniture', 'metal shelving', 'metal shelving', { evidenceIds: ['e_baseline_shelf'] }),
+    object('audit_shelf-old', 'furniture', 'metal shelving', 'metal shelving', { evidenceIds: ['e_baseline_shelf'] }),
     object('door-old-verbose', 'door', 'green emergency exit door', 'green door with exit sign above', { evidenceIds: ['e_baseline_door'], position: { description: 'center' } }),
+    object('audit_door-old-verbose', 'door', 'green emergency exit door', 'green door with exit sign above', { evidenceIds: ['e_baseline_door'], position: { description: 'center' } }),
     object('door-old-short', 'door', 'green door', 'green double door', { evidenceIds: ['e_baseline_door'] }),
   ]
   const baselineState = store.ingestScan(environmentId, source('baseline'), perception('baseline', baselineObjects))
@@ -104,8 +117,10 @@ try {
 
   const comparisonObjects = [
     object('shelf-new-short', 'furniture', 'shelves', 'shelves on both sides', { evidenceIds: ['e_comparison_shelf'] }),
+    object('audit_shelf-new-short', 'furniture', 'shelves', 'shelves on both sides', { evidenceIds: ['e_comparison_shelf'] }),
     object('shelf-new-specific', 'furniture', 'orange metal shelves', 'orange metal shelves on both sides', { evidenceIds: ['e_comparison_shelf'] }),
-    object('door-new', 'door', 'green door', 'green double door'),
+    object('door-new', 'door', 'green door', 'green double door', { evidenceIds: ['e_comparison_door'] }),
+    object('audit_door-new', 'door', 'green door', 'green double door', { evidenceIds: ['e_comparison_door'] }),
     object('jack-new', 'equipment', 'orange pallet jack', 'orange pallet jack in front of the green door'),
   ]
   const comparisonState = store.ingestScan(environmentId, source('comparison'), perception('comparison', comparisonObjects))
@@ -166,7 +181,7 @@ try {
   console.log('PASS  provider naming aliases map to conservative durable object families')
   console.log('PASS  color-anchored door aliases match while unanchored generic doors remain excluded')
   console.log('PASS  secondary description mentions do not redefine object identity')
-  console.log('PASS  grounded same-scan aliases consolidate only with shared evidence and compatible position')
+  console.log('PASS  grounded cross-pass exact duplicates and semantic aliases consolidate conservatively')
   console.log('PASS  repeated ambiguous objects are not collapsed into one match')
   console.log('PASS  memory reuses durable shelf/door identities across provider naming drift')
   console.log('PASS  warehouse alias drift collapses to one real added pallet jack')

@@ -37,13 +37,14 @@ export function semanticObjectIdentityKey(item: SpatialObject): string {
  * at least one trusted evidence frame, and do not contradict structured or
  * semantic position. This is intentionally stricter than cross-scan matching:
  * two detections in the same frame can still be different physical instances,
- * so identical name/category pairs are never collapsed merely for coexisting.
+ * so identical name/category pairs are collapsed only when one came from the
+ * scene pass and the other from SENTINEL's prefixed condition-audit pass.
  */
 export function sameScanObjectsCanConsolidate(a: SpatialObject, b: SpatialObject): boolean {
   if (!objectsSemanticallyMatch(a, b)) return false
 
   const sameSurfaceIdentity = normalize(a.name) === normalize(b.name) && a.category === b.category
-  if (sameSurfaceIdentity) return false
+  if (sameSurfaceIdentity && !isCrossPassAlias(a, b)) return false
 
   if (!a.evidenceIds.some((id) => b.evidenceIds.includes(id))) return false
   return positionsCompatible(a, b)
@@ -103,7 +104,7 @@ function semanticFamily(item: SpatialObject): ObjectFamily | undefined {
   if (/\b(?:emergency )?exit\b/.test(name) && /\bsign\b|\bsymbol\b/.test(name)) return 'exit-sign'
   if (item.category === 'signage' && /\b(?:emergency )?exit\b/.test(description) && /\bsign\b|\bsymbol\b/.test(description)) return 'exit-sign'
   if (/\b(?:shelves|shelving|racks|racking)\b/.test(name)) return 'shelving'
-  if (/\b(?:boxes|cartons)\b/.test(name)) return 'box'
+  if (/\b(?:boxes|cartons|boxed items|boxed goods)\b/.test(name)) return 'box'
   if (/\b(?:concrete |warehouse )?floor\b/.test(name)) return 'floor'
   if (/\b(?:white |warehouse |high )?ceiling\b/.test(name)) return 'ceiling'
 
@@ -131,6 +132,12 @@ function categoriesCompatibleForExactName(a: SpatialObject, b: SpatialObject): b
   }
 
   return false
+}
+
+function isCrossPassAlias(a: SpatialObject, b: SpatialObject): boolean {
+  const auditA = a.id.startsWith('audit_')
+  const auditB = b.id.startsWith('audit_')
+  return auditA !== auditB
 }
 
 function positionsCompatible(a: SpatialObject, b: SpatialObject): boolean {
