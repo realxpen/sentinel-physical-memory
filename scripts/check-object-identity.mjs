@@ -81,6 +81,14 @@ try {
   if (!sameScanObjectsCanConsolidate(exactSceneDoor, exactAuditDoor)) {
     throw new Error('exact scene/audit duplicates with shared grounding should consolidate')
   }
+  const exactIdentityDoor = object('identity_door-identity', 'door', 'green double door', 'green double door', { evidenceIds: sameDoorEvidence })
+  if (!sameScanObjectsCanConsolidate(exactSceneDoor, exactIdentityDoor)) {
+    throw new Error('exact scene/identity duplicates with shared grounding should consolidate')
+  }
+  const exactGeometryDoor = object('geometry_door-geometry', 'door', 'green double door', 'green double door', { evidenceIds: sameDoorEvidence })
+  if (!sameScanObjectsCanConsolidate(exactIdentityDoor, exactGeometryDoor)) {
+    throw new Error('exact identity/geometry duplicates with shared grounding should consolidate')
+  }
   const exactScenePeer = object('door-peer', 'door', 'green double door', 'green double door', { evidenceIds: sameDoorEvidence })
   if (sameScanObjectsCanConsolidate(exactSceneDoor, exactScenePeer)) {
     throw new Error('same-pass exact duplicates must remain separate to protect repeated physical instances')
@@ -193,7 +201,7 @@ try {
   console.log('PASS  provider naming aliases map to conservative durable object families')
   console.log('PASS  color-anchored door aliases match while unanchored generic doors remain excluded')
   console.log('PASS  secondary description mentions do not redefine object identity')
-  console.log('PASS  grounded cross-pass exact duplicates and semantic aliases consolidate conservatively')
+  console.log('PASS  grounded cross-pass exact duplicates across audit/identity/geometry and semantic aliases consolidate conservatively')
   console.log('PASS  repeated ambiguous objects are not collapsed into one match')
   console.log('PASS  memory reuses durable shelf/door identities across provider naming drift')
   console.log('PASS  warehouse alias drift collapses to one real added pallet jack')

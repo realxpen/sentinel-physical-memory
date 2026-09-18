@@ -37,8 +37,8 @@ export function semanticObjectIdentityKey(item: SpatialObject): string {
  * at least one trusted evidence frame, and do not contradict structured or
  * semantic position. This is intentionally stricter than cross-scan matching:
  * two detections in the same frame can still be different physical instances,
- * so identical name/category pairs are collapsed only when one came from the
- * scene pass and the other from SENTINEL's prefixed condition-audit pass.
+ * so identical name/category pairs are collapsed only across distinct
+ * SENTINEL perception passes (scene / condition-audit / identity / geometry).
  */
 export function sameScanObjectsCanConsolidate(a: SpatialObject, b: SpatialObject): boolean {
   if (!objectsSemanticallyMatch(a, b)) return false
@@ -135,9 +135,14 @@ function categoriesCompatibleForExactName(a: SpatialObject, b: SpatialObject): b
 }
 
 function isCrossPassAlias(a: SpatialObject, b: SpatialObject): boolean {
-  const auditA = a.id.startsWith('audit_')
-  const auditB = b.id.startsWith('audit_')
-  return auditA !== auditB
+  return perceptionPass(a.id) !== perceptionPass(b.id)
+}
+
+function perceptionPass(id: string): 'scene' | 'audit' | 'identity' | 'geometry' {
+  if (id.startsWith('audit_')) return 'audit'
+  if (id.startsWith('identity_')) return 'identity'
+  if (id.startsWith('geometry_')) return 'geometry'
+  return 'scene'
 }
 
 function positionsCompatible(a: SpatialObject, b: SpatialObject): boolean {

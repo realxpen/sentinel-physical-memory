@@ -75,9 +75,26 @@ try {
   const negative = deriveOperationalConditions(safePlacement, capturedAt)
   if (negative.derivedConditions.length !== 0) throw new Error('safe placement must not derive an access obstruction')
 
-  const reversedPlacement = structuredClone(base)
-  reversedPlacement.observations[1].description = 'The green door is in front of the orange pallet jack.'
-  reversedPlacement.objects[1].description = 'orange pallet jack near the green door'
+  const relationPlacement = structuredClone(base)
+  relationPlacement.observations[1].description = 'An orange pallet jack with visible wheels and handle.'
+  relationPlacement.objects[1].description = 'orange pallet jack with visible wheels and handle'
+  relationPlacement.relations = [{
+    id: 'rel_jack_front_door',
+    environmentId,
+    fromId: 'jack_1',
+    toId: 'door_1',
+    type: 'in_front_of',
+    confidence: 1,
+    evidenceIds: ['frame_jack'],
+  }]
+  const relationDerived = deriveOperationalConditions(relationPlacement, capturedAt)
+  if (relationDerived.derivedConditions.length !== 1) {
+    throw new Error('grounded obstacle -> door in_front_of relation must support access derivation')
+  }
+
+  const reversedPlacement = structuredClone(relationPlacement)
+  reversedPlacement.relations[0].fromId = 'door_1'
+  reversedPlacement.relations[0].toId = 'jack_1'
   const reversed = deriveOperationalConditions(reversedPlacement, capturedAt)
   if (reversed.derivedConditions.length !== 0) throw new Error('reversed spatial direction must not derive an access obstruction')
 
@@ -101,7 +118,8 @@ try {
   console.log('PASS  green emergency exit door aliases to grounded green-door wording without lowering confidence policy')
   console.log('PASS  derived condition preserves evidence and stays below source confidence')
   console.log('PASS  safe obstacle placement does not create an access condition')
-  console.log('PASS  reversed spatial language does not invert obstacle direction')
+  console.log('PASS  grounded obstacle -> door in_front_of relation supports derivation when text omits placement')
+  console.log('PASS  reversed spatial direction does not derive an access obstruction')
   console.log('PASS  door naming alone cannot self-ground emergency-exit identity')
   console.log('PASS  inferred conditions are not reused as direct grounding facts')
   console.log('SENTINEL CONDITION DERIVATION GATE VERIFIED')

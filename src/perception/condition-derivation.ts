@@ -109,6 +109,20 @@ function findObstaclePlacementEvidence(
   obstacle: SpatialObject,
   door: SpatialObject,
 ): GroundedFact | undefined {
+  const explicitRelation = perception.relations.find((item) =>
+    item.type === 'in_front_of' &&
+    item.fromId === obstacle.id &&
+    item.toId === door.id &&
+    item.evidenceIds.length > 0,
+  )
+  if (explicitRelation) {
+    return {
+      confidence: explicitRelation.confidence,
+      evidenceIds: explicitRelation.evidenceIds,
+      phrase: 'in front of',
+    }
+  }
+
   const obstacleNames = entityAliases(obstacle)
   const doorNames = entityAliases(door)
   const candidates: Array<Observation | SpatialObject> = [

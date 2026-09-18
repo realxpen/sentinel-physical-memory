@@ -407,6 +407,202 @@ try {
   console.log('PASS  ambiguous ramp-like warehouse object triggers one targeted identity audit')
   console.log('PASS  identity audit uses visible morphology and explicitly rejects filename/metadata leakage')
   console.log('PASS  corrected pallet-jack identity enables grounded derivation without lowering trust thresholds')
+
+  const geometryEnvironmentId = 'condition-audit-warehouse-geometry-test'
+  const geometrySourceId = 'source-condition-audit-geometry'
+  const geometryPrompts = []
+  const geometryModel = {
+    provider: 'test-provider',
+    model: 'test-model',
+    async infer(request) {
+      geometryPrompts.push(request.prompt)
+      const isConditionAudit = request.prompt.includes('Condition audit for scan')
+      const isGeometryAudit = request.prompt.includes('Targeted access-geometry verification for scan')
+
+      if (isGeometryAudit) {
+        return {
+          sourceId: geometrySourceId,
+          observations: [{
+            id: 'geometry-placement',
+            environmentId: geometryEnvironmentId,
+            sourceId: geometrySourceId,
+            modality: 'video',
+            capturedAt,
+            label: 'orange pallet jack',
+            description: 'An orange pallet jack is directly in front of the green door.',
+            confidence: 1,
+            basis: 'observed',
+            evidenceIds: ['evidence_0'],
+          }, {
+            id: 'geometry-exit',
+            environmentId: geometryEnvironmentId,
+            sourceId: geometrySourceId,
+            modality: 'video',
+            capturedAt,
+            label: 'emergency exit sign',
+            description: 'A green emergency exit sign is above the green door.',
+            confidence: 1,
+            basis: 'observed',
+            evidenceIds: ['evidence_0'],
+          }],
+          objects: [{
+            id: 'geometry-jack',
+            environmentId: geometryEnvironmentId,
+            category: 'equipment',
+            name: 'orange pallet jack',
+            description: 'orange pallet jack with wheels',
+            confidence: 1,
+            firstSeenAt: capturedAt,
+            lastSeenAt: capturedAt,
+            evidenceIds: ['evidence_0'],
+          }, {
+            id: 'geometry-door',
+            environmentId: geometryEnvironmentId,
+            category: 'door',
+            name: 'green emergency exit door',
+            description: 'green door',
+            confidence: 1,
+            firstSeenAt: capturedAt,
+            lastSeenAt: capturedAt,
+            evidenceIds: ['evidence_0'],
+          }, {
+            id: 'geometry-sign',
+            environmentId: geometryEnvironmentId,
+            category: 'signage',
+            name: 'green exit sign',
+            description: 'green emergency exit sign above the green door',
+            confidence: 1,
+            firstSeenAt: capturedAt,
+            lastSeenAt: capturedAt,
+            evidenceIds: ['evidence_0'],
+          }],
+          conditions: [],
+          relations: [{
+            id: 'geometry-front',
+            environmentId: geometryEnvironmentId,
+            fromId: 'geometry-jack',
+            toId: 'geometry-door',
+            type: 'in_front_of',
+            confidence: 1,
+            evidenceIds: ['evidence_0'],
+          }],
+          evidence: [],
+        }
+      }
+
+      const observations = [{
+        id: isConditionAudit ? 'audit-exit-geometry' : 'scene-exit-geometry',
+        environmentId: geometryEnvironmentId,
+        sourceId: geometrySourceId,
+        modality: 'video',
+        capturedAt,
+        label: 'green exit sign',
+        description: 'A green emergency exit sign is above the green door.',
+        confidence: 1,
+        basis: 'observed',
+        evidenceIds: ['evidence_0'],
+      }, {
+        id: isConditionAudit ? 'audit-jack-geometry' : 'scene-jack-geometry',
+        environmentId: geometryEnvironmentId,
+        sourceId: geometrySourceId,
+        modality: 'video',
+        capturedAt,
+        label: 'orange pallet jack',
+        description: 'An orange pallet jack with visible wheels and handle.',
+        confidence: 1,
+        basis: 'observed',
+        evidenceIds: ['evidence_0'],
+      }]
+      const objects = [{
+        id: isConditionAudit ? 'audit-door-geometry' : 'scene-door-geometry',
+        environmentId: geometryEnvironmentId,
+        category: 'door',
+        name: 'green emergency exit door',
+        description: 'green door with window and handle',
+        confidence: 1,
+        firstSeenAt: capturedAt,
+        lastSeenAt: capturedAt,
+        evidenceIds: ['evidence_0'],
+      }, {
+        id: isConditionAudit ? 'audit-jack-object-geometry' : 'scene-jack-object-geometry',
+        environmentId: geometryEnvironmentId,
+        category: 'equipment',
+        name: 'orange pallet jack',
+        description: 'orange pallet jack with wheels',
+        confidence: 1,
+        firstSeenAt: capturedAt,
+        lastSeenAt: capturedAt,
+        evidenceIds: ['evidence_0'],
+      }, {
+        id: isConditionAudit ? 'audit-sign-geometry' : 'scene-sign-geometry',
+        environmentId: geometryEnvironmentId,
+        category: 'signage',
+        name: 'green exit sign',
+        description: 'green emergency exit sign above the green door',
+        confidence: 1,
+        firstSeenAt: capturedAt,
+        lastSeenAt: capturedAt,
+        evidenceIds: ['evidence_0'],
+      }]
+      return {
+        sourceId: geometrySourceId,
+        observations,
+        objects,
+        conditions: [{
+          id: isConditionAudit ? 'audit-normal-geometry' : 'scene-normal-geometry',
+          environmentId: geometryEnvironmentId,
+          kind: 'normal',
+          title: 'Normal warehouse environment',
+          description: 'Warehouse appears normal.',
+          status: 'present',
+          basis: 'observed',
+          confidence: 1,
+          objectIds: [],
+          evidenceIds: ['evidence_0'],
+          observedAt: capturedAt,
+        }],
+        relations: [],
+        evidence: [],
+      }
+    },
+  }
+
+  const geometryPipeline = new ScanPipeline({ model: geometryModel })
+  const geometryResult = await geometryPipeline.run({
+    environmentId: geometryEnvironmentId,
+    source: {
+      id: geometrySourceId,
+      environmentId: geometryEnvironmentId,
+      modality: 'video',
+      uri: 'local://warehouse-geometry-audit.mp4',
+      capturedAt,
+      durationMs: 30_000,
+      metadata: { name: 'Warehouse Geometry Audit', environmentType: 'warehouse' },
+    },
+    media: {
+      kind: 'video',
+      uri: 'local://warehouse-geometry-audit.mp4',
+      mimeType: 'video/mp4',
+      durationMs: 30_000,
+      extractedFrames: [{
+        frameId: 'warehouse-geometry-frame-0',
+        timestampMs: 1_000,
+        uri: 'data:image/jpeg;base64,AAA',
+      }],
+    },
+  })
+
+  if (geometryPrompts.length !== 3) throw new Error(`expected scene + condition audit + access geometry audit, got ${geometryPrompts.length}`)
+  if (!geometryPrompts[2].includes('type="in_front_of"')) throw new Error('geometry audit must request a structured in_front_of relation')
+  if (!geometryPrompts[2].includes('Near, beside, left/right')) throw new Error('geometry audit must reject weak proximity as obstruction evidence')
+  if (!geometryResult.conditions.some((item) => item.title === 'Emergency exit access obstructed')) {
+    throw new Error('grounded geometry relation did not enable deterministic access derivation')
+  }
+  if (geometryResult.state.issueIds.length !== 1) throw new Error('geometry-supported derived access condition was not promoted')
+
+  console.log('PASS  pallet-jack + exit context without placement triggers one targeted access-geometry audit')
+  console.log('PASS  geometry audit requires obstacle -> door in_front_of evidence and rejects weak proximity')
+  console.log('PASS  structured geometry relation enables derivation without weakening policy thresholds')
   console.log('SENTINEL CONDITION AUDIT VERIFIED')
 } finally {
   await vite.close()

@@ -214,13 +214,77 @@ export class ScanPipeline {
         ].join('\n')
 
         console.warn('SENTINEL_IDENTITY_AUDIT_STARTED', { scanId, reason: 'ambiguous_access_adjacent_object' })
-        const identityAudit = await this.inferPerceptionPass('identity-audit', identityPrompt, artifacts, frames, input)
-        merged = mergePerceptionPasses(merged, identityAudit, 'identity_')
-        console.warn('SENTINEL_IDENTITY_AUDIT_COMPLETED', {
+        try {
+          const identityAudit = await this.inferPerceptionPass('identity-audit', identityPrompt, artifacts, frames, input)
+          merged = mergePerceptionPasses(merged, identityAudit, 'identity_')
+          console.warn('SENTINEL_IDENTITY_AUDIT_COMPLETED', {
+            scanId,
+            objects: identityAudit.objects.map((item) => ({ name: item.name, category: item.category, confidence: item.confidence })),
+            conditions: identityAudit.conditions.map((item) => ({ title: item.title, kind: item.kind, confidence: item.confidence })),
+          })
+        } catch (error) {
+          console.warn('SENTINEL_IDENTITY_AUDIT_SKIPPED', {
+            scanId,
+            code: errorCode(error),
+            message: error instanceof Error ? error.message : 'Unknown identity-audit failure',
+          })
+        }
+      }
+
+      if (!hasOperationalConditionCandidate(merged) && shouldRunAccessGeometryAudit(merged)) {
+        const geometryCandidates = materialHandlingCandidates(merged)
+          .map((item) => `${item.name} (${item.category})`)
+          .join(', ')
+        const geometryDoors = merged.objects
+          .filter((item) => item.category === 'door')
+          .map((item) => item.name)
+          .join(', ')
+
+        const geometryPrompt = [
+          `Targeted access-geometry verification for scan ${scanId} in environment ${input.environmentId}.`,
+          `The scan source id is ${input.source.id}.`,
+          `The trusted scan capturedAt is ${input.source.capturedAt}.`,
+          `Visible material-handling/obstruction candidates: ${geometryCandidates || 'none'}.`,
+          `Visible door candidates: ${geometryDoors || 'none'}.`,
+          'Inspect the supplied frames only to verify the physical relationship between the named current-scan candidate object(s) and the visible door/exit.',
+          'If a candidate is directly in front of the door, emit an explicit relation with type="in_front_of", fromId=candidate object id, toId=door object id, plus grounded evidenceIds. The direction must be obstacle -> door.',
+          'Also state the placement explicitly in a direct observation when visually supported.',
+          'Near, beside, left/right, or sharing the center of the image is NOT sufficient evidence of obstruction and must not be converted to in_front_of.',
+          'If exit signage is visible, include the exit-sign observation/object so emergency-exit identity remains independently grounded.',
+          'Do not infer from filenames, metadata, prior memory, or the earlier model wording. Use only visible frame evidence.',
+          'Do not force a relation or operational condition when geometry is unclear.',
+          'Reference only exact supplied FRAME_ID values in evidenceIds. Return the full SENTINEL PerceptionResult JSON schema.',
+        ].join('\n')
+
+        console.warn('SENTINEL_ACCESS_GEOMETRY_AUDIT_STARTED', {
           scanId,
-          objects: identityAudit.objects.map((item) => ({ name: item.name, category: item.category, confidence: item.confidence })),
-          conditions: identityAudit.conditions.map((item) => ({ title: item.title, kind: item.kind, confidence: item.confidence })),
+          reason: 'material_handling_object_and_exit_without_explicit_placement',
+          candidates: geometryCandidates,
         })
+        try {
+          const geometryAudit = await this.inferPerceptionPass('access-geometry-audit', geometryPrompt, artifacts, frames, input)
+          merged = mergePerceptionPasses(merged, geometryAudit, 'geometry_')
+          console.warn('SENTINEL_ACCESS_GEOMETRY_AUDIT_COMPLETED', {
+            scanId,
+            relations: geometryAudit.relations.map((item) => ({
+              type: item.type,
+              fromId: item.fromId,
+              toId: item.toId,
+              confidence: item.confidence,
+            })),
+            observations: geometryAudit.observations.map((item) => ({
+              label: item.label,
+              description: item.description,
+              confidence: item.confidence,
+            })),
+          })
+        } catch (error) {
+          console.warn('SENTINEL_ACCESS_GEOMETRY_AUDIT_SKIPPED', {
+            scanId,
+            code: errorCode(error),
+            message: error instanceof Error ? error.message : 'Unknown access-geometry-audit failure',
+          })
+        }
       }
 
       return validatePerceptionForScan(merged, input.environmentId, input.source.id)
@@ -235,7 +299,7 @@ export class ScanPipeline {
   }
 
   private async inferPerceptionPass(
-    pass: 'scene' | 'condition-audit' | 'identity-audit',
+    pass: 'scene' | 'condition-audit' | 'identity-audit' | 'access-geometry-audit',
     prompt: string,
     artifacts: ScanArtifact[],
     frames: ScanFrame[],
@@ -364,6 +428,61 @@ function shouldRunIdentityAudit(result: PerceptionResult): boolean {
     const accessPlacement = /\b(?:in front of|directly in front of|across|blocking|obstructing|near)\b.{0,48}\b(?:door|exit)\b/i.test(text)
     return ambiguousTaxonomy && accessPlacement
   })
+}
+
+function shouldRunAccessGeometryAudit(result: PerceptionResult): boolean {
+  if (!hasIndependentExitContext(result)) return false
+
+  const doors = result.objects.filter((item) => item.category === 'door')
+  if (doors.length === 0) return false
+
+  return materialHandlingCandidates(result).some((candidate) =>
+    !hasExplicitPlacementForCandidate(result, candidate, doors),
+  )
+}
+
+function hasIndependentExitContext(result: PerceptionResult): boolean {
+  return [...result.observations, ...result.objects].some((item) => {
+    const text = 'label' in item
+      ? `${item.label} ${item.description}`
+      : `${item.name} ${item.description ?? ''}`
+    return /\b(?:emergency\s+)?exit\b/i.test(text) && /\b(?:sign|symbol)\b/i.test(text)
+  })
+}
+
+function materialHandlingCandidates(result: PerceptionResult): SpatialObject[] {
+  return result.objects.filter((item) => {
+    if (item.category === 'obstruction') return true
+    const text = `${item.name} ${item.description ?? ''}`
+    return /\b(?:pallet\s+jack|trolley|cart|forklift|material[-\s]+handling\s+equipment)\b/i.test(text)
+  })
+}
+
+function hasExplicitPlacementForCandidate(
+  result: PerceptionResult,
+  candidate: SpatialObject,
+  doors: SpatialObject[],
+): boolean {
+  if (result.relations.some((item) =>
+    item.type === 'in_front_of' &&
+    item.fromId === candidate.id &&
+    doors.some((door) => door.id === item.toId) &&
+    item.evidenceIds.length > 0,
+  )) return true
+
+  const candidateName = normalizeSemanticText(candidate.name)
+  const texts = [...result.observations, ...result.objects].map((item) =>
+    normalizeSemanticText('label' in item ? `${item.label} ${item.description}` : `${item.name} ${item.description ?? ''}`),
+  )
+
+  return texts.some((text) =>
+    text.includes(candidateName) &&
+    /\b(?:in front of|directly in front of|across|blocking|obstructing)\b.{0,48}\b(?:door|exit)\b/.test(text),
+  )
+}
+
+function normalizeSemanticText(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim()
 }
 
 function mergePerceptionPasses(scene: PerceptionResult, audit: PerceptionResult, prefix = 'audit_'): PerceptionResult {
