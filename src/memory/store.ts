@@ -12,7 +12,7 @@ export class EnvironmentalMemoryStore {
   private readonly ids: MemoryIds
   private readonly diffEngine: DiffEngine
   private readonly memories = new Map<string, EnvironmentalMemory>()
-  private readonly snapshots = new Map<string, { objects: SpatialObject[]; conditions: EnvironmentalCondition[]; issues: Issue[] }>()
+  private readonly snapshots = new Map<string, { objects: SpatialObject[]; conditions: EnvironmentalCondition[]; issues: Issue[]; relations: EnvironmentRelation[] }>()
 
   constructor(deps: MemoryStoreDependencies = {}) {
     this.now = deps.now ?? (() => new Date())
@@ -47,6 +47,7 @@ export class EnvironmentalMemoryStore {
         ? {
             ...this.clone(persisted),
             conditions: Array.isArray(persisted.conditions) ? this.clone(persisted.conditions) : [],
+            relations: Array.isArray(persisted.relations) ? this.clone(persisted.relations) : [],
           }
         : {
             stateId: state.id,
@@ -54,10 +55,11 @@ export class EnvironmentalMemoryStore {
             objects: copy.objects.filter((item) => state.objectIds.includes(item.id)).map((item) => this.clone(item)),
             conditions: copy.conditions.filter((item) => state.conditionIds.includes(item.id)).map((item) => this.clone(item)),
             issues: copy.issues.filter((item) => state.issueIds.includes(item.id)).map((item) => this.clone(item)),
+            relations: [],
           }
 
       normalizedSnapshots.push(snapshot)
-      this.snapshots.set(state.id, { objects: this.clone(snapshot.objects), conditions: this.clone(snapshot.conditions), issues: this.clone(snapshot.issues) })
+      this.snapshots.set(state.id, { objects: this.clone(snapshot.objects), conditions: this.clone(snapshot.conditions), issues: this.clone(snapshot.issues), relations: this.clone(snapshot.relations) })
     }
 
     copy.snapshots = normalizedSnapshots
@@ -132,8 +134,8 @@ export class EnvironmentalMemoryStore {
     const state: EnvironmentalState = { id: this.ids.state(), environmentId, capturedAt, sourceIds: [source.id], objectIds: objects.map((item) => item.id), conditionIds: conditions.map((item) => item.id), issueIds: issues.map((item) => item.id), relationIds: relations.map((item) => item.id), summary: summary ?? this.defaultSummary(objects, conditions, issues, relations), version: memory.states.length + 1 }
     memory.states.push(state)
 
-    const snapshot: EnvironmentalStateSnapshot = { stateId: state.id, environmentId, objects: this.clone(objects), conditions: this.clone(conditions), issues: this.clone(issues) }
-    this.snapshots.set(state.id, { objects: this.clone(snapshot.objects), conditions: this.clone(snapshot.conditions), issues: this.clone(snapshot.issues) })
+    const snapshot: EnvironmentalStateSnapshot = { stateId: state.id, environmentId, objects: this.clone(objects), conditions: this.clone(conditions), issues: this.clone(issues), relations: this.clone(relations) }
+    this.snapshots.set(state.id, { objects: this.clone(snapshot.objects), conditions: this.clone(snapshot.conditions), issues: this.clone(snapshot.issues), relations: this.clone(snapshot.relations) })
     memory.snapshots = [...memory.snapshots.filter((item) => item.stateId !== state.id), this.clone(snapshot)]
 
     memory.environment.currentStateId = state.id

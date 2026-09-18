@@ -255,6 +255,7 @@ export class NeonEnvironmentalMemoryRepository implements EnvironmentalMemoryRep
       ? (value.snapshots as EnvironmentalMemory['snapshots']).map((snapshot) => ({
           ...snapshot,
           conditions: Array.isArray(snapshot.conditions) ? snapshot.conditions : [],
+          relations: Array.isArray(snapshot.relations) ? snapshot.relations : [],
         }))
       : []
     const observations = (value.observations as EnvironmentalMemory['observations']).map((observation) => ({

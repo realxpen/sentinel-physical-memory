@@ -34,5 +34,7 @@ jobs:
         run: npm run check:diff-position
       - name: Verify conservative object identity
         run: npm run check:object-identity
+      - name: Verify Phase 6 immutable state history
+        run: npm run check:phase6-history
       - name: Build
         run: npm run build

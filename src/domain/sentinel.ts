@@ -61,7 +61,7 @@ export interface EnvironmentalCondition { id: ID; environmentId: ID; kind: Condi
 export interface Issue { id: ID; environmentId: ID; type: IssueType; title: string; description: string; severity: IssueSeverity; status: IssueStatus; confidence: Confidence; objectIds: ID[]; roomId?: ID; evidenceIds: ID[]; firstDetectedAt: ISODateTime; lastObservedAt: ISODateTime; resolvedAt?: ISODateTime; resolutionNote?: string }
 export interface EnvironmentRelation { id: ID; environmentId: ID; fromId: ID; toId: ID; type: RelationType; confidence: Confidence; evidenceIds: ID[] }
 export interface EnvironmentalState { id: ID; environmentId: ID; capturedAt: ISODateTime; sourceIds: ID[]; objectIds: ID[]; conditionIds: ID[]; issueIds: ID[]; relationIds: ID[]; summary: string; version: number }
-export interface EnvironmentalStateSnapshot { stateId: ID; environmentId: ID; objects: SpatialObject[]; conditions: EnvironmentalCondition[]; issues: Issue[] }
+export interface EnvironmentalStateSnapshot { stateId: ID; environmentId: ID; objects: SpatialObject[]; conditions: EnvironmentalCondition[]; issues: Issue[]; relations: EnvironmentRelation[] }
 export interface Environment { id: ID; name: string; type: EnvironmentType; description?: string; createdAt: ISODateTime; updatedAt: ISODateTime; currentStateId?: ID; stateIds: ID[]; roomIds: ID[]; objectIds: ID[]; issueIds: ID[] }
 export interface Change { id: ID; environmentId: ID; fromStateId: ID; toStateId: ID; type: ChangeType; entityId?: ID; title: string; description: string; confidence: Confidence; evidenceIds: ID[] }
 export interface EnvironmentalDiff { id: ID; environmentId: ID; fromStateId: ID; toStateId: ID; createdAt: ISODateTime; changes: Change[]; summary: string }
