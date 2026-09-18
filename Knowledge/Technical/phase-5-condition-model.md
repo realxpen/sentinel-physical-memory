@@ -1,7 +1,7 @@
 # Phase 5 — Perception Quality & Condition Model
 
 Date: 2026-09-18
-Status: **ACTIVE — FIFTH FRESH PROOF PASSED CONDITION DEDUPE + ISSUE PROMOTION / EXIT-SIGN COMPLETENESS HARDENING CI PASS / SIXTH FRESH PROOF NEXT**
+Status: **COMPLETE — SIXTH FRESH WAREHOUSE PROOF PASSED**
 
 ## Goal
 
@@ -373,23 +373,53 @@ and prevents a directly stated visual fact from disappearing merely because the 
 
 Sentinel CI run `35342332725` passed on commit `c47867594230633beade63389e59e9e7e642f5d1`, including the explicit-grounded-exit-sign completion regression plus all existing Phase 4/5 gates and the production build.
 
-## Next Phase 5 proof
+## Sixth fresh warehouse proof — 2026-09-18
 
-Pull latest `main` and run a **sixth fresh** warehouse baseline/comparison through the updated build. Do not reuse any warehouse1–warehouse5 proof environment.
+Environment: `env_warehouse5_cbe5dde8`
 
-Expected new proof:
+Persisted states:
 
-1. the obstruction is stably identified as a pallet jack/cart/trolley rather than a ramp, and the wall safety device is not mislabeled as a hydrant;
-2. direct pallet-jack and exit-sign facts remain Observed and visible exit signage has a durable signage object;
-3. SENTINEL emits one derived Inferred access condition only because the exit role is independently grounded;
-4. the condition retains both grounded evidence sources and promotes to a medium access issue at the unchanged inferred threshold;
-5. exact cross-pass duplicates and obvious provider aliases — including the green door, shelving, boxes, floor, ceiling, extinguisher and exit-sign families — no longer dominate Reality Diff;
-6. the pallet jack remains the meaningful added object;
-7. post-derivation/post-persistence telemetry confirms derived-condition and issue counts;
-8. Ask Building preserves the Observed/Inferred distinction.
+- v1: `state_c60cc223-9f0b-4519-beae-69a447b4c50e`;
+- v2: `state_d8db8374-fd23-403b-ae05-c791fb96a97b`.
 
-For a clean demo-quality A/B, create a fresh warehouse validation environment after pulling the fix, then scan the baseline and comparison videos once each. Existing historical states should not be rewritten.
+The baseline durably contained the exit sign as a signage object, so the Warehouse 5 false `New: exit sign` diff did not recur.
 
-## Phase 5 exit condition
+The comparison persisted:
+
+- `orange pallet cart` at 1.00 confidence;
+- grounded placement in front of the green emergency-exit door;
+- one semantic `Emergency exit access obstructed` condition;
+- basis `inferred`;
+- status `present`;
+- confidence **0.90**;
+- one promoted `access` issue;
+- severity `medium`;
+- issue confidence **0.90**.
+
+Policy telemetry:
+
+- `conditionsPersisted: 2`;
+- `issuesPromoted: 1`.
+
+Persisted Reality Diff:
+
+1. `New: orange pallet cart` — 1.00;
+2. `New issue: Emergency exit access obstructed` — 0.90.
+
+There were no false stable-object additions/removals and no duplicate semantic access conditions.
+
+This closes the controlled realistic Phase 5 loop while preserving all trust rules:
+
+- direct visual facts remain Observed;
+- derived access interpretation remains Inferred;
+- inferred threshold remains 0.85;
+- only SENTINEL policy promotes the issue;
+- inferred severity remains capped at medium;
+- perception cannot create a critical issue;
+- historical proof states remain immutable.
+
+## Phase 5 exit condition — MET
 
 **Real or controlled realistic scans consistently produce evidence-grounded observations and conditions with correct trust labels; weak inference does not become an operational issue; strong supported conditions persist across memory and are available to reasoning without collapsing observation, interpretation, and recommendation into one claim.**
+
+Phase 5 is closed for the current AED build track. The next active phase is **Phase 6 — Environmental State History**.

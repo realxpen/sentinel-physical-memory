@@ -14,7 +14,7 @@ Hackathon track: **Best Apps and Agents**.
 
 ## Current phase
 
-**Phase 5 — Perception Quality & Condition Model: ACTIVE / FIFTH FRESH PROOF PASSED CONDITION DEDUPE + ISSUE PROMOTION / EXIT-SIGN COMPLETENESS HARDENING CI PASS / SIXTH FRESH PROOF NEXT**
+**Phase 6 — Environmental State History: READY / PHASE 5 COMPLETE**
 
 ## Phase 3 — COMPLETE
 
@@ -119,7 +119,7 @@ Phase 4 is therefore fully complete; there is no remaining deployment-freshness 
 Canonical Phase 4 record: `Knowledge/Technical/phase-4-observation-pipeline.md`.
 Archive transition record: `Archive/phase-4-transition-note.md`.
 
-## Phase 5 checkpoint — ACTIVE
+## Phase 5 — COMPLETE
 
 ### Objective
 
@@ -506,27 +506,78 @@ This is not a new inference path. It only preserves an already-explicit visual f
 
 Sentinel CI run `35342332725` passed the full repository suite and build on commit `c47867594230633beade63389e59e9e7e642f5d1`, including a regression where the provider explicitly says **“green door with exit sign above”** but omits a signage object; SENTINEL now persists exactly one grounded exit-sign object.
 
-## Phase 5 next proof
+## Sixth fresh warehouse proof — PHASE 5 EXIT GATE PASSED
 
-Pull latest `main` and use a **sixth fresh warehouse validation environment**; do not reuse any warehouse1–warehouse5 proof environment. Scan the clean baseline once and the obstructed comparison once.
+Environment: `env_warehouse5_cbe5dde8`.
 
-Expected proof:
+This fresh baseline/comparison run closes Phase 5.
 
-1. the movable obstruction is stably identified as a pallet jack/cart/trolley rather than a ramp, and the wall-mounted safety device is not confused with a hydrant;
-2. direct pallet-jack and exit-sign facts remain Observed, with the exit sign represented in durable object memory;
-3. one derived access condition appears as Inferred and Present;
-4. the condition retains both grounded evidence sources;
-5. policy promotes it to a medium access issue, never critical;
-6. cross-pass duplicates and green-door/shelving/boxes/floor/ceiling/extinguisher/sign aliases do not dominate Reality Diff;
-7. the pallet jack remains the meaningful added object;
-8. `SENTINEL_CONDITION_DERIVATION_COMPLETED` reports the post-derivation count and `SENTINEL_SCAN_POLICY_RESULT` reports the persisted issue count;
-9. Ask Building preserves the Observed/Inferred distinction.
+Persisted states:
 
-Inspect durable memory using the fresh validation environment ID via:
+- State v1: `state_c60cc223-9f0b-4519-beae-69a447b4c50e`;
+- State v2: `state_d8db8374-fd23-403b-ae05-c791fb96a97b`.
 
-`/api/memory?environmentId=<fresh-warehouse-environment-id>`
+State v1 durably remembered the stable warehouse context, including:
 
-Expected fields include top-level `conditions`, latest-state `conditionIds`, the derived access condition, and a medium access issue when the grounded facts satisfy policy.
+- `green emergency exit door`;
+- `green exit sign`;
+- `red fire extinguisher`;
+- `metal shelving units`;
+- `cardboard boxes`.
+
+State v2 persisted:
+
+- `orange pallet cart` — confidence 1.00 — **“Orange pallet cart positioned in front of the green emergency exit door.”**;
+- one semantic `Emergency exit access obstructed` condition;
+- basis: `inferred`;
+- status: `present`;
+- confidence: **0.90**;
+- exactly one promoted issue;
+- issue type: `access`;
+- severity: `medium`;
+- issue confidence: **0.90**.
+
+Terminal policy telemetry confirmed:
+
+- `conditionsPersisted: 2`;
+- `issuesPromoted: 1`.
+
+The persisted Reality Diff contains exactly two meaningful changes:
+
+1. **New: orange pallet cart** — confidence 1.00;
+2. **New issue: Emergency exit access obstructed** — confidence 0.90.
+
+No false exit-sign addition remained. No stable door, shelving, box, or extinguisher add/not-reobserved noise survived the diff.
+
+This proves the Phase 5 trust loop on a fresh realistic scan:
+
+`Observed physical facts → deterministic Inferred condition → SENTINEL-owned issue promotion → durable memory → clean Reality Diff`.
+
+The inferred threshold remained **0.85**, the derived condition stayed below/at the bounded source confidence, and perception still did not create a critical issue.
+
+Historical Warehouse 1–5 proof states/diffs remain immutable and are retained as evidence of the hardening progression.
+
+## Phase 5 exit condition — MET
+
+Phase 5 is complete for the current AED build track.
+
+Exit condition satisfied:
+
+- real/controlled realistic scans produce evidence-grounded observations and conditions;
+- Observed and Inferred remain distinct;
+- weak/uncertain inference does not auto-promote;
+- strong supported conditions persist durably;
+- issue promotion remains deterministic SENTINEL policy;
+- conservative identity + diff handling avoids provider naming/multiplicity noise in the demonstrated warehouse case;
+- the resulting condition/issue are available to the existing reasoning/memory layer without collapsing observation, interpretation, and recommendation.
+
+Canonical technical record:
+
+`Knowledge/Technical/phase-5-condition-model.md`
+
+Transition record:
+
+`Archive/phase-5-transition-note.md`
 
 ## Verified implementation baseline
 
@@ -565,12 +616,10 @@ Expected fields include top-level `conditions`, latest-state `conditionIds`, the
 
 ## Highest-priority gaps
 
-1. **Phase 5 sixth fresh controlled warehouse baseline/comparison re-scan on the grounded exit-sign completion build.**
-2. Condition quality tuning based on real model output.
-3. Environmental state history UX/query hardening — Phase 6.
-4. Diff Engine v2 — richer repeated-instance matching + first-class condition transitions — Phase 7.
-5. Action + verification closed loop — Phases 11/12.
-6. Reliability, automated tests, security, and least-privilege database-role hardening.
+1. **Phase 6 — Environmental state history: current / previous / state-by-ID / state-by-date queries with immutable snapshots.**
+2. Diff Engine v2 — richer repeated-instance matching + first-class condition transitions — Phase 7.
+3. Action + verification closed loop — Phases 11/12.
+4. Reliability, automated tests, security, and least-privilege database-role hardening.
 
 ## Locked decisions
 
@@ -601,8 +650,8 @@ Expected fields include top-level `conditions`, latest-state `conditionIds`, the
 - [x] Phase 2 — Core architecture cleanup
 - [x] Phase 3 — Persistent Environmental Memory
 - [x] Phase 4 — Observation pipeline hardening (**COMPLETE — local/real-phone + exact latest-main production contract passed**)
-- [ ] Phase 5 — Perception quality and condition model (**ACTIVE — fifth fresh proof passed semantic condition dedupe + one medium issue; grounded exit-sign completion passed CI; sixth fresh proof next**)
-- [ ] Phase 6 — Environmental state history
+- [x] Phase 5 — Perception quality and condition model (**COMPLETE — sixth fresh warehouse proof passed clean condition/issue/diff gate**)
+- [ ] Phase 6 — Environmental state history (**NEXT**)
 - [ ] Phase 7 — Environmental Diff Engine v2
 - [ ] Phase 8 — Reality Diff UI
 - [ ] Phase 9 — Spatial Memory experience
@@ -648,6 +697,8 @@ Phase 5 fifth fresh warehouse proof (`env_warehouse5_a9589829`): **PARTIAL PASS 
 
 Phase 5 grounded exit-sign completion hardening: **CI PASS (`35342332725`, commit `c4786759`)**.
 
-Phase 5 sixth fresh post-hardening warehouse condition-quality proof: **PENDING**.
+Phase 5 sixth fresh warehouse proof (`env_warehouse5_cbe5dde8`): **PASS — 2 CONDITIONS, 1 MEDIUM ACCESS ISSUE, CLEAN 2-CHANGE REALITY DIFF**.
 
-**Next gate: pull latest `main`, run the Phase 5 gates/build locally, then perform a sixth fresh warehouse baseline/comparison re-scan. Phase 5 can close if one semantic access condition persists, exactly one medium access issue promotes, the already-present exit sign is durable in both states, and Reality Diff contains only the real pallet-jack addition plus the new issue.**
+Phase 5: **COMPLETE**.
+
+**Next gate: begin Phase 6 — Environmental State History. Preserve immutable snapshots and add reliable current / previous / by-ID / by-date state retrieval without changing Phase 5 perception policy.**
