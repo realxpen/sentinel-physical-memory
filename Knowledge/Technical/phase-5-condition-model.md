@@ -1,7 +1,7 @@
 # Phase 5 — Perception Quality & Condition Model
 
 Date: 2026-09-18
-Status: **ACTIVE — FIRST FRESH WAREHOUSE PROOF EXPOSED TAXONOMY/CROSS-PASS MISSES / HARDENING CI PASS / SECOND FRESH PROOF NEXT**
+Status: **ACTIVE — SECOND FRESH PROOF REDUCED DIFF NOISE / TARGETED IDENTITY AUDIT CI PASS / THIRD FRESH PROOF NEXT**
 
 ## Goal
 
@@ -228,9 +228,42 @@ The audit pass also independently re-checks scene taxonomy, visible exit signage
 
 The failed environment and its 20-change diff remain immutable.
 
+## Second fresh warehouse proof — 2026-09-18
+
+Environment: `env_warehouse2_6a1cb840`
+
+This run produced a much cleaner A/B result than the prior proof:
+
+- cross-pass duplication no longer dominated memory;
+- fire-extinguisher taxonomy remained stable;
+- emergency-exit signage persisted as a durable object;
+- Reality Diff dropped from 20 changes to **2**.
+
+The remaining changes were:
+
+1. `New: orange ramp` — 1.00;
+2. `Not re-observed: cardboard boxes` — 0.50.
+
+The final persisted comparison state contained one benign normal condition and zero issues. The post-derivation telemetry reported zero derived/operational conditions.
+
+The remaining blocker was therefore isolated to perception taxonomy: scene/audit grounded the orange access-adjacent object as a **ramp**, not as pallet jack/trolley/cart. SENTINEL correctly stayed fail-closed and did not reinterpret a ramp into a hazard merely to satisfy the demo scenario.
+
+A smaller identity bug also remained: singular `cardboard box` did not share the plural durable box family with `cardboard boxes`.
+
+Current `main` now:
+
+- treats singular/plural box/carton forms as one conservative semantic family;
+- invokes one targeted physical-object identity audit only when exit context + ambiguous access-adjacent equipment exists and no operational condition has been established;
+- asks the targeted pass to classify from visible morphology and explicitly forbids filename/metadata inference;
+- distinguishes wheeled/forked/handled material-handling equipment from a true ramp;
+- preserves a conservative generic label when morphology is insufficient;
+- still does not force an access condition.
+
+Sentinel CI run `35333800689` passed on commit `f835b64f4957c2053e48787a812eb7067d2724e6`, including a regression where broad passes say `orange ramp`, the targeted identity audit visually resolves `orange pallet jack`, deterministic derivation then creates the inferred access condition, and policy promotes exactly one issue.
+
 ## Next Phase 5 proof
 
-Pull latest `main` and run a **second fresh** warehouse baseline/comparison through the updated build. Do not reuse `env_warehouse1_1bd4a50c`.
+Pull latest `main` and run a **third fresh** warehouse baseline/comparison through the updated build. Do not reuse `env_warehouse1_1bd4a50c` or `env_warehouse2_6a1cb840`.
 
 Expected new proof:
 

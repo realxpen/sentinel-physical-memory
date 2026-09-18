@@ -14,7 +14,7 @@ Hackathon track: **Best Apps and Agents**.
 
 ## Current phase
 
-**Phase 5 — Perception Quality & Condition Model: ACTIVE / FRESH WAREHOUSE MISS DIAGNOSED + HARDENING CI PASS / RE-SCAN NEXT**
+**Phase 5 — Perception Quality & Condition Model: ACTIVE / SECOND FRESH PROOF REDUCED DIFF NOISE / TARGETED IDENTITY AUDIT CI PASS / THIRD FRESH PROOF NEXT**
 
 ## Phase 3 — COMPLETE
 
@@ -324,9 +324,48 @@ Post-failure hardening on `main` now:
 
 Historical states and the 20-change diff for this failed proof remain immutable.
 
+## Second fresh warehouse proof — PARTIAL PASS / TAXONOMY MISS REMAINS
+
+Environment: `env_warehouse2_6a1cb840`.
+
+This run demonstrated that the previous cross-pass identity hardening worked:
+
+- State v1: `state_e4564d64-e765-4164-90a8-bd4af56ee766`;
+- State v2: `state_0ac8254e-7d17-454e-847e-ab2e404ab63f`;
+- both states persisted through Neon;
+- the extinguisher remained correctly identified as `fire extinguisher`;
+- the emergency-exit sign persisted as a durable signage object;
+- the v1→v2 Reality Diff shrank from the prior failed proof's **20 changes** to just **2 changes**.
+
+The remaining diff was:
+
+- `added` — **New: orange ramp** — confidence 1.00;
+- `uncertain` — **Not re-observed: cardboard boxes** — confidence 0.50.
+
+The terminal correctly reported:
+
+- `derivedConditions: 0`;
+- `operationalConditionsAfterDerivation: 0`;
+- `conditionsPersisted: 1`;
+- `issuesPromoted: 0`.
+
+Neon confirms why. The comparison source visually grounded an emergency-exit sign, but both broad scene/audit reasoning still labeled the access-adjacent orange object as **`orange ramp`** / **“orange ramp in front of the green door”** instead of pallet jack/trolley/cart. SENTINEL therefore correctly refused to manufacture an obstruction issue from the wrong taxonomy.
+
+The remaining `cardboard boxes` noise came from singular/plural provider drift (`cardboard boxes` ↔ `cardboard box`), not a real environmental change.
+
+Post-run hardening on `main` now adds:
+
+- singular `box` / `carton` forms to the conservative durable box family;
+- a **targeted identity audit** that runs only when exit context exists, no operational condition was found, and an access-adjacent object has ambiguous ramp/equipment/cart/trolley/pallet taxonomy;
+- the targeted pass must classify from visible morphology only and explicitly rejects filenames/metadata as evidence;
+- it distinguishes movable pallet jack/trolley/cart features from a true sloped/bridging ramp;
+- if still uncertain, it must stay generic rather than forcing a pallet-jack label or access condition.
+
+Sentinel CI run `35333800689` passed the full repository suite and production build on commit `f835b64f4957c2053e48787a812eb7067d2724e6`, including the new ambiguous-ramp → targeted-identity-audit regression.
+
 ## Phase 5 next proof
 
-Pull latest `main` and use **another fresh warehouse validation environment**; do not reuse `env_warehouse1_1bd4a50c`. Scan the clean baseline once and the obstructed comparison once.
+Pull latest `main` and use a **third fresh warehouse validation environment**; do not reuse `env_warehouse1_1bd4a50c` or `env_warehouse2_6a1cb840`. Scan the clean baseline once and the obstructed comparison once.
 
 Expected proof:
 
@@ -383,7 +422,7 @@ Expected fields include top-level `conditions`, latest-state `conditionIds`, the
 
 ## Highest-priority gaps
 
-1. **Phase 5 second fresh controlled warehouse baseline/comparison re-scan on the taxonomy + cross-pass hardening build.**
+1. **Phase 5 third fresh controlled warehouse baseline/comparison re-scan on the targeted identity-audit build.**
 2. Condition quality tuning based on real model output.
 3. Environmental state history UX/query hardening — Phase 6.
 4. Diff Engine v2 — richer repeated-instance matching + first-class condition transitions — Phase 7.
@@ -419,7 +458,7 @@ Expected fields include top-level `conditions`, latest-state `conditionIds`, the
 - [x] Phase 2 — Core architecture cleanup
 - [x] Phase 3 — Persistent Environmental Memory
 - [x] Phase 4 — Observation pipeline hardening (**COMPLETE — local/real-phone + exact latest-main production contract passed**)
-- [ ] Phase 5 — Perception quality and condition model (**ACTIVE — first fresh proof exposed taxonomy/cross-pass misses; hardened CI passed; second fresh re-scan next**)
+- [ ] Phase 5 — Perception quality and condition model (**ACTIVE — second fresh proof reduced Reality Diff to 2 changes; targeted identity-audit hardening passed CI; third fresh proof next**)
 - [ ] Phase 6 — Environmental state history
 - [ ] Phase 7 — Environmental Diff Engine v2
 - [ ] Phase 8 — Reality Diff UI
@@ -450,6 +489,10 @@ Phase 5 hardened trust/independent-derivation/taxonomy/identity gates + build: *
 
 Phase 5 first fresh warehouse proof (`env_warehouse1_1bd4a50c`): **FAILED / ROOT CAUSES DIAGNOSED**.
 
-Phase 5 second fresh post-hardening warehouse condition-quality proof: **PENDING**.
+Phase 5 second fresh warehouse proof (`env_warehouse2_6a1cb840`): **PARTIAL PASS — DIFF NOISE FIXED, TAXONOMY STILL BLOCKED DERIVATION**.
 
-**Next gate: pull latest `main`, run the Phase 5 gates/build locally, then perform a second fresh warehouse baseline/comparison re-scan and evaluate taxonomy, derived condition, promoted issue, and Reality Diff noise.**
+Phase 5 targeted identity-audit hardening: **CI PASS (`35333800689`, commit `f835b64f`)**.
+
+Phase 5 third fresh post-hardening warehouse condition-quality proof: **PENDING**.
+
+**Next gate: pull latest `main`, run the Phase 5 gates/build locally, then perform a third fresh warehouse baseline/comparison re-scan and verify the targeted identity audit resolves or safely preserves the ambiguous object before evaluating derivation, issue promotion, and Reality Diff.**
