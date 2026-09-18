@@ -613,6 +613,98 @@ try {
   console.log('PASS  pass-local door aliases collapse to one persisted semantic access condition')
   console.log('PASS  geometry audit requires obstacle -> door in_front_of evidence and rejects weak proximity')
   console.log('PASS  structured geometry relation enables derivation without weakening policy thresholds')
+
+  const completionEnvironmentId = 'condition-audit-exit-sign-completion-test'
+  const completionSourceId = 'source-exit-sign-completion'
+  const completionModel = {
+    provider: 'test-provider',
+    model: 'test-model',
+    async infer(request) {
+      const isAudit = request.prompt.includes('Condition audit for scan')
+      const common = {
+        sourceId: completionSourceId,
+        observations: [{
+          id: isAudit ? 'audit-door-sign-mention' : 'scene-door-sign-mention',
+          environmentId: completionEnvironmentId,
+          sourceId: completionSourceId,
+          modality: 'video',
+          capturedAt,
+          label: 'green door',
+          description: 'A green door with exit sign above.',
+          confidence: 0.96,
+          basis: 'observed',
+          evidenceIds: ['evidence_0'],
+        }],
+        objects: [{
+          id: isAudit ? 'audit-door-only' : 'scene-door-only',
+          environmentId: completionEnvironmentId,
+          category: 'door',
+          name: 'green emergency exit door',
+          description: 'green door with exit sign above',
+          confidence: 0.96,
+          firstSeenAt: capturedAt,
+          lastSeenAt: capturedAt,
+          evidenceIds: ['evidence_0'],
+        }],
+        conditions: [{
+          id: isAudit ? 'audit-normal-sign' : 'scene-normal-sign',
+          environmentId: completionEnvironmentId,
+          kind: 'normal',
+          title: 'Normal warehouse environment',
+          description: 'Warehouse appears normal.',
+          status: 'present',
+          basis: 'observed',
+          confidence: 0.96,
+          objectIds: [],
+          evidenceIds: ['evidence_0'],
+          observedAt: capturedAt,
+        }],
+        relations: [],
+        evidence: [],
+      }
+      return common
+    },
+  }
+
+  const completionPipeline = new ScanPipeline({ model: completionModel })
+  const completionResult = await completionPipeline.run({
+    environmentId: completionEnvironmentId,
+    source: {
+      id: completionSourceId,
+      environmentId: completionEnvironmentId,
+      modality: 'video',
+      uri: 'local://exit-sign-completion.mp4',
+      capturedAt,
+      durationMs: 30_000,
+      metadata: { name: 'Exit Sign Completion', environmentType: 'warehouse' },
+    },
+    media: {
+      kind: 'video',
+      uri: 'local://exit-sign-completion.mp4',
+      mimeType: 'video/mp4',
+      durationMs: 30_000,
+      extractedFrames: [{
+        frameId: 'exit-sign-completion-frame-0',
+        timestampMs: 1_000,
+        uri: 'data:image/jpeg;base64,AAA',
+      }],
+    },
+  })
+
+  const completionMemory = await completionPipeline.getMemory(completionEnvironmentId)
+  const completionSnapshot = completionMemory?.snapshots.find((item) => item.stateId === completionResult.state.id)
+  const materializedSigns = completionSnapshot?.objects.filter((item) =>
+    item.category === 'signage' && /\bexit sign\b/i.test(`${item.name} ${item.description ?? ''}`),
+  ) ?? []
+  if (materializedSigns.length !== 1) {
+    throw new Error(`expected one durable exit-sign object from explicit grounded mention, got ${materializedSigns.length}`)
+  }
+  if (materializedSigns[0].evidenceIds.length === 0) {
+    throw new Error('materialized exit-sign object must preserve grounded evidence')
+  }
+
+  console.log('PASS  explicit grounded exit-sign mention materializes one durable signage object when provider omits it')
+  console.log('PASS  grounded object completion preserves evidence and does not rely on filename/prior memory')
   console.log('SENTINEL CONDITION AUDIT VERIFIED')
 } finally {
   await vite.close()

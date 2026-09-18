@@ -57,7 +57,19 @@ export class ScanPipeline {
     const priorObjects = priorSnapshot?.objects ?? []
 
     const perceived = await this.perceive(scanId, artifacts, frames, input, priorObjects)
-    const derived = deriveOperationalConditions(perceived, input.source.capturedAt)
+    const completed = materializeExplicitGroundedObjects(perceived, input.source.capturedAt)
+    if (completed.materialized.length > 0) {
+      console.warn('SENTINEL_GROUNDED_OBJECT_COMPLETION', {
+        scanId,
+        objects: completed.materialized.map((item) => ({
+          name: item.name,
+          category: item.category,
+          confidence: item.confidence,
+          evidenceIds: item.evidenceIds,
+        })),
+      })
+    }
+    const derived = deriveOperationalConditions(completed.result, input.source.capturedAt)
     const perception = validatePerceptionForScan(derived.result, input.environmentId, input.source.id)
     console.warn('SENTINEL_CONDITION_DERIVATION_COMPLETED', {
       scanId,
@@ -413,6 +425,60 @@ export class ScanPipeline {
 
 function hasOperationalConditionCandidate(result: PerceptionResult): boolean {
   return result.conditions.some((item) => OPERATIONAL_CONDITION_KINDS.has(item.kind))
+}
+
+function materializeExplicitGroundedObjects(
+  result: PerceptionResult,
+  capturedAt: string,
+): { result: PerceptionResult; materialized: SpatialObject[] } {
+  const hasDurableExitSign = result.objects.some((item) => {
+    const name = normalizeSemanticText(item.name)
+    const description = normalizeSemanticText(item.description ?? '')
+    const explicitInName = /\b(?:emergency\s+)?exit\s+(?:sign|symbol)\b/.test(name)
+    const explicitSignageObject = item.category === 'signage' &&
+      /\b(?:emergency\s+)?exit\b/.test(`${name} ${description}`) &&
+      /\b(?:sign|symbol)\b/.test(`${name} ${description}`)
+    return explicitInName || explicitSignageObject
+  })
+  if (hasDurableExitSign) return { result, materialized: [] }
+
+  const groundedMentions = [
+    ...result.observations.map((item) => ({
+      text: `${item.label} ${item.description}`,
+      confidence: item.confidence,
+      evidenceIds: item.evidenceIds,
+    })),
+    ...result.objects.map((item) => ({
+      text: `${item.name} ${item.description ?? ''}`,
+      confidence: item.confidence,
+      evidenceIds: item.evidenceIds,
+    })),
+  ].filter((item) =>
+    /\b(?:emergency\s+)?exit\s+(?:sign|symbol)\b/i.test(item.text) &&
+    item.evidenceIds.length > 0,
+  )
+
+  if (groundedMentions.length === 0) return { result, materialized: [] }
+
+  const evidenceIds = [...new Set(groundedMentions.flatMap((item) => item.evidenceIds))]
+  const confidence = Math.min(...groundedMentions.map((item) => item.confidence))
+  const explicitlyEmergency = groundedMentions.some((item) => /\bemergency\s+exit\s+(?:sign|symbol)\b/i.test(item.text))
+  const object: SpatialObject = {
+    id: 'sentinel_materialized_exit_sign',
+    environmentId: result.objects[0]?.environmentId ?? result.observations[0]?.environmentId ?? '',
+    category: 'signage',
+    name: explicitlyEmergency ? 'emergency exit sign' : 'exit sign',
+    description: 'Exit signage explicitly referenced by grounded visual evidence.',
+    confidence,
+    firstSeenAt: capturedAt,
+    lastSeenAt: capturedAt,
+    evidenceIds,
+  }
+
+  return {
+    result: { ...result, objects: [...result.objects, object] },
+    materialized: [object],
+  }
 }
 
 function shouldRunIdentityAudit(result: PerceptionResult): boolean {
