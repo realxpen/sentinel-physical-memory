@@ -1,7 +1,7 @@
 # Phase 5 — Perception Quality & Condition Model
 
-Date: 2026-09-17
-Status: **ACTIVE — CORE TRUST MODEL IMPLEMENTED / WAREHOUSE POLICY HARDENING VERIFIED IN CI / REAL-SCAN RE-RUN NEXT**
+Date: 2026-09-18
+Status: **ACTIVE — FIRST FRESH WAREHOUSE PROOF EXPOSED TAXONOMY/CROSS-PASS MISSES / HARDENING CI PASS / SECOND FRESH PROOF NEXT**
 
 ## Goal
 
@@ -114,7 +114,7 @@ Severity policy:
 The same controlled warehouse test exposed provider naming drift that inflated Reality Diff:
 
 - `metal shelving` ↔ `shelves` / `orange metal shelves`
-- `cardboard boxes` ↔ `boxes` / `brown boxes`
+- `cardboard boxes` ↔ `boxes` / `brown boxes` / `boxed items`
 - `green emergency exit door` ↔ `green door`
 - `concrete floor` ↔ `warehouse floor`
 - `white ceiling` ↔ `warehouse ceiling`
@@ -132,7 +132,7 @@ Provider scene/audit passes can also emit semantic duplicates inside the **same 
 - they already satisfy the conservative semantic identity rule;
 - they share at least one trusted frame evidence ID;
 - their structured/semantic positions do not conflict;
-- they are not merely identical name/category detections being collapsed because they coexist.
+- exact same-name/category detections collapse only when one came from SENTINEL's controlled prefixed audit pass and the other from the scene pass; same-pass exact duplicates remain separate.
 
 This lets obvious duplicate labels such as `shelves` + `orange metal shelves`, or `green emergency exit door` + `green door`, resolve to one durable object when grounded to the same physical evidence. Repeated objects without shared grounding or with conflicting positions remain distinct. Richer repeated-instance identity remains Phase 7 work.
 
@@ -186,7 +186,7 @@ Nemotron must treat inferred conditions as lower-authority interpretation rather
 
 `npm run check:diff-position` continues to verify that image-coordinate drift cannot create false physical movement.
 
-Sentinel CI run `35253466573` passed the full repository gate suite on commit `f1f24211e06132798a2681a88351b6a3f399e8a2`, including Phase 4 quality gates, provider grounding, perception retry, condition audit, Phase 5 trust, independent exit derivation, Reality Diff position semantics, conservative object identity, and the TypeScript/Vite production build.
+Sentinel CI run `35331412827` passed the full repository gate suite on commit `dcda069cf0005c34685a6a8f1bde0ddde00c92b5`, including Phase 4 quality gates, provider grounding, perception retry, sharpened condition audit, Phase 5 trust, independent exit derivation, Reality Diff position semantics, conservative cross-pass object identity, and the TypeScript/Vite production build.
 
 ## Controlled warehouse checkpoint
 
@@ -198,18 +198,50 @@ State v2 persisted the comparison scan and correctly detected a new `orange pall
 
 Those historical states/diffs remain immutable. Current `main` now contains deterministic fixes for the two root causes plus the same-scan duplicate alias pattern exposed by the persisted warehouse data.
 
+## Fresh warehouse proof attempt — 2026-09-18
+
+Environment: `env_warehouse1_1bd4a50c`
+
+A fresh baseline/comparison run after the earlier policy hardening **did not pass the Phase 5 real-scan gate**.
+
+Persisted evidence showed:
+
+- v2 contained **2 normal conditions and 0 issues**;
+- the emergency-exit sign was directly observed at confidence 1.00;
+- the intended movable obstruction was labeled **`green door ramp`** with description **“An orange and green ramp in front of the door.”** rather than pallet jack;
+- the clean baseline labeled the portable wall-mounted safety device **`fire hydrant`**;
+- scene and condition-audit passes produced exact duplicate objects with the same trusted evidence;
+- the resulting v1→v2 Reality Diff contained **20 changes**, dominated by duplicate add/not-reobserved noise.
+
+SENTINEL correctly did **not** convert the ramp label into an access issue. A ramp is not on the deterministic obstruction whitelist, and the trust policy was not weakened to force the demo result.
+
+The failure produced three bounded hardening changes:
+
+1. **Cross-pass exact duplicate consolidation** — exact name/category detections may merge only across the controlled scene↔`audit_` boundary, with shared evidence and compatible position. Same-pass exact duplicates stay separate.
+2. **Warehouse taxonomy guidance** — scene and audit prompts now distinguish wheeled/forked pallet jacks/carts/trolleys from ramps and portable fire extinguishers from hydrants/standpipes; uncertain cases should use conservative generic equipment names.
+3. **Naming continuity without memory leakage** — latest durable object names are supplied as naming context only. Prior memory is explicitly not evidence and cannot establish current presence.
+
+The audit pass also independently re-checks scene taxonomy, visible exit signage is requested as a durable signage object, and telemetry now distinguishes provider audit output from final SENTINEL policy through:
+
+- `SENTINEL_CONDITION_DERIVATION_COMPLETED`
+- `SENTINEL_SCAN_POLICY_RESULT`
+
+The failed environment and its 20-change diff remain immutable.
+
 ## Next Phase 5 proof
 
-Pull latest `main` and re-run the warehouse baseline/comparison through the updated build.
+Pull latest `main` and run a **second fresh** warehouse baseline/comparison through the updated build. Do not reuse `env_warehouse1_1bd4a50c`.
 
 Expected new proof:
 
-1. direct pallet-jack and exit-sign facts remain Observed;
-2. SENTINEL emits one derived Inferred access condition only because the exit role is independently grounded;
-3. the condition retains both grounded evidence sources and promotes to a medium access issue at the unchanged inferred threshold;
-4. obvious provider aliases — including the green door, shelving, boxes, floor, ceiling, extinguisher and exit-sign families — no longer dominate Reality Diff;
-5. the pallet jack remains the meaningful added object;
-6. Ask Building preserves the Observed/Inferred distinction.
+1. the obstruction is stably identified as a pallet jack/cart/trolley rather than a ramp, and the wall safety device is not mislabeled as a hydrant;
+2. direct pallet-jack and exit-sign facts remain Observed and visible exit signage has a durable signage object;
+3. SENTINEL emits one derived Inferred access condition only because the exit role is independently grounded;
+4. the condition retains both grounded evidence sources and promotes to a medium access issue at the unchanged inferred threshold;
+5. exact cross-pass duplicates and obvious provider aliases — including the green door, shelving, boxes, floor, ceiling, extinguisher and exit-sign families — no longer dominate Reality Diff;
+6. the pallet jack remains the meaningful added object;
+7. post-derivation/post-persistence telemetry confirms derived-condition and issue counts;
+8. Ask Building preserves the Observed/Inferred distinction.
 
 For a clean demo-quality A/B, create a fresh warehouse validation environment after pulling the fix, then scan the baseline and comparison videos once each. Existing historical states should not be rewritten.
 

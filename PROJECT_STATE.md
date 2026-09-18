@@ -1,6 +1,6 @@
 # SENTINEL Project State
 
-Last updated: 2026-09-17
+Last updated: 2026-09-18
 
 ## North star
 
@@ -14,7 +14,7 @@ Hackathon track: **Best Apps and Agents**.
 
 ## Current phase
 
-**Phase 5 — Perception Quality & Condition Model: ACTIVE / WAREHOUSE POLICY HARDENING VERIFIED / REAL-SCAN RE-RUN NEXT**
+**Phase 5 — Perception Quality & Condition Model: ACTIVE / FRESH WAREHOUSE MISS DIAGNOSED + HARDENING CI PASS / RE-SCAN NEXT**
 
 ## Phase 3 — COMPLETE
 
@@ -226,7 +226,7 @@ Supported warehouse families include:
 
 Cross-scan matching remains unique one-to-one. Unanchored generic door names remain excluded.
 
-Within a single scan, scene/audit aliases consolidate only when they share trusted frame evidence and do not contradict position. Identical name/category detections are not collapsed merely because they coexist. Repeated objects without shared grounding remain separate.
+Within a single scan, scene/audit aliases consolidate only when they share trusted frame evidence and do not contradict position. Exact same-name/category duplicates may collapse only across SENTINEL's controlled scene→audit boundary (`audit_` provenance); exact same-pass detections remain separate to protect repeated physical instances. Repeated objects without shared grounding remain separate.
 
 This applies only to future ingestion. Historical snapshots and persisted diffs are immutable and are not rewritten.
 
@@ -266,7 +266,7 @@ The hardened warehouse regression suite additionally verifies:
 - repeated ambiguous objects remain separate;
 - warehouse alias drift collapses to the real pallet-jack addition rather than fake add/not-reobserved noise.
 
-Sentinel CI run `35253466573` passed the full repository suite on commit `f1f24211e06132798a2681a88351b6a3f399e8a2`, including Phase 4 quality gates, provider grounding, perception retry, condition audit, Phase 5 trust, condition derivation, Reality Diff position semantics, conservative object identity, and the TypeScript/Vite production build.
+Sentinel CI run `35331412827` passed the full repository suite on commit `dcda069cf0005c34685a6a8f1bde0ddde00c92b5`, including Phase 4 quality gates, provider grounding, perception retry, the sharpened condition audit, Phase 5 trust, condition derivation, Reality Diff position semantics, cross-pass object identity, and the TypeScript/Vite production build.
 
 Canonical Phase 5 record: `Knowledge/Technical/phase-5-condition-model.md`.
 
@@ -290,19 +290,47 @@ Current `main` now owns the missing behaviors deterministically:
 - consolidate obvious same-scan aliases only when shared trusted evidence and compatible position support one physical identity;
 - use the same conservative identity families across durable memory and Reality Diff.
 
+## Fresh warehouse proof attempt — FAILED / DIAGNOSED
+
+Environment: `env_warehouse1_1bd4a50c`.
+
+A fresh local baseline/comparison run on 2026-09-18 exposed two remaining Phase 5 quality failures:
+
+- State v2 persisted **2 normal conditions and 0 issues**; no derived access condition survived into durable memory.
+- MiniCPM observed the emergency-exit sign, but misclassified the intended orange pallet jack as **`green door ramp`**, so SENTINEL correctly refused to manufacture an obstruction from uncertain taxonomy.
+- The baseline also mislabeled the portable extinguisher as **`fire hydrant`**.
+- Scene + condition-audit exact duplicate objects were persisted separately, and the v1→v2 Reality Diff expanded to **20 changes** dominated by pass duplication and naming drift.
+
+This result is important: SENTINEL did **not** weaken policy to force a desired issue. The inferred threshold remains 0.85, and a generic ramp is not treated as an obstruction.
+
+Post-failure hardening on `main` now:
+
+- collapses exact scene/audit duplicates only across the controlled `audit_` boundary when trusted evidence and position agree;
+- keeps exact same-pass duplicates separate;
+- recognizes `boxed items` / `boxed goods` as the conservative box family;
+- supplies prior durable object names to perception as **naming context only, never evidence**;
+- explicitly asks MiniCPM to distinguish pallet jack/cart/trolley from ramps and portable extinguishers from hydrants/standpipes;
+- asks the audit pass to independently re-check taxonomy rather than blindly repeat the scene label;
+- requires visible exit signage to be emitted as a durable signage object when supported;
+- logs provider audit count separately from the final post-derivation policy result through `SENTINEL_CONDITION_DERIVATION_COMPLETED` and `SENTINEL_SCAN_POLICY_RESULT`.
+
+Historical states and the 20-change diff for this failed proof remain immutable.
+
 ## Phase 5 next proof
 
-Pull latest `main` and run a **fresh** warehouse validation environment so historical snapshots are not rewritten. Scan the clean baseline once and the obstructed comparison once.
+Pull latest `main` and use **another fresh warehouse validation environment**; do not reuse `env_warehouse1_1bd4a50c`. Scan the clean baseline once and the obstructed comparison once.
 
 Expected proof:
 
-1. direct pallet-jack and exit-sign facts remain Observed;
-2. one derived access condition appears as Inferred and Present;
-3. the condition retains both grounded evidence sources;
-4. policy promotes it to a medium access issue, never critical;
-5. green-door/shelving/boxes/floor/ceiling/extinguisher/sign aliases do not dominate Reality Diff;
-6. the pallet jack remains the meaningful added object;
-7. Ask Building preserves the Observed/Inferred distinction.
+1. the movable obstruction is stably identified as a pallet jack/cart/trolley rather than a ramp, and the wall-mounted safety device is not confused with a hydrant;
+2. direct pallet-jack and exit-sign facts remain Observed, with the exit sign represented in durable object memory;
+3. one derived access condition appears as Inferred and Present;
+4. the condition retains both grounded evidence sources;
+5. policy promotes it to a medium access issue, never critical;
+6. cross-pass duplicates and green-door/shelving/boxes/floor/ceiling/extinguisher/sign aliases do not dominate Reality Diff;
+7. the pallet jack remains the meaningful added object;
+8. `SENTINEL_CONDITION_DERIVATION_COMPLETED` reports the post-derivation count and `SENTINEL_SCAN_POLICY_RESULT` reports the persisted issue count;
+9. Ask Building preserves the Observed/Inferred distinction.
 
 Inspect durable memory using the fresh validation environment ID via:
 
@@ -347,7 +375,7 @@ Expected fields include top-level `conditions`, latest-state `conditionIds`, the
 
 ## Highest-priority gaps
 
-1. **Phase 5 fresh controlled warehouse baseline/comparison re-scan on the hardened policy build.**
+1. **Phase 5 second fresh controlled warehouse baseline/comparison re-scan on the taxonomy + cross-pass hardening build.**
 2. Condition quality tuning based on real model output.
 3. Environmental state history UX/query hardening — Phase 6.
 4. Diff Engine v2 — richer repeated-instance matching + first-class condition transitions — Phase 7.
@@ -368,7 +396,9 @@ Expected fields include top-level `conditions`, latest-state `conditionIds`, the
 - Perception cannot independently create a critical operational issue.
 - Derived access reasoning requires independent grounded exit identity plus explicit obstacle placement.
 - Inferred condition threshold remains 0.85; the 0.60 access exception is observed-only.
-- Object aliases remain whitelist-based, evidence-conscious, and conservative; historical memory is never rewritten.
+- Object aliases remain whitelist-based, evidence-conscious, and conservative; exact duplicate collapse is allowed only across the controlled scene/audit boundary; historical memory is never rewritten.
+- Prior environmental memory may guide stable naming but is never perception evidence and never proves current presence.
+- Provider/audit `operationalConditions` counts are not the final policy result; post-derivation and post-persistence telemetry are authoritative for this Phase 5 proof.
 - All durable memory access goes through `EnvironmentalMemoryRepository`.
 - Neon Postgres is the active durable store (DEC-005).
 - Browser-carried memory is not authoritative.
@@ -382,7 +412,7 @@ Expected fields include top-level `conditions`, latest-state `conditionIds`, the
 - [x] Phase 2 — Core architecture cleanup
 - [x] Phase 3 — Persistent Environmental Memory
 - [x] Phase 4 — Observation pipeline hardening (**local/engineering track complete; latest-main Vercel re-verification deferred and tracked**)
-- [ ] Phase 5 — Perception quality and condition model (**ACTIVE — warehouse policy hardening + CI passed; fresh warehouse re-scan next**)
+- [ ] Phase 5 — Perception quality and condition model (**ACTIVE — first fresh proof exposed taxonomy/cross-pass misses; hardened CI passed; second fresh re-scan next**)
 - [ ] Phase 6 — Environmental state history
 - [ ] Phase 7 — Environmental Diff Engine v2
 - [ ] Phase 8 — Reality Diff UI
@@ -411,8 +441,10 @@ Phase 5 strict condition/evidence validation: **MET**.
 
 Phase 5 durable condition memory + Ask context: **MET**.
 
-Phase 5 hardened trust/independent-derivation/identity gates + build: **CI PASS (`35253466573`)**.
+Phase 5 hardened trust/independent-derivation/taxonomy/identity gates + build: **CI PASS (`35331412827`, commit `dcda069c`)**.
 
-Phase 5 post-fix warehouse condition-quality proof: **PENDING**.
+Phase 5 first fresh warehouse proof (`env_warehouse1_1bd4a50c`): **FAILED / ROOT CAUSES DIAGNOSED**.
 
-**Next gate: pull latest `main`, run the Phase 5 gates/build locally, then perform a fresh warehouse baseline/comparison re-scan and evaluate the new Memory state.**
+Phase 5 second fresh post-hardening warehouse condition-quality proof: **PENDING**.
+
+**Next gate: pull latest `main`, run the Phase 5 gates/build locally, then perform a second fresh warehouse baseline/comparison re-scan and evaluate taxonomy, derived condition, promoted issue, and Reality Diff noise.**
