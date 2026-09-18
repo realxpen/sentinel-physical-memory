@@ -1,7 +1,7 @@
 # Phase 5 — Perception Quality & Condition Model
 
 Date: 2026-09-18
-Status: **ACTIVE — FOURTH FRESH PROOF PASSED ACCESS REASONING + ISSUE PROMOTION / CONDITION + DIFF MULTIPLICITY HARDENING CI PASS / FIFTH FRESH PROOF NEXT**
+Status: **ACTIVE — FIFTH FRESH PROOF PASSED CONDITION DEDUPE + ISSUE PROMOTION / EXIT-SIGN COMPLETENESS HARDENING CI PASS / SIXTH FRESH PROOF NEXT**
 
 ## Goal
 
@@ -338,9 +338,44 @@ Sentinel CI run `35339258094` passed on commit `9f5fbb2f2e2aa55ce0c5f173acb8f56a
 - a real new pallet jack remains visible in Reality Diff;
 - all existing trust, grounding, derivation and position gates remain green.
 
+## Fifth fresh warehouse proof — 2026-09-18
+
+Environment: `env_warehouse5_a9589829`
+
+Warehouse 5 passed the semantic condition/memory goal that Warehouse 4 had not:
+
+- exactly **2** persisted conditions in State v2;
+- exactly **1** semantic `Emergency exit access obstructed` condition;
+- basis `inferred`, status `present`;
+- confidence **0.855**;
+- exactly **1** promoted issue;
+- issue type `access`, severity `medium`, confidence **0.855**.
+
+The lower confidence is expected: SENTINEL bounds the derived claim from its grounded source facts and still requires the unchanged 0.85 inferred threshold.
+
+The only remaining false diff item was `New: green emergency exit sign`.
+
+The baseline already grounded the fact textually in the door description — **“green door with exit sign above”** — but did not emit a separate signage object. The comparison did. This is a provider completeness mismatch, not a real scene change.
+
+Current `main` now materializes a missing durable exit-sign object only when:
+
+- a current grounded observation/object explicitly contains `exit sign` / `emergency exit sign`;
+- the mention has trusted evidence;
+- no durable exit-sign/signage object already exists.
+
+The materialized object inherits only current trusted evidence and does not raise source confidence. Door naming alone, generic exit language, filenames, metadata, or prior memory do not qualify.
+
+This bounded rule preserves the architecture:
+
+`provider output → grounding → explicit-fact completion → deterministic derivation → validation → memory → Neon`
+
+and prevents a directly stated visual fact from disappearing merely because the provider omitted a parallel object record.
+
+Sentinel CI run `35342332725` passed on commit `c47867594230633beade63389e59e9e7e642f5d1`, including the explicit-grounded-exit-sign completion regression plus all existing Phase 4/5 gates and the production build.
+
 ## Next Phase 5 proof
 
-Pull latest `main` and run a **fifth fresh** warehouse baseline/comparison through the updated build. Do not reuse any warehouse1–warehouse4 proof environment.
+Pull latest `main` and run a **sixth fresh** warehouse baseline/comparison through the updated build. Do not reuse any warehouse1–warehouse5 proof environment.
 
 Expected new proof:
 

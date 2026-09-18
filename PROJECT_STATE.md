@@ -14,7 +14,7 @@ Hackathon track: **Best Apps and Agents**.
 
 ## Current phase
 
-**Phase 5 — Perception Quality & Condition Model: ACTIVE / FOURTH FRESH PROOF PASSED ACCESS REASONING + ISSUE PROMOTION / CONDITION + DIFF MULTIPLICITY HARDENING CI PASS / FIFTH FRESH PROOF NEXT**
+**Phase 5 — Perception Quality & Condition Model: ACTIVE / FIFTH FRESH PROOF PASSED CONDITION DEDUPE + ISSUE PROMOTION / EXIT-SIGN COMPLETENESS HARDENING CI PASS / SIXTH FRESH PROOF NEXT**
 
 ## Phase 3 — COMPLETE
 
@@ -464,9 +464,51 @@ Sentinel CI run `35339258094` passed the full repository suite and production bu
 - Phase 5 trust and derivation gates;
 - TypeScript/Vite production build.
 
+## Fifth fresh warehouse proof — CONDITION DEDUPE PASS / ONE SIGNAGE COMPLETENESS MISS
+
+Environment: `env_warehouse5_a9589829`.
+
+This run verified the canonical-condition and issue-promotion fixes against a fresh scan:
+
+- State v1: `state_3857ef1c-10d0-4dcd-a051-b09055d4ed00`;
+- State v2: `state_78aa6297-ce49-4a63-8191-a4388985d136`;
+- `conditionsPersisted: 2`;
+- `issuesPromoted: 1`;
+- one persisted semantic `Emergency exit access obstructed` condition;
+- condition basis: `inferred`;
+- condition status: `present`;
+- confidence: **0.855**, still above the unchanged 0.85 inferred threshold;
+- exactly one promoted issue:
+  - type: `access`
+  - severity: `medium`
+  - confidence: **0.855**.
+
+So the Phase 5 trust path, semantic-condition dedupe, and issue-promotion policy all passed together on a fresh realistic run.
+
+Reality Diff was reduced to three changes:
+
+- **New: orange pallet jack** — real;
+- **New issue: Emergency exit access obstructed** — real;
+- **New: green emergency exit sign** — false physical change.
+
+Neon inspection showed why the sign change is false: the baseline door was grounded as **“green door with exit sign above”**, but MiniCPM failed to emit a separate signage object in State v1. State v2 did emit `green emergency exit sign`, so the deterministic diff correctly compared the persisted object sets but surfaced a perception-completeness miss as an apparent addition.
+
+Historical Warehouse 5 states and diff remain immutable.
+
+Current `main` now adds one bounded grounded-object completion rule:
+
+- when direct grounded observation/object text explicitly contains `exit sign` or `emergency exit sign`;
+- and no durable exit-sign/signage object exists in that scan;
+- SENTINEL materializes one signage object using only the same trusted evidence IDs and a non-increasing confidence;
+- generic `exit`, door naming alone, prior memory, filenames, and metadata do **not** trigger materialization.
+
+This is not a new inference path. It only preserves an already-explicit visual fact as a durable object so Reality Diff does not later call an already-present sign “new.”
+
+Sentinel CI run `35342332725` passed the full repository suite and build on commit `c47867594230633beade63389e59e9e7e642f5d1`, including a regression where the provider explicitly says **“green door with exit sign above”** but omits a signage object; SENTINEL now persists exactly one grounded exit-sign object.
+
 ## Phase 5 next proof
 
-Pull latest `main` and use a **fifth fresh warehouse validation environment**; do not reuse any warehouse1–warehouse4 proof environment. Scan the clean baseline once and the obstructed comparison once.
+Pull latest `main` and use a **sixth fresh warehouse validation environment**; do not reuse any warehouse1–warehouse5 proof environment. Scan the clean baseline once and the obstructed comparison once.
 
 Expected proof:
 
@@ -523,7 +565,7 @@ Expected fields include top-level `conditions`, latest-state `conditionIds`, the
 
 ## Highest-priority gaps
 
-1. **Phase 5 fifth fresh controlled warehouse baseline/comparison re-scan on the canonical-condition + multiplicity-safe diff build.**
+1. **Phase 5 sixth fresh controlled warehouse baseline/comparison re-scan on the grounded exit-sign completion build.**
 2. Condition quality tuning based on real model output.
 3. Environmental state history UX/query hardening — Phase 6.
 4. Diff Engine v2 — richer repeated-instance matching + first-class condition transitions — Phase 7.
@@ -559,7 +601,7 @@ Expected fields include top-level `conditions`, latest-state `conditionIds`, the
 - [x] Phase 2 — Core architecture cleanup
 - [x] Phase 3 — Persistent Environmental Memory
 - [x] Phase 4 — Observation pipeline hardening (**COMPLETE — local/real-phone + exact latest-main production contract passed**)
-- [ ] Phase 5 — Perception quality and condition model (**ACTIVE — fourth fresh proof promoted the correct medium access issue; condition/diff multiplicity hardening passed CI; fifth fresh proof next**)
+- [ ] Phase 5 — Perception quality and condition model (**ACTIVE — fifth fresh proof passed semantic condition dedupe + one medium issue; grounded exit-sign completion passed CI; sixth fresh proof next**)
 - [ ] Phase 6 — Environmental state history
 - [ ] Phase 7 — Environmental Diff Engine v2
 - [ ] Phase 8 — Reality Diff UI
@@ -602,6 +644,10 @@ Phase 5 fourth fresh warehouse proof (`env_warehouse4_4a96a4d1`): **CORE CONDITI
 
 Phase 5 canonical-condition + multiplicity-safe diff hardening: **CI PASS (`35339258094`, commit `9f5fbb2f`)**.
 
-Phase 5 fifth fresh post-hardening warehouse condition-quality proof: **PENDING**.
+Phase 5 fifth fresh warehouse proof (`env_warehouse5_a9589829`): **PARTIAL PASS — CONDITION DEDUPE + ISSUE PROMOTION PASSED; BASELINE EXIT-SIGN OBJECT COMPLETENESS CAUSED ONE FALSE DIFF ADDITION**.
 
-**Next gate: pull latest `main`, run the Phase 5 gates/build locally, then perform a fifth fresh warehouse baseline/comparison re-scan. Phase 5 can close only if one semantic access condition persists, exactly one medium access issue promotes, and Reality Diff is free of provider multiplicity noise while preserving the real pallet-jack addition.**
+Phase 5 grounded exit-sign completion hardening: **CI PASS (`35342332725`, commit `c4786759`)**.
+
+Phase 5 sixth fresh post-hardening warehouse condition-quality proof: **PENDING**.
+
+**Next gate: pull latest `main`, run the Phase 5 gates/build locally, then perform a sixth fresh warehouse baseline/comparison re-scan. Phase 5 can close if one semantic access condition persists, exactly one medium access issue promotes, the already-present exit sign is durable in both states, and Reality Diff contains only the real pallet-jack addition plus the new issue.**
