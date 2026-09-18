@@ -14,7 +14,7 @@ Hackathon track: **Best Apps and Agents**.
 
 ## Current phase
 
-**Phase 5 — Perception Quality & Condition Model: ACTIVE / THIRD FRESH PROOF CLEAN DIFF + TAXONOMY PASS / ACCESS-GEOMETRY HARDENING CI PASS / FOURTH FRESH PROOF NEXT**
+**Phase 5 — Perception Quality & Condition Model: ACTIVE / FOURTH FRESH PROOF PASSED ACCESS REASONING + ISSUE PROMOTION / CONDITION + DIFF MULTIPLICITY HARDENING CI PASS / FIFTH FRESH PROOF NEXT**
 
 ## Phase 3 — COMPLETE
 
@@ -225,7 +225,7 @@ Future scans now resolve a small whitelist of obvious provider aliases without g
 
 Supported warehouse families include:
 
-- shelving/racking naming drift;
+- shelf/shelves/shelving/rack/racking naming drift;
 - plural box/carton aggregate naming drift;
 - floor and ceiling naming drift;
 - fire-extinguisher category drift;
@@ -410,9 +410,63 @@ Sentinel CI run `35335200200` passed the full repository suite and production bu
 
 Historical `warehouse3` states and its zero-issue result remain immutable.
 
+## Fourth fresh warehouse proof — ACCESS REASONING PASS / MEMORY MULTIPLICITY CLEANUP NEEDED
+
+Environment: `env_warehouse4_4a96a4d1`.
+
+This run passed the core Phase 5 condition-trust scenario end-to-end for the first time.
+
+Persisted comparison State v2:
+
+- `state_c4e506db-4628-4a4c-94b6-18d228fa752b`;
+- `pallet jack` — equipment — confidence 1.00 — **“Orange pallet jack in front of the door.”**;
+- `emergency exit sign` — signage — confidence 1.00;
+- `green door` — door — confidence 1.00;
+- one promoted issue:
+  - **Emergency exit access obstructed**
+  - type: `access`
+  - severity: `medium`
+  - confidence: **0.90**.
+
+Terminal telemetry confirmed:
+
+- derived access condition present at **0.90** confidence;
+- `issuesPromoted: 1`.
+
+So the trust path itself is now proven against a fresh realistic scan:
+
+`Observed pallet jack + Observed exit context + grounded placement → Inferred access condition → medium issue`
+
+without lowering the 0.85 inferred threshold and without allowing perception to create a critical issue.
+
+However, Neon inspection exposed two cleanup defects that prevent Phase 5 from closing yet:
+
+1. the same semantic inferred access condition persisted **three times** because scene/identity/geometry pass-local door aliases mapped to one durable door only after derivation;
+2. the baseline provider emitted several repeated same-family object mentions across frames, causing an inflated Reality Diff even though the physical scene was stable.
+
+The historical warehouse4 state/diff remain immutable.
+
+Current `main` now hardens both boundaries:
+
+- equivalent conditions are consolidated **after scan-local object IDs are mapped to canonical durable IDs**, keyed by kind + basis + status + normalized title + canonical object set; evidence is unioned and confidence is preserved conservatively;
+- Reality Diff keeps conservative one-to-one identity, but when multiplicity inside a whitelisted semantic family is unresolved on one/both sides, SENTINEL suppresses fake add/not-reobserved claims instead of pretending instance counts are known;
+- this suppression applies only when the same conservative family exists on both sides; genuinely new non-family objects such as the pallet jack still appear;
+- singular `shelf` / `rack` now belong to the existing shelving family;
+- perception is explicitly told to treat all frames as one walkthrough, avoid one-object-per-frame repetition, and not emit the overall environment itself (for example `warehouse`) as a SpatialObject unless a distinct bounded room/area identity is supported.
+
+Sentinel CI run `35339258094` passed the full repository suite and production build on commit `9f5fbb2f2e2aa55ce0c5f173acb8f56a8715bf9c`, including:
+
+- exactly one persisted semantic access condition after canonical object remapping;
+- targeted access-geometry regression;
+- conservative object identity;
+- unresolved family-multiplicity diff suppression;
+- genuine new-object preservation;
+- Phase 5 trust and derivation gates;
+- TypeScript/Vite production build.
+
 ## Phase 5 next proof
 
-Pull latest `main` and use a **fourth fresh warehouse validation environment**; do not reuse `env_warehouse1_1bd4a50c`, `env_warehouse2_6a1cb840`, or `env_warehouse3_64751084`. Scan the clean baseline once and the obstructed comparison once.
+Pull latest `main` and use a **fifth fresh warehouse validation environment**; do not reuse any warehouse1–warehouse4 proof environment. Scan the clean baseline once and the obstructed comparison once.
 
 Expected proof:
 
@@ -469,7 +523,7 @@ Expected fields include top-level `conditions`, latest-state `conditionIds`, the
 
 ## Highest-priority gaps
 
-1. **Phase 5 fourth fresh controlled warehouse baseline/comparison re-scan on the targeted access-geometry build.**
+1. **Phase 5 fifth fresh controlled warehouse baseline/comparison re-scan on the canonical-condition + multiplicity-safe diff build.**
 2. Condition quality tuning based on real model output.
 3. Environmental state history UX/query hardening — Phase 6.
 4. Diff Engine v2 — richer repeated-instance matching + first-class condition transitions — Phase 7.
@@ -505,7 +559,7 @@ Expected fields include top-level `conditions`, latest-state `conditionIds`, the
 - [x] Phase 2 — Core architecture cleanup
 - [x] Phase 3 — Persistent Environmental Memory
 - [x] Phase 4 — Observation pipeline hardening (**COMPLETE — local/real-phone + exact latest-main production contract passed**)
-- [ ] Phase 5 — Perception quality and condition model (**ACTIVE — third fresh proof reached a 1-change clean Reality Diff and correct pallet-jack taxonomy; access-geometry hardening passed CI; fourth fresh proof next**)
+- [ ] Phase 5 — Perception quality and condition model (**ACTIVE — fourth fresh proof promoted the correct medium access issue; condition/diff multiplicity hardening passed CI; fifth fresh proof next**)
 - [ ] Phase 6 — Environmental state history
 - [ ] Phase 7 — Environmental Diff Engine v2
 - [ ] Phase 8 — Reality Diff UI
@@ -544,6 +598,10 @@ Phase 5 third fresh warehouse proof (`env_warehouse3_64751084`): **PARTIAL PASS 
 
 Phase 5 access-geometry hardening: **CI PASS (`35335200200`, commit `3e1046c8`)**.
 
-Phase 5 fourth fresh post-hardening warehouse condition-quality proof: **PENDING**.
+Phase 5 fourth fresh warehouse proof (`env_warehouse4_4a96a4d1`): **CORE CONDITION GATE PASS — CORRECT INFERRED ACCESS CONDITION + ONE MEDIUM ISSUE; DUPLICATE CONDITION/DIFF MULTIPLICITY CLEANUP REQUIRED**.
 
-**Next gate: pull latest `main`, run the Phase 5 gates/build locally, then perform a fourth fresh warehouse baseline/comparison re-scan and verify grounded obstacle→door geometry, derived access condition, medium issue promotion, and the already-clean one-object Reality Diff.**
+Phase 5 canonical-condition + multiplicity-safe diff hardening: **CI PASS (`35339258094`, commit `9f5fbb2f`)**.
+
+Phase 5 fifth fresh post-hardening warehouse condition-quality proof: **PENDING**.
+
+**Next gate: pull latest `main`, run the Phase 5 gates/build locally, then perform a fifth fresh warehouse baseline/comparison re-scan. Phase 5 can close only if one semantic access condition persists, exactly one medium access issue promotes, and Reality Diff is free of provider multiplicity noise while preserving the real pallet-jack addition.**

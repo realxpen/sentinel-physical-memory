@@ -1,7 +1,7 @@
 # Phase 5 — Perception Quality & Condition Model
 
 Date: 2026-09-18
-Status: **ACTIVE — THIRD FRESH PROOF CLEAN DIFF + TAXONOMY PASS / ACCESS-GEOMETRY HARDENING CI PASS / FOURTH FRESH PROOF NEXT**
+Status: **ACTIVE — FOURTH FRESH PROOF PASSED ACCESS REASONING + ISSUE PROMOTION / CONDITION + DIFF MULTIPLICITY HARDENING CI PASS / FIFTH FRESH PROOF NEXT**
 
 ## Goal
 
@@ -113,7 +113,7 @@ Severity policy:
 
 The same controlled warehouse test exposed provider naming drift that inflated Reality Diff:
 
-- `metal shelving` ↔ `shelves` / `orange metal shelves`
+- `shelf` / `shelves` / `shelving` / `rack` / `racking` / `metal shelving` / `orange metal shelves`
 - `cardboard boxes` ↔ `boxes` / `brown boxes` / `boxed items`
 - `green emergency exit door` ↔ `green door`
 - `concrete floor` ↔ `warehouse floor`
@@ -298,9 +298,49 @@ The deterministic derivation layer now accepts that grounded structured relation
 
 Sentinel CI run `35335200200` passed on commit `3e1046c88d7a2156aff666d412412e5c60f37d67`, including a warehouse3-shaped regression where pallet-jack identity is correct but placement text is absent, the targeted geometry audit supplies grounded obstacle→door `in_front_of`, deterministic derivation creates the inferred access condition, and policy promotes one medium access issue.
 
+## Fourth fresh warehouse proof — 2026-09-18
+
+Environment: `env_warehouse4_4a96a4d1`
+
+This run passed the actual condition-policy objective:
+
+- pallet jack taxonomy was correct;
+- direct placement was grounded as **“Orange pallet jack in front of the door.”**;
+- exit signage was independently grounded;
+- deterministic derivation produced `Emergency exit access obstructed` as **Inferred / Present / 0.90**;
+- policy promoted exactly one **medium access issue** at 0.90 confidence.
+
+This is the first fresh realistic proof where the complete Phase 5 trust chain succeeded:
+
+`Observed facts → deterministic inference → policy-owned issue promotion`.
+
+Neon also exposed two non-policy cleanup defects:
+
+1. three pass-local door aliases caused the same semantic derived access condition to be persisted three times after all three aliases canonicalized to the same durable door;
+2. baseline cross-frame provider repetition produced unresolved multiplicity for green doors, fire extinguishers and shelving, inflating Reality Diff despite no evidence for physical additions/removals inside those families.
+
+Current `main` fixes both without rewriting warehouse4 history:
+
+- conditions are semantically consolidated after canonical durable object mapping using kind + basis + status + normalized title + sorted canonical object IDs;
+- duplicate conditions union grounded evidence and preserve the strongest confidence;
+- Reality Diff suppresses add/not-reobserved claims only when a whitelisted semantic family is present on both sides but instance multiplicity is unresolved;
+- the system does **not** merge those ambiguous instances in durable memory and does **not** claim a removal/addition it cannot ground;
+- genuinely new objects outside that unresolved family still surface;
+- singular `shelf` and `rack` join the shelving family;
+- the scene prompt now treats all frames as one walkthrough and asks for one object per physical entity across frames;
+- the overall environment label itself should not be emitted as a SpatialObject without a distinct bounded room/area identity.
+
+Sentinel CI run `35339258094` passed on commit `9f5fbb2f2e2aa55ce0c5f173acb8f56a8715bf9c`. The regression suite now proves:
+
+- multiple pass-local derived access aliases persist as **one semantic condition** after canonical object mapping;
+- one issue is promoted;
+- unresolved repeated-family multiplicity creates no fake object diff;
+- a real new pallet jack remains visible in Reality Diff;
+- all existing trust, grounding, derivation and position gates remain green.
+
 ## Next Phase 5 proof
 
-Pull latest `main` and run a **fourth fresh** warehouse baseline/comparison through the updated build. Do not reuse `env_warehouse1_1bd4a50c`, `env_warehouse2_6a1cb840`, or `env_warehouse3_64751084`.
+Pull latest `main` and run a **fifth fresh** warehouse baseline/comparison through the updated build. Do not reuse any warehouse1–warehouse4 proof environment.
 
 Expected new proof:
 
