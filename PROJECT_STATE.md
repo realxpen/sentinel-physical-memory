@@ -37,7 +37,7 @@ Verified:
 
 Canonical Phase 3 proof: `Knowledge/Technical/phase-3-production-proof.md`.
 
-## Phase 4 — COMPLETE FOR CURRENT AED BUILD TRACK
+## Phase 4 — COMPLETE
 
 Observation Pipeline Hardening completed its local/engineering and real-phone gates.
 
@@ -98,15 +98,23 @@ The two non-observations remain `uncertain`; absence alone is not treated as pro
 - unknown references fail closed;
 - ambiguous frame-index references fail closed.
 
-### Deferred production debt
+### Production observation contract — PASS
 
-The latest-main Vercel valid-video contract was **not** passed before Phase 4 transition.
+The previously deferred latest-main Vercel contract is now closed.
 
-Vercel was rejecting new deployments because of the project build-rate limit. The user explicitly chose not to block the AED build cycle on that infrastructure limit and will pull/test GitHub locally.
+Phase 4 Observation Contract run `35331268053` detected the exact deployed commit `c55177642a1b7988a7144d1f228925aed9eb9e14` and verified:
 
-The post-warehouse-fix re-check, Phase 4 Observation Contract run `35234538587`, failed only its deployment-freshness wait: production still reported commit `597545a0e2193330d5513935825a68a6b01fb0f6` after ten minutes instead of the expected `5aa75049c75d3723a06979e47400d1fd73a8288c`. No video-contract assertion ran. This keeps the item deferred; it does not invalidate the green Phase 5 repository gates.
+- fresh production deployment matched `/api/health.deploymentCommit`;
+- unsupported video MIME → 415 `UNSUPPORTED_MEDIA_TYPE`;
+- too-short walkthrough → 422 `VIDEO_TOO_SHORT`;
+- too-few evidence frames → 422 `TOO_FEW_FRAMES`;
+- valid 8-frame walkthrough → HTTP 200;
+- `persistence: neon`;
+- State v1 created successfully.
 
-This is a deferred production re-verification item, not a passed gate. When deployment capacity is available, rerun `.github/workflows/phase4-observation-contract.yml` against the matching `deploymentCommit` and record the result.
+Production contract environment: `phase4-contract-35331268053`.
+
+Phase 4 is therefore fully complete; there is no remaining deployment-freshness debt for this gate.
 
 Canonical Phase 4 record: `Knowledge/Technical/phase-4-observation-pipeline.md`.
 Archive transition record: `Archive/phase-4-transition-note.md`.
@@ -380,8 +388,7 @@ Expected fields include top-level `conditions`, latest-state `conditionIds`, the
 3. Environmental state history UX/query hardening — Phase 6.
 4. Diff Engine v2 — richer repeated-instance matching + first-class condition transitions — Phase 7.
 5. Action + verification closed loop — Phases 11/12.
-6. Deferred latest-main Vercel production re-verification.
-7. Reliability, automated tests, security, and least-privilege database-role hardening.
+6. Reliability, automated tests, security, and least-privilege database-role hardening.
 
 ## Locked decisions
 
@@ -411,7 +418,7 @@ Expected fields include top-level `conditions`, latest-state `conditionIds`, the
 - [x] Phase 1 — Freeze the MVP contract
 - [x] Phase 2 — Core architecture cleanup
 - [x] Phase 3 — Persistent Environmental Memory
-- [x] Phase 4 — Observation pipeline hardening (**local/engineering track complete; latest-main Vercel re-verification deferred and tracked**)
+- [x] Phase 4 — Observation pipeline hardening (**COMPLETE — local/real-phone + exact latest-main production contract passed**)
 - [ ] Phase 5 — Perception quality and condition model (**ACTIVE — first fresh proof exposed taxonomy/cross-pass misses; hardened CI passed; second fresh re-scan next**)
 - [ ] Phase 6 — Environmental state history
 - [ ] Phase 7 — Environmental Diff Engine v2
@@ -431,9 +438,7 @@ Expected fields include top-level `conditions`, latest-state `conditionIds`, the
 
 Phase 3: **COMPLETE**.
 
-Phase 4 current AED build track: **COMPLETE**.
-
-Phase 4 latest-main Vercel valid-video proof: **DEFERRED / NOT PASSED**.
+Phase 4 observation pipeline + latest-main Vercel valid-video proof: **COMPLETE / PASS (`35331268053`)**.
 
 Phase 5 core domain + trust policy: **MET**.
 

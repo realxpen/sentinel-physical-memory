@@ -1,7 +1,7 @@
 # Phase 4 — Observation Pipeline Hardening
 
-Date: 2026-09-14
-Status: **ALL LOCAL EXIT GATES PASSED — LATEST-MAIN PRODUCTION VALID-SCAN GATE PENDING**
+Date: 2026-09-18
+Status: **COMPLETE — LOCAL / REAL-PHONE / LATEST-MAIN PRODUCTION CONTRACT PASSED**
 
 ## Goal
 
@@ -206,11 +206,23 @@ A valid production contract subsequently reached Nebius but failed because the m
 
 The production workflow now waits for `/api/health.deploymentCommit` to equal the exact GitHub commit under test before running the valid scan. This prevents stale production deployments from producing misleading failures.
 
-Current blocker: Vercel reports a **build-rate-limit failure** on latest `main`. Therefore the latest adapter hardening is not yet considered deployed.
+On 2026-09-18, Phase 4 Observation Contract run `35331268053` detected the exact production deployment commit `c55177642a1b7988a7144d1f228925aed9eb9e14` and passed the complete contract:
 
-## Remaining Phase 4 exit gate
+- unsupported MIME → 415 `UNSUPPORTED_MEDIA_TYPE`;
+- too-short walkthrough → 422 `VIDEO_TOO_SHORT`;
+- too-few frames → 422 `TOO_FEW_FRAMES`;
+- valid 8-frame walkthrough → HTTP 200;
+- `persistence: neon`;
+- State v1 created;
+- 16 observations returned.
 
-All local engineering gates are now **MET**:
+Contract environment: `phase4-contract-35331268053`.
+
+The earlier Vercel build-rate/deployment-freshness blocker is therefore resolved for Phase 4.
+
+## Phase 4 exit gates — COMPLETE
+
+All engineering and production gates are **MET**:
 
 - multiple real-phone walkthroughs;
 - durable repeat state;
@@ -218,13 +230,9 @@ All local engineering gates are now **MET**:
 - trusted provenance;
 - compact perception requests;
 - dark/duplicate/too-few safe-failure behavior;
-- model JSON/category/evidence-reference regression coverage.
-
-Phase 4 remains open for one production gate only:
-
-1. Vercel deploys latest `main` after the build-rate limit clears;
-2. the production contract observes the matching deployment commit;
-3. valid 8-frame walkthrough request returns HTTP 200 + `persistence: neon`.
+- model JSON/category/evidence-reference regression coverage;
+- exact deployed-commit verification;
+- production valid 8-frame walkthrough → HTTP 200 + `persistence: neon`.
 
 ## Non-goals
 
