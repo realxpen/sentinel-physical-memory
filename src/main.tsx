@@ -424,7 +424,7 @@ function App() {
             <div className="history-snapshot-list">
               {historySelection.snapshot.issues.map((item) => <div key={item.id}><strong>{item.title}</strong><small>{item.severity} · {item.status} · {Math.round(item.confidence * 100)}%</small><p>{item.description}</p></div>)}
             </div>
-          </div>
+          </div>}
         </aside>
       </div>}
 
