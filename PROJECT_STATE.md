@@ -14,7 +14,7 @@ Hackathon track: **Best Apps and Agents**.
 
 ## Current phase
 
-**Phase 5 — Perception Quality & Condition Model: ACTIVE / SECOND FRESH PROOF REDUCED DIFF NOISE / TARGETED IDENTITY AUDIT CI PASS / THIRD FRESH PROOF NEXT**
+**Phase 5 — Perception Quality & Condition Model: ACTIVE / THIRD FRESH PROOF CLEAN DIFF + TAXONOMY PASS / ACCESS-GEOMETRY HARDENING CI PASS / FOURTH FRESH PROOF NEXT**
 
 ## Phase 3 — COMPLETE
 
@@ -192,7 +192,7 @@ The warehouse comparison exposed a composition failure rather than a basic perce
 SENTINEL now deterministically derives an Inferred `access` condition only when:
 
 - a separate evidence-backed observation/object independently grounds the door as an emergency exit;
-- an evidence-backed obstacle is explicitly in front of/across/blocking that same door;
+- an evidence-backed obstacle is explicitly in front of/across/blocking that same door, either through direct grounded wording or an explicit grounded `in_front_of` obstacle→door relation;
 - the spatial direction is obstacle → door, not reversed;
 - confidence remains above the unchanged inferred threshold after a downward bound;
 - no equivalent access condition already exists.
@@ -234,7 +234,7 @@ Supported warehouse families include:
 
 Cross-scan matching remains unique one-to-one. Unanchored generic door names remain excluded.
 
-Within a single scan, scene/audit aliases consolidate only when they share trusted frame evidence and do not contradict position. Exact same-name/category duplicates may collapse only across SENTINEL's controlled scene→audit boundary (`audit_` provenance); exact same-pass detections remain separate to protect repeated physical instances. Repeated objects without shared grounding remain separate.
+Within a single scan, cross-pass aliases consolidate only when they share trusted frame evidence and do not contradict position. Exact same-name/category duplicates may collapse across distinct SENTINEL-controlled scene / condition-audit / identity / geometry passes; exact same-pass detections remain separate to protect repeated physical instances. Repeated objects without shared grounding remain separate.
 
 This applies only to future ingestion. Historical snapshots and persisted diffs are immutable and are not rewritten.
 
@@ -363,9 +363,56 @@ Post-run hardening on `main` now adds:
 
 Sentinel CI run `35333800689` passed the full repository suite and production build on commit `f835b64f4957c2053e48787a812eb7067d2724e6`, including the new ambiguous-ramp → targeted-identity-audit regression.
 
+## Third fresh warehouse proof — CLEAN DIFF + TAXONOMY PASS / GEOMETRY FACT MISSING
+
+Environment: `env_warehouse3_64751084`.
+
+This run passed the two previously failing perception-quality sub-gates:
+
+- State v1: `state_ed889a7d-c833-4133-96f1-dfff466aedad`;
+- State v2: `state_0d594930-99d2-4f96-b839-b31d015e54ce`;
+- the comparison correctly persisted **`orange pallet jack`** at confidence 1.00;
+- the emergency-exit door/sign and extinguisher remained stable durable identities;
+- the v1→v2 Reality Diff contained exactly **1 change**: **New: orange pallet jack**;
+- the earlier false `cardboard boxes` non-observation disappeared.
+
+The remaining failure was narrower:
+
+- `derivedConditions: 0`;
+- `operationalConditionsAfterDerivation: 0`;
+- `conditionsPersisted: 1`;
+- `issuesPromoted: 0`.
+
+Neon shows the pallet jack was correctly identified, but its grounded description was only **“orange and green pallet jack with wheels”**. The exit door and exit sign were independently grounded, but no current-scan fact explicitly stated the pallet jack's obstacle→door placement, and no grounded `in_front_of` relation was emitted. SENTINEL correctly refused to infer obstruction from shared image-center positioning or generic proximity.
+
+Post-run hardening on `main` now adds a bounded **access-geometry audit**:
+
+- it runs only when independent exit context and a visible pallet-jack/trolley/cart/obstruction candidate exist but explicit placement is still missing;
+- it asks MiniCPM only to verify obstacle↔door geometry from the current trusted frames;
+- a structured `in_front_of` relation is accepted only in the direction obstacle → door and only with grounded evidence;
+- `near`, beside, left/right, or merely occupying the same image center are explicitly insufficient;
+- filenames, metadata, prior memory, and prior model wording are explicitly excluded as evidence;
+- if geometry remains unclear, the pass must emit no relation/condition;
+- deterministic condition derivation now accepts the explicit grounded `in_front_of` relation as placement evidence while preserving the independent exit-sign requirement and unchanged 0.85 inferred threshold.
+
+Exact duplicates emitted by the new identity/geometry passes may consolidate across distinct SENTINEL-controlled passes when shared evidence and compatible position establish one physical object; exact duplicates from the same pass remain protected.
+
+Sentinel CI run `35335200200` passed the full repository suite and production build on commit `3e1046c88d7a2156aff666d412412e5c60f37d67`, including:
+
+- targeted condition audit;
+- identity-audit regression;
+- access-geometry-audit regression;
+- grounded text and structured-relation derivation;
+- reversed-direction rejection;
+- conservative cross-pass identity;
+- Reality Diff position semantics;
+- production TypeScript/Vite build.
+
+Historical `warehouse3` states and its zero-issue result remain immutable.
+
 ## Phase 5 next proof
 
-Pull latest `main` and use a **third fresh warehouse validation environment**; do not reuse `env_warehouse1_1bd4a50c` or `env_warehouse2_6a1cb840`. Scan the clean baseline once and the obstructed comparison once.
+Pull latest `main` and use a **fourth fresh warehouse validation environment**; do not reuse `env_warehouse1_1bd4a50c`, `env_warehouse2_6a1cb840`, or `env_warehouse3_64751084`. Scan the clean baseline once and the obstructed comparison once.
 
 Expected proof:
 
@@ -422,7 +469,7 @@ Expected fields include top-level `conditions`, latest-state `conditionIds`, the
 
 ## Highest-priority gaps
 
-1. **Phase 5 third fresh controlled warehouse baseline/comparison re-scan on the targeted identity-audit build.**
+1. **Phase 5 fourth fresh controlled warehouse baseline/comparison re-scan on the targeted access-geometry build.**
 2. Condition quality tuning based on real model output.
 3. Environmental state history UX/query hardening — Phase 6.
 4. Diff Engine v2 — richer repeated-instance matching + first-class condition transitions — Phase 7.
@@ -458,7 +505,7 @@ Expected fields include top-level `conditions`, latest-state `conditionIds`, the
 - [x] Phase 2 — Core architecture cleanup
 - [x] Phase 3 — Persistent Environmental Memory
 - [x] Phase 4 — Observation pipeline hardening (**COMPLETE — local/real-phone + exact latest-main production contract passed**)
-- [ ] Phase 5 — Perception quality and condition model (**ACTIVE — second fresh proof reduced Reality Diff to 2 changes; targeted identity-audit hardening passed CI; third fresh proof next**)
+- [ ] Phase 5 — Perception quality and condition model (**ACTIVE — third fresh proof reached a 1-change clean Reality Diff and correct pallet-jack taxonomy; access-geometry hardening passed CI; fourth fresh proof next**)
 - [ ] Phase 6 — Environmental state history
 - [ ] Phase 7 — Environmental Diff Engine v2
 - [ ] Phase 8 — Reality Diff UI
@@ -493,6 +540,10 @@ Phase 5 second fresh warehouse proof (`env_warehouse2_6a1cb840`): **PARTIAL PASS
 
 Phase 5 targeted identity-audit hardening: **CI PASS (`35333800689`, commit `f835b64f`)**.
 
-Phase 5 third fresh post-hardening warehouse condition-quality proof: **PENDING**.
+Phase 5 third fresh warehouse proof (`env_warehouse3_64751084`): **PARTIAL PASS — TAXONOMY + REALITY DIFF PASSED, EXPLICIT ACCESS GEOMETRY MISSING**.
 
-**Next gate: pull latest `main`, run the Phase 5 gates/build locally, then perform a third fresh warehouse baseline/comparison re-scan and verify the targeted identity audit resolves or safely preserves the ambiguous object before evaluating derivation, issue promotion, and Reality Diff.**
+Phase 5 access-geometry hardening: **CI PASS (`35335200200`, commit `3e1046c8`)**.
+
+Phase 5 fourth fresh post-hardening warehouse condition-quality proof: **PENDING**.
+
+**Next gate: pull latest `main`, run the Phase 5 gates/build locally, then perform a fourth fresh warehouse baseline/comparison re-scan and verify grounded obstacle→door geometry, derived access condition, medium issue promotion, and the already-clean one-object Reality Diff.**

@@ -1,7 +1,7 @@
 # Phase 5 — Perception Quality & Condition Model
 
 Date: 2026-09-18
-Status: **ACTIVE — SECOND FRESH PROOF REDUCED DIFF NOISE / TARGETED IDENTITY AUDIT CI PASS / THIRD FRESH PROOF NEXT**
+Status: **ACTIVE — THIRD FRESH PROOF CLEAN DIFF + TAXONOMY PASS / ACCESS-GEOMETRY HARDENING CI PASS / FOURTH FRESH PROOF NEXT**
 
 ## Goal
 
@@ -70,8 +70,8 @@ SENTINEL owns a narrow deterministic derivation layer in `src/perception/conditi
 It may derive an inferred `access` condition only when:
 
 - an evidence-backed door is explicitly associated with **independent** emergency-exit signage or another separate grounded exit fact;
-- an evidence-backed physical obstacle is explicitly described in front of/across/blocking that same named door;
-- the obstacle-to-door direction is explicit (reversed spatial wording does not qualify);
+- an evidence-backed physical obstacle is explicitly described in front of/across/blocking that same named door, or a grounded structured `in_front_of` relation connects obstacle → door;
+- the obstacle-to-door direction is explicit (reversed spatial wording or reversed relations do not qualify);
 - both facts belong to the same grounded perception result;
 - confidence remains above the inferred-condition threshold after SENTINEL applies a downward confidence bound;
 - no equivalent access condition already exists.
@@ -132,7 +132,7 @@ Provider scene/audit passes can also emit semantic duplicates inside the **same 
 - they already satisfy the conservative semantic identity rule;
 - they share at least one trusted frame evidence ID;
 - their structured/semantic positions do not conflict;
-- exact same-name/category detections collapse only when one came from SENTINEL's controlled prefixed audit pass and the other from the scene pass; same-pass exact duplicates remain separate.
+- exact same-name/category detections collapse only across distinct SENTINEL-controlled scene / audit / identity / geometry passes; same-pass exact duplicates remain separate.
 
 This lets obvious duplicate labels such as `shelves` + `orange metal shelves`, or `green emergency exit door` + `green door`, resolve to one durable object when grounded to the same physical evidence. Repeated objects without shared grounding or with conflicting positions remain distinct. Richer repeated-instance identity remains Phase 7 work.
 
@@ -170,7 +170,8 @@ Nemotron must treat inferred conditions as lower-authority interpretation rather
 - confidence remains below source confidence;
 - the strong derived condition promotes only through SENTINEL policy;
 - safe placement does not create an access condition;
-- reversed spatial wording does not invert the obstruction relation;
+- grounded `in_front_of` obstacle→door relations can supply placement when text omits it;
+- reversed spatial wording or reversed structured relations do not invert the obstruction relation;
 - a door name cannot self-ground emergency-exit identity;
 - inferred conditions are not reused as direct grounding facts.
 
@@ -261,9 +262,45 @@ Current `main` now:
 
 Sentinel CI run `35333800689` passed on commit `f835b64f4957c2053e48787a812eb7067d2724e6`, including a regression where broad passes say `orange ramp`, the targeted identity audit visually resolves `orange pallet jack`, deterministic derivation then creates the inferred access condition, and policy promotes exactly one issue.
 
+## Third fresh warehouse proof — 2026-09-18
+
+Environment: `env_warehouse3_64751084`
+
+The third fresh A/B scan materially improved again:
+
+- the comparison correctly persisted `orange pallet jack`;
+- the extinguisher, exit sign, door, shelving, and boxes retained durable identity;
+- Reality Diff contained exactly **one** change: `New: orange pallet jack`;
+- no false box/shelf/door non-observation remained.
+
+The state still contained one benign normal condition and zero issues because the model did **not** ground the pallet-jack-to-door placement. The pallet jack description was **“orange and green pallet jack with wheels”**. Exit context was independently grounded, but there was no explicit `in front of` wording tied to that pallet jack and no `in_front_of` relation.
+
+This is a trust-preserving failure. SENTINEL did not infer obstruction from:
+
+- both entities appearing near the center of the image;
+- generic proximity;
+- the video's filename;
+- prior memory;
+- the door's own emergency-exit name.
+
+Current `main` therefore adds one narrow access-geometry verification pass. It runs only when a visible material-handling/obstruction candidate and independently grounded exit context exist but explicit placement remains absent.
+
+The pass may establish placement only by current trusted frame evidence. It is instructed to emit a structured `in_front_of` relation in the exact direction **obstacle → door** when visually supported. `near`, beside, left/right, or shared image center are explicitly insufficient. If geometry is unclear, no relation or condition should be emitted.
+
+The deterministic derivation layer now accepts that grounded structured relation as equivalent placement evidence while preserving:
+
+- independent exit-sign grounding;
+- evidence inheritance;
+- bounded 0.90 confidence from 1.00 source facts;
+- the unchanged 0.85 inferred threshold;
+- medium maximum severity;
+- fail-closed behavior for reversed or missing relations.
+
+Sentinel CI run `35335200200` passed on commit `3e1046c88d7a2156aff666d412412e5c60f37d67`, including a warehouse3-shaped regression where pallet-jack identity is correct but placement text is absent, the targeted geometry audit supplies grounded obstacle→door `in_front_of`, deterministic derivation creates the inferred access condition, and policy promotes one medium access issue.
+
 ## Next Phase 5 proof
 
-Pull latest `main` and run a **third fresh** warehouse baseline/comparison through the updated build. Do not reuse `env_warehouse1_1bd4a50c` or `env_warehouse2_6a1cb840`.
+Pull latest `main` and run a **fourth fresh** warehouse baseline/comparison through the updated build. Do not reuse `env_warehouse1_1bd4a50c`, `env_warehouse2_6a1cb840`, or `env_warehouse3_64751084`.
 
 Expected new proof:
 
