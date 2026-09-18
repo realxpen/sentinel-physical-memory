@@ -143,6 +143,8 @@ try {
 
   if (prompts.length !== 2) throw new Error(`expected scene + condition audit passes, got ${prompts.length}`)
   if (!prompts[0].includes('Previously remembered object naming context (NOT evidence): none')) throw new Error('scene prompt must label prior memory as naming-only context')
+  if (!prompts[0].includes('Repeated sightings of the same physical entity across frames should resolve to one object')) throw new Error('scene prompt must consolidate repeated cross-frame sightings')
+  if (!prompts[0].includes('Do not emit the overall scene/environment itself')) throw new Error('scene prompt must reject the whole environment as a SpatialObject')
   if (!prompts[0].includes('distinguish pallet jacks/carts/trolleys from ramps')) throw new Error('scene prompt is missing warehouse equipment disambiguation')
   if (!prompts[0].includes('portable fire extinguisher')) throw new Error('scene prompt is missing extinguisher/hydrant disambiguation')
   if (!prompts[1].includes('walking paths, doors, exits, floors')) throw new Error('condition audit prompt is missing facility-condition focus')
@@ -599,8 +601,16 @@ try {
     throw new Error('grounded geometry relation did not enable deterministic access derivation')
   }
   if (geometryResult.state.issueIds.length !== 1) throw new Error('geometry-supported derived access condition was not promoted')
+  const geometryMemory = await geometryPipeline.getMemory(geometryEnvironmentId)
+  const geometryStateConditions = geometryMemory?.snapshots
+    .find((item) => item.stateId === geometryResult.state.id)?.conditions
+    .filter((item) => item.title === 'Emergency exit access obstructed') ?? []
+  if (geometryStateConditions.length !== 1) {
+    throw new Error(`expected exactly one persisted semantic access condition, got ${geometryStateConditions.length}`)
+  }
 
   console.log('PASS  pallet-jack + exit context without placement triggers one targeted access-geometry audit')
+  console.log('PASS  pass-local door aliases collapse to one persisted semantic access condition')
   console.log('PASS  geometry audit requires obstacle -> door in_front_of evidence and rejects weak proximity')
   console.log('PASS  structured geometry relation enables derivation without weakening policy thresholds')
   console.log('SENTINEL CONDITION AUDIT VERIFIED')

@@ -143,6 +143,8 @@ export class ScanPipeline {
       `Previously remembered object naming context (NOT evidence): ${priorNamingContext}.`,
       'Reuse a remembered name only when the same physical object is directly visible now. Never infer presence from memory and never use prior memory as evidence.',
       'Perform a grounded scene inventory: direct observations, visible objects, supported environmental conditions, and spatial relationships.',
+      'Treat all supplied frames as one walkthrough of the same environment. Repeated sightings of the same physical entity across frames should resolve to one object, not one object per frame.',
+      'Do not emit the overall scene/environment itself (for example "warehouse" or "office") as a SpatialObject. A room/area object requires a distinct bounded physical-space identity.',
       'For every durable physical item named in a direct observation, emit a corresponding object entry when the item is visually identifiable.',
       'Prefer stable physical identity names over viewpoint-dependent phrases. In warehouses, distinguish pallet jacks/carts/trolleys from ramps: a pallet jack is wheeled material-handling equipment with fork arms and a handle; a ramp is a fixed or sloped walking/loading surface. Distinguish a portable fire extinguisher (cylinder/handle/hose) from a hydrant or standpipe. If uncertain, use a conservative generic equipment label instead of a wrong specific label.',
       'If an emergency/exit sign is directly visible, emit both a grounded observation and a signage object for it.',

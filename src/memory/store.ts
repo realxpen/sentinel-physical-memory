@@ -107,7 +107,7 @@ export class EnvironmentalMemoryStore {
       evidenceIds: remapEvidenceIds(item.evidenceIds),
     }))
 
-    const conditions = uniqueById(perception.conditions.map((item) => ({
+    const conditions = consolidateEquivalentConditions(perception.conditions.map((item) => ({
       ...item,
       id: sourceScopedId(source.id, 'condition', item.id),
       environmentId,
@@ -279,6 +279,42 @@ function mergeAliasEvidence(target: SpatialObject, alias: SpatialObject, capture
   target.confidence = Math.max(target.confidence, alias.confidence)
   target.lastSeenAt = capturedAt
   target.evidenceIds = unique([...target.evidenceIds, ...alias.evidenceIds])
+}
+
+function consolidateEquivalentConditions(values: EnvironmentalCondition[]): EnvironmentalCondition[] {
+  const byMeaning = new Map<string, EnvironmentalCondition>()
+
+  for (const value of values) {
+    const key = [
+      value.kind,
+      value.basis,
+      value.status,
+      normalizeConditionText(value.title),
+      [...value.objectIds].sort().join('|'),
+    ].join('::')
+
+    const existing = byMeaning.get(key)
+    if (!existing) {
+      byMeaning.set(key, {
+        ...value,
+        objectIds: [...value.objectIds],
+        evidenceIds: [...value.evidenceIds],
+      })
+      continue
+    }
+
+    existing.confidence = Math.max(existing.confidence, value.confidence)
+    existing.evidenceIds = unique([...existing.evidenceIds, ...value.evidenceIds])
+    if ((value.description?.length ?? 0) > (existing.description?.length ?? 0)) {
+      existing.description = value.description
+    }
+  }
+
+  return [...byMeaning.values()]
+}
+
+function normalizeConditionText(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim()
 }
 
 function sourceScopedId(sourceId: string, kind: string, rawId: string): string { return `${sourceId}:${kind}:${rawId}` }

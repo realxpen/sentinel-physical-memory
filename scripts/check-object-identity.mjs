@@ -198,6 +198,44 @@ try {
   }
   if (uncertain.length !== 0) throw new Error(`semantic aliases must not create not-re-observed noise: ${uncertain.map((change) => change.title).join(', ')}`)
 
+  const multiplicityDiff = engine.compare(
+    {
+      stateId: 'state_multi_1',
+      environmentId,
+      objects: [
+        object('door-old-1', 'door', 'green door', 'green door with window'),
+        object('door-old-2', 'door', 'green door', 'green door with window'),
+        object('ext-old-1', 'equipment', 'fire extinguisher', 'red fire extinguisher'),
+        object('ext-old-2', 'equipment', 'fire extinguisher', 'red fire extinguisher'),
+        object('shelf-old-left', 'furniture', 'shelf', 'metal shelf on the left'),
+        object('shelf-old-right', 'furniture', 'shelf', 'metal shelf on the right'),
+      ],
+      conditions: [],
+      issues: [],
+    },
+    {
+      stateId: 'state_multi_2',
+      environmentId,
+      objects: [
+        object('door-new-1', 'door', 'green door', 'green door with window'),
+        object('ext-new-1', 'equipment', 'fire extinguisher', 'red fire extinguisher'),
+        object('shelf-new', 'furniture', 'metal shelving', 'metal shelves on both sides'),
+        object('jack-multi-new', 'equipment', 'orange pallet jack', 'orange pallet jack in front of green door'),
+      ],
+      conditions: [],
+      issues: [],
+    },
+  )
+  const multiplicityObjectNoise = multiplicityDiff.changes.filter((change) =>
+    /green door|fire extinguisher|shelf/i.test(change.title),
+  )
+  if (multiplicityObjectNoise.length !== 0) {
+    throw new Error(`unresolved same-family multiplicity must not create fake diff changes: ${multiplicityObjectNoise.map((change) => change.title).join(', ')}`)
+  }
+  if (!multiplicityDiff.changes.some((change) => change.title === 'New: orange pallet jack')) {
+    throw new Error('multiplicity suppression must not hide a genuinely new pallet jack')
+  }
+
   console.log('PASS  provider naming aliases map to conservative durable object families')
   console.log('PASS  color-anchored door aliases match while unanchored generic doors remain excluded')
   console.log('PASS  secondary description mentions do not redefine object identity')
@@ -205,6 +243,7 @@ try {
   console.log('PASS  repeated ambiguous objects are not collapsed into one match')
   console.log('PASS  memory reuses durable shelf/door identities across provider naming drift')
   console.log('PASS  warehouse alias drift collapses to one real added pallet jack')
+  console.log('PASS  unresolved whitelisted-family multiplicity suppresses fake add/not-reobserved noise without hiding new objects')
   console.log('SENTINEL OBJECT IDENTITY GATE VERIFIED')
 } finally {
   await vite.close()
