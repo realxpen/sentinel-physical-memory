@@ -142,7 +142,12 @@ try {
   })
 
   if (prompts.length !== 2) throw new Error(`expected scene + condition audit passes, got ${prompts.length}`)
+  if (!prompts[0].includes('Previously remembered object naming context (NOT evidence): none')) throw new Error('scene prompt must label prior memory as naming-only context')
+  if (!prompts[0].includes('distinguish pallet jacks/carts/trolleys from ramps')) throw new Error('scene prompt is missing warehouse equipment disambiguation')
+  if (!prompts[0].includes('portable fire extinguisher')) throw new Error('scene prompt is missing extinguisher/hydrant disambiguation')
   if (!prompts[1].includes('walking paths, doors, exits, floors')) throw new Error('condition audit prompt is missing facility-condition focus')
+  if (!prompts[1].includes('Re-check object identity independently instead of blindly copying the scene label')) throw new Error('condition audit must independently re-check scene taxonomy')
+  if (!prompts[1].includes('If an emergency/exit sign is visible, emit it as a signage object')) throw new Error('condition audit must keep exit signage in the durable object inventory')
   if (!prompts[1].includes('supply box (obstruction)')) throw new Error('condition audit prompt is missing scene-object context')
   if (!prompts[1].includes('Normal office environment [normal]')) throw new Error('condition audit prompt is missing benign-condition context')
   if (result.conditions.length !== 2) throw new Error(`expected benign + audited conditions, got ${result.conditions.length}`)

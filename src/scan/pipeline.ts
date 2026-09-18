@@ -1,4 +1,4 @@
-import type { ConditionKind, EnvironmentType, PerceptionResult } from '../domain/sentinel.js'
+import type { ConditionKind, EnvironmentType, PerceptionResult, SpatialObject } from '../domain/sentinel.js'
 import { PerceptionValidationError, validatePerceptionForScan } from '../ai/perception-schema.js'
 import { groundPerceptionToTrustedFrames } from '../ai/trusted-evidence.js'
 import { ModelAdapterError, type ModelAdapter } from '../ai/model.js'
@@ -50,28 +50,39 @@ export class ScanPipeline {
     const artifacts = this.createArtifacts(frames, input)
     this.emit(scanId, 'extracting', 55, `${artifacts.filter((artifact) => artifact.kind === 'frame').length} frame artifact(s) prepared`)
 
-    const perceived = await this.perceive(scanId, artifacts, frames, input)
+    const existingMemory = memory.get(input.environmentId)
+    const priorSnapshot = existingMemory?.environment.currentStateId
+      ? existingMemory.snapshots.find((item) => item.stateId === existingMemory.environment.currentStateId)
+      : undefined
+    const priorObjects = priorSnapshot?.objects ?? []
+
+    const perceived = await this.perceive(scanId, artifacts, frames, input, priorObjects)
     const derived = deriveOperationalConditions(perceived, input.source.capturedAt)
     const perception = validatePerceptionForScan(derived.result, input.environmentId, input.source.id)
-    if (derived.derivedConditions.length > 0) {
-      console.warn('SENTINEL_DERIVED_CONDITIONS', {
-        scanId,
-        count: derived.derivedConditions.length,
-        conditions: derived.derivedConditions.map((item) => ({
-          kind: item.kind,
-          title: item.title,
-          basis: item.basis,
-          confidence: item.confidence,
-          objectIds: item.objectIds,
-        })),
-      })
-    }
+    console.warn('SENTINEL_CONDITION_DERIVATION_COMPLETED', {
+      scanId,
+      derivedConditions: derived.derivedConditions.length,
+      operationalConditionsAfterDerivation: perception.conditions.filter((item) => OPERATIONAL_CONDITION_KINDS.has(item.kind)).length,
+      conditions: derived.derivedConditions.map((item) => ({
+        kind: item.kind,
+        title: item.title,
+        basis: item.basis,
+        confidence: item.confidence,
+        objectIds: item.objectIds,
+      })),
+    })
 
     const observations = perception.observations.map((item) => ({ ...item }))
     const conditions = perception.conditions.map((item) => ({ ...item, objectIds: [...item.objectIds], evidenceIds: [...item.evidenceIds] }))
     this.emit(scanId, 'normalizing', 75, `${observations.length} observation(s), ${conditions.length} condition(s) normalized`)
 
     const state = memory.ingestScan(input.environmentId, input.source, perception)
+    console.warn('SENTINEL_SCAN_POLICY_RESULT', {
+      scanId,
+      stateVersion: state.version,
+      conditionsPersisted: state.conditionIds.length,
+      issuesPromoted: state.issueIds.length,
+    })
     this.emit(scanId, 'memorizing', 88, `Environmental state v${state.version} created`)
 
     const previous = memory.get(input.environmentId)?.states.find((candidate) => candidate.version === state.version - 1)
@@ -118,14 +129,23 @@ export class ScanPipeline {
     })
   }
 
-  private async perceive(scanId: string, artifacts: ScanArtifact[], frames: ScanFrame[], input: ScanInput): Promise<PerceptionResult> {
+  private async perceive(scanId: string, artifacts: ScanArtifact[], frames: ScanFrame[], input: ScanInput, priorObjects: SpatialObject[]): Promise<PerceptionResult> {
     if (!this.model) return { sourceId: input.source.id, observations: [], objects: [], conditions: [], relations: [], evidence: [] }
+
+    const priorNamingContext = priorObjects.length
+      ? priorObjects.slice(0, 24).map((item) => `${item.name} (${item.category})`).join(', ')
+      : 'none'
 
     const scenePrompt = [
       `Analyze scan ${scanId} for environment ${input.environmentId}.`,
       `The scan source id is ${input.source.id}.`,
       `The trusted scan capturedAt is ${input.source.capturedAt}.`,
+      `Previously remembered object naming context (NOT evidence): ${priorNamingContext}.`,
+      'Reuse a remembered name only when the same physical object is directly visible now. Never infer presence from memory and never use prior memory as evidence.',
       'Perform a grounded scene inventory: direct observations, visible objects, supported environmental conditions, and spatial relationships.',
+      'For every durable physical item named in a direct observation, emit a corresponding object entry when the item is visually identifiable.',
+      'Prefer stable physical identity names over viewpoint-dependent phrases. In warehouses, distinguish pallet jacks/carts/trolleys from ramps: a pallet jack is wheeled material-handling equipment with fork arms and a handle; a ramp is a fixed or sloped walking/loading surface. Distinguish a portable fire extinguisher (cylinder/handle/hose) from a hydrant or standpipe. If uncertain, use a conservative generic equipment label instead of a wrong specific label.',
+      'If an emergency/exit sign is directly visible, emit both a grounded observation and a signage object for it.',
       'Separate direct visual observations from condition interpretations.',
       'Reference only the exact supplied FRAME_ID values in evidenceIds. SENTINEL owns frame evidence records; do not manufacture replacement frame evidence IDs.',
       'Omit unsupported optional claims instead of guessing.',
@@ -148,7 +168,10 @@ export class ScanPipeline {
       `The trusted scan capturedAt is ${input.source.capturedAt}.`,
       `The scene inventory already identified these visible objects: ${sceneObjectSummary}.`,
       `The scene inventory reported these conditions: ${sceneConditionSummary}. Benign/normal conditions do not count as a completed facility-condition audit.`,
+      `Previously remembered object naming context (NOT evidence): ${priorNamingContext}.`,
       'Inspect every supplied frame specifically for visually defensible environmental conditions that a facility or operations manager would care about.',
+      'Re-check object identity independently instead of blindly copying the scene label. In warehouses, verify whether wheeled/forked material-handling equipment is a pallet jack/cart/trolley rather than a ramp, and whether a portable red cylinder is a fire extinguisher rather than a hydrant. If uncertain, use a conservative generic equipment label.',
+      'When a visible movable object is directly in front of, across, blocking, or obstructing a door/exit, state that relative placement explicitly in the observation/object description. If an emergency/exit sign is visible, emit it as a signage object as well as an observation.',
       'Check walking paths, doors, exits, floors, desks, furniture, boxes/packages, cables, electrical items, equipment, and visible maintenance state.',
       'Pay special attention to newly introduced or misplaced objects and whether their placement narrows, blocks, or changes a normal circulation path.',
       'Examples of relevant visible conditions include a blocked or narrowed passage, furniture or a box obstructing a normal walkway, a loose cable on a walking surface, a spill/wet floor, visible physical damage, unstable or misplaced equipment, a blocked door/exit, or an obvious maintenance defect.',
@@ -171,7 +194,7 @@ export class ScanPipeline {
         scanId,
         auditConditions: audit.conditions.length,
         mergedConditions: merged.conditions.length,
-        operationalConditions: merged.conditions.filter((item) => OPERATIONAL_CONDITION_KINDS.has(item.kind)).length,
+        providerOperationalConditions: merged.conditions.filter((item) => OPERATIONAL_CONDITION_KINDS.has(item.kind)).length,
       })
       return validatePerceptionForScan(merged, input.environmentId, input.source.id)
     } catch (error) {
