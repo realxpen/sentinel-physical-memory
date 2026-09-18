@@ -189,13 +189,40 @@ export class ScanPipeline {
         sceneConditions: scene.conditions.map((item) => ({ kind: item.kind, title: item.title })),
       })
       const audit = await this.inferPerceptionPass('condition-audit', auditPrompt, artifacts, frames, input)
-      const merged = mergePerceptionPasses(scene, audit)
+      let merged = mergePerceptionPasses(scene, audit, 'audit_')
       console.warn('SENTINEL_CONDITION_AUDIT_COMPLETED', {
         scanId,
         auditConditions: audit.conditions.length,
         mergedConditions: merged.conditions.length,
         providerOperationalConditions: merged.conditions.filter((item) => OPERATIONAL_CONDITION_KINDS.has(item.kind)).length,
       })
+
+      if (!hasOperationalConditionCandidate(merged) && shouldRunIdentityAudit(merged)) {
+        const identityPrompt = [
+          `Targeted physical-object identity verification for scan ${scanId} in environment ${input.environmentId}.`,
+          `The scan source id is ${input.source.id}.`,
+          `The trusted scan capturedAt is ${input.source.capturedAt}.`,
+          'The earlier grounded passes found an emergency/exit context and an access-adjacent object whose taxonomy is ambiguous.',
+          'Inspect the supplied frames again, focusing specifically on the physical object directly in front of/across/near the door or exit.',
+          'Classify by visible morphology, not by the earlier label and not by filenames or metadata.',
+          'For warehouse material-handling equipment: a pallet jack/trolley/cart is movable and normally has wheels/casters, fork arms/platform and/or a steering handle; a ramp is a sloped or bridging surface and does not have those handling features.',
+          'Return a specific pallet jack/trolley/cart label only when those visible features support it. If the evidence really supports a ramp, keep ramp. If neither is clear, use conservative generic equipment/object wording.',
+          'State the object-to-door placement explicitly when visible (for example in front of, across, blocking, or beside).',
+          'If exit signage is visible, include a grounded exit-sign observation/object so the access role remains independently evidenced.',
+          'Do not force a hazard or access condition. Emit an operational condition only if the visible evidence itself supports one.',
+          'Reference only exact supplied FRAME_ID values in evidenceIds. Return the full SENTINEL PerceptionResult JSON schema.',
+        ].join('\n')
+
+        console.warn('SENTINEL_IDENTITY_AUDIT_STARTED', { scanId, reason: 'ambiguous_access_adjacent_object' })
+        const identityAudit = await this.inferPerceptionPass('identity-audit', identityPrompt, artifacts, frames, input)
+        merged = mergePerceptionPasses(merged, identityAudit, 'identity_')
+        console.warn('SENTINEL_IDENTITY_AUDIT_COMPLETED', {
+          scanId,
+          objects: identityAudit.objects.map((item) => ({ name: item.name, category: item.category, confidence: item.confidence })),
+          conditions: identityAudit.conditions.map((item) => ({ title: item.title, kind: item.kind, confidence: item.confidence })),
+        })
+      }
+
       return validatePerceptionForScan(merged, input.environmentId, input.source.id)
     } catch (error) {
       console.warn('SENTINEL_CONDITION_AUDIT_SKIPPED', {
@@ -208,7 +235,7 @@ export class ScanPipeline {
   }
 
   private async inferPerceptionPass(
-    pass: 'scene' | 'condition-audit',
+    pass: 'scene' | 'condition-audit' | 'identity-audit',
     prompt: string,
     artifacts: ScanArtifact[],
     frames: ScanFrame[],
@@ -322,9 +349,26 @@ function hasOperationalConditionCandidate(result: PerceptionResult): boolean {
   return result.conditions.some((item) => OPERATIONAL_CONDITION_KINDS.has(item.kind))
 }
 
-function mergePerceptionPasses(scene: PerceptionResult, audit: PerceptionResult): PerceptionResult {
-  const objectIdMap = new Map(audit.objects.map((item) => [item.id, `audit_${item.id}`]))
-  const prefixId = (id: string) => `audit_${id}`
+function shouldRunIdentityAudit(result: PerceptionResult): boolean {
+  const hasExitContext = [...result.observations, ...result.objects].some((item) => {
+    const text = 'label' in item
+      ? `${item.label} ${item.description}`
+      : `${item.name} ${item.description ?? ''}`
+    return /\b(?:emergency\s+)?exit\b/i.test(text) && /\b(?:sign|door)\b/i.test(text)
+  })
+  if (!hasExitContext) return false
+
+  return result.objects.some((item) => {
+    const text = `${item.name} ${item.description ?? ''}`
+    const ambiguousTaxonomy = /\b(?:ramp|equipment|object|device|cart|trolley|pallet(?:\s+jack)?)\b/i.test(text)
+    const accessPlacement = /\b(?:in front of|directly in front of|across|blocking|obstructing|near)\b.{0,48}\b(?:door|exit)\b/i.test(text)
+    return ambiguousTaxonomy && accessPlacement
+  })
+}
+
+function mergePerceptionPasses(scene: PerceptionResult, audit: PerceptionResult, prefix = 'audit_'): PerceptionResult {
+  const objectIdMap = new Map(audit.objects.map((item) => [item.id, `${prefix}${item.id}`]))
+  const prefixId = (id: string) => `${prefix}${id}`
   const mapObjectId = (id: string) => objectIdMap.get(id) ?? id
 
   const auditObservations = audit.observations.map((item) => ({ ...item, id: prefixId(item.id) }))

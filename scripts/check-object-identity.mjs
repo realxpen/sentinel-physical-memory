@@ -39,6 +39,12 @@ try {
   )) {
     throw new Error('cardboard boxes -> brown boxes should remain a supported isolated alias')
   }
+  if (!objectsSemanticallyMatch(
+    object('box-plural', 'furniture', 'cardboard boxes'),
+    object('box-singular', 'equipment', 'cardboard box'),
+  )) {
+    throw new Error('cardboard boxes -> cardboard box should preserve the durable box family')
+  }
 
   if (objectsSemanticallyMatch(object('chair1', 'furniture', 'chair'), object('chair2', 'furniture', 'desk'))) {
     throw new Error('ambiguous movable furniture must not fuzzy-match')

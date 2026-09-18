@@ -104,7 +104,7 @@ function semanticFamily(item: SpatialObject): ObjectFamily | undefined {
   if (/\b(?:emergency )?exit\b/.test(name) && /\bsign\b|\bsymbol\b/.test(name)) return 'exit-sign'
   if (item.category === 'signage' && /\b(?:emergency )?exit\b/.test(description) && /\bsign\b|\bsymbol\b/.test(description)) return 'exit-sign'
   if (/\b(?:shelves|shelving|racks|racking)\b/.test(name)) return 'shelving'
-  if (/\b(?:boxes|cartons|boxed items|boxed goods)\b/.test(name)) return 'box'
+  if (/\b(?:box|boxes|carton|cartons|boxed items|boxed goods)\b/.test(name)) return 'box'
   if (/\b(?:concrete |warehouse )?floor\b/.test(name)) return 'floor'
   if (/\b(?:white |warehouse |high )?ceiling\b/.test(name)) return 'ceiling'
 

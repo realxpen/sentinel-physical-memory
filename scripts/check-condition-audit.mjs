@@ -161,6 +161,252 @@ try {
   console.log('PASS  condition audit receives scene object + benign-condition context')
   console.log('PASS  audited condition remains grounded to SENTINEL-owned frame evidence')
   console.log('PASS  audited access condition persists and issue policy remains SENTINEL-owned')
+
+  const warehouseEnvironmentId = 'condition-audit-warehouse-identity-test'
+  const warehouseSourceId = 'source-condition-audit-warehouse'
+  const warehousePrompts = []
+  const warehouseModel = {
+    provider: 'test-provider',
+    model: 'test-model',
+    async infer(request) {
+      warehousePrompts.push(request.prompt)
+      const isConditionAudit = request.prompt.includes('Condition audit for scan')
+      const isIdentityAudit = request.prompt.includes('Targeted physical-object identity verification for scan')
+
+      if (isIdentityAudit) {
+        return {
+          sourceId: warehouseSourceId,
+          observations: [{
+            id: 'identity-jack-placement',
+            environmentId: warehouseEnvironmentId,
+            sourceId: warehouseSourceId,
+            modality: 'video',
+            capturedAt,
+            label: 'orange pallet jack',
+            description: 'An orange pallet jack is directly in front of the green door.',
+            confidence: 1,
+            basis: 'observed',
+            evidenceIds: ['evidence_0'],
+          }, {
+            id: 'identity-exit-sign',
+            environmentId: warehouseEnvironmentId,
+            sourceId: warehouseSourceId,
+            modality: 'video',
+            capturedAt,
+            label: 'emergency exit sign',
+            description: 'A green emergency exit sign is above the green door.',
+            confidence: 1,
+            basis: 'observed',
+            evidenceIds: ['evidence_0'],
+          }],
+          objects: [{
+            id: 'identity-jack',
+            environmentId: warehouseEnvironmentId,
+            category: 'equipment',
+            name: 'orange pallet jack',
+            description: 'An orange pallet jack directly in front of the green door.',
+            confidence: 1,
+            firstSeenAt: capturedAt,
+            lastSeenAt: capturedAt,
+            evidenceIds: ['evidence_0'],
+          }, {
+            id: 'identity-door',
+            environmentId: warehouseEnvironmentId,
+            category: 'door',
+            name: 'green door',
+            confidence: 1,
+            firstSeenAt: capturedAt,
+            lastSeenAt: capturedAt,
+            evidenceIds: ['evidence_0'],
+          }, {
+            id: 'identity-exit',
+            environmentId: warehouseEnvironmentId,
+            category: 'signage',
+            name: 'emergency exit sign',
+            description: 'Green emergency exit sign above the green door.',
+            confidence: 1,
+            firstSeenAt: capturedAt,
+            lastSeenAt: capturedAt,
+            evidenceIds: ['evidence_0'],
+          }],
+          conditions: [],
+          relations: [],
+          evidence: [],
+        }
+      }
+
+      if (isConditionAudit) {
+        return {
+          sourceId: warehouseSourceId,
+          observations: [{
+            id: 'audit-ramp',
+            environmentId: warehouseEnvironmentId,
+            sourceId: warehouseSourceId,
+            modality: 'video',
+            capturedAt,
+            label: 'green door',
+            description: 'Green door with orange ramp in front.',
+            confidence: 1,
+            basis: 'observed',
+            evidenceIds: ['evidence_0'],
+          }, {
+            id: 'audit-exit',
+            environmentId: warehouseEnvironmentId,
+            sourceId: warehouseSourceId,
+            modality: 'video',
+            capturedAt,
+            label: 'emergency exit sign',
+            description: 'Emergency exit sign above the green door.',
+            confidence: 1,
+            basis: 'observed',
+            evidenceIds: ['evidence_0'],
+          }],
+          objects: [{
+            id: 'audit-ramp-object',
+            environmentId: warehouseEnvironmentId,
+            category: 'other',
+            name: 'orange ramp',
+            description: 'An orange ramp in front of the green door.',
+            confidence: 1,
+            firstSeenAt: capturedAt,
+            lastSeenAt: capturedAt,
+            evidenceIds: ['evidence_0'],
+          }, {
+            id: 'audit-door-object',
+            environmentId: warehouseEnvironmentId,
+            category: 'door',
+            name: 'green door',
+            confidence: 1,
+            firstSeenAt: capturedAt,
+            lastSeenAt: capturedAt,
+            evidenceIds: ['evidence_0'],
+          }, {
+            id: 'audit-exit-object',
+            environmentId: warehouseEnvironmentId,
+            category: 'signage',
+            name: 'emergency exit sign',
+            confidence: 1,
+            firstSeenAt: capturedAt,
+            lastSeenAt: capturedAt,
+            evidenceIds: ['evidence_0'],
+          }],
+          conditions: [{
+            id: 'audit-normal',
+            environmentId: warehouseEnvironmentId,
+            kind: 'normal',
+            title: 'Normal warehouse environment',
+            description: 'Warehouse appears normal.',
+            status: 'present',
+            basis: 'observed',
+            confidence: 1,
+            objectIds: [],
+            evidenceIds: ['evidence_0'],
+            observedAt: capturedAt,
+          }],
+          relations: [],
+          evidence: [],
+        }
+      }
+
+      return {
+        sourceId: warehouseSourceId,
+        observations: [{
+          id: 'scene-exit',
+          environmentId: warehouseEnvironmentId,
+          sourceId: warehouseSourceId,
+          modality: 'video',
+          capturedAt,
+          label: 'emergency exit sign',
+          description: 'Emergency exit sign above the green door.',
+          confidence: 1,
+          basis: 'observed',
+          evidenceIds: ['evidence_0'],
+        }],
+        objects: [{
+          id: 'scene-ramp',
+          environmentId: warehouseEnvironmentId,
+          category: 'other',
+          name: 'orange ramp',
+          description: 'An orange ramp in front of the green door.',
+          confidence: 1,
+          firstSeenAt: capturedAt,
+          lastSeenAt: capturedAt,
+          evidenceIds: ['evidence_0'],
+        }, {
+          id: 'scene-door',
+          environmentId: warehouseEnvironmentId,
+          category: 'door',
+          name: 'green door',
+          confidence: 1,
+          firstSeenAt: capturedAt,
+          lastSeenAt: capturedAt,
+          evidenceIds: ['evidence_0'],
+        }, {
+          id: 'scene-exit-object',
+          environmentId: warehouseEnvironmentId,
+          category: 'signage',
+          name: 'emergency exit sign',
+          confidence: 1,
+          firstSeenAt: capturedAt,
+          lastSeenAt: capturedAt,
+          evidenceIds: ['evidence_0'],
+        }],
+        conditions: [{
+          id: 'scene-normal',
+          environmentId: warehouseEnvironmentId,
+          kind: 'normal',
+          title: 'Normal warehouse environment',
+          description: 'Warehouse appears normal.',
+          status: 'present',
+          basis: 'observed',
+          confidence: 1,
+          objectIds: [],
+          evidenceIds: ['evidence_0'],
+          observedAt: capturedAt,
+        }],
+        relations: [],
+        evidence: [],
+      }
+    },
+  }
+
+  const warehousePipeline = new ScanPipeline({ model: warehouseModel })
+  const warehouseResult = await warehousePipeline.run({
+    environmentId: warehouseEnvironmentId,
+    source: {
+      id: warehouseSourceId,
+      environmentId: warehouseEnvironmentId,
+      modality: 'video',
+      uri: 'local://warehouse-identity-audit.mp4',
+      capturedAt,
+      durationMs: 30_000,
+      metadata: { name: 'Warehouse Identity Audit', environmentType: 'warehouse' },
+    },
+    media: {
+      kind: 'video',
+      uri: 'local://warehouse-identity-audit.mp4',
+      mimeType: 'video/mp4',
+      durationMs: 30_000,
+      extractedFrames: [{
+        frameId: 'warehouse-identity-frame-0',
+        timestampMs: 1_000,
+        uri: 'data:image/jpeg;base64,AAA',
+      }],
+    },
+  })
+
+  if (warehousePrompts.length !== 3) throw new Error(`expected scene + condition audit + identity audit, got ${warehousePrompts.length}`)
+  if (!warehousePrompts[2].includes('Classify by visible morphology')) throw new Error('identity audit must classify from visible morphology')
+  if (!warehousePrompts[2].includes('not by filenames or metadata')) throw new Error('identity audit must reject filename/metadata leakage')
+  if (!warehouseResult.conditions.some((item) => item.title === 'Emergency exit access obstructed')) {
+    throw new Error('identity-audit correction did not enable grounded access derivation')
+  }
+  if (warehouseResult.state.issueIds.length !== 1) throw new Error('derived warehouse access condition was not promoted')
+  if (!warehouseResult.observations.some((item) => item.label === 'orange pallet jack')) throw new Error('identity audit pallet-jack fact did not survive merge')
+
+  console.log('PASS  ambiguous ramp-like warehouse object triggers one targeted identity audit')
+  console.log('PASS  identity audit uses visible morphology and explicitly rejects filename/metadata leakage')
+  console.log('PASS  corrected pallet-jack identity enables grounded derivation without lowering trust thresholds')
   console.log('SENTINEL CONDITION AUDIT VERIFIED')
 } finally {
   await vite.close()
