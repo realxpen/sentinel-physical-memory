@@ -36,5 +36,7 @@ jobs:
         run: npm run check:object-identity
       - name: Verify Phase 6 immutable state history
         run: npm run check:phase6-history
+      - name: Verify Phase 7 Diff Engine v2
+        run: npm run check:phase7-diff
       - name: Build
         run: npm run build

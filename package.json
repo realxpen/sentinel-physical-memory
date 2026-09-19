@@ -22,7 +22,8 @@
     "check:object-identity": "node ./scripts/check-object-identity.mjs",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "check:phase6-history": "node --experimental-strip-types ./scripts/check-phase6-history.mjs"
+    "check:phase6-history": "node --experimental-strip-types ./scripts/check-phase6-history.mjs",
+    "check:phase7-diff": "node --experimental-strip-types ./scripts/check-phase7-diff-v2.mjs"
   },
   "dependencies": {
     "@neondatabase/serverless": "latest",

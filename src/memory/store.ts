@@ -153,8 +153,8 @@ export class EnvironmentalMemoryStore {
     const fromSnapshot = this.snapshots.get(from.id); const toSnapshot = this.snapshots.get(to.id)
     if (!fromSnapshot || !toSnapshot) throw new Error('Historical snapshot unavailable for one or both states')
     const diff = this.diffEngine.compare(
-      { stateId: from.id, environmentId, objects: uniqueById(fromSnapshot.objects), conditions: uniqueById(fromSnapshot.conditions), issues: uniqueById(fromSnapshot.issues) },
-      { stateId: to.id, environmentId, objects: uniqueById(toSnapshot.objects), conditions: uniqueById(toSnapshot.conditions), issues: uniqueById(toSnapshot.issues) },
+      { stateId: from.id, environmentId, objects: uniqueById(fromSnapshot.objects), conditions: uniqueById(fromSnapshot.conditions), issues: uniqueById(fromSnapshot.issues), relations: uniqueById(fromSnapshot.relations) },
+      { stateId: to.id, environmentId, objects: uniqueById(toSnapshot.objects), conditions: uniqueById(toSnapshot.conditions), issues: uniqueById(toSnapshot.issues), relations: uniqueById(toSnapshot.relations) },
     )
     memory.diffs = [...memory.diffs.filter((item) => !(item.fromStateId === from.id && item.toStateId === to.id)), diff]
     return this.clone(diff)

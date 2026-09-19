@@ -63,7 +63,7 @@ export interface EnvironmentRelation { id: ID; environmentId: ID; fromId: ID; to
 export interface EnvironmentalState { id: ID; environmentId: ID; capturedAt: ISODateTime; sourceIds: ID[]; objectIds: ID[]; conditionIds: ID[]; issueIds: ID[]; relationIds: ID[]; summary: string; version: number }
 export interface EnvironmentalStateSnapshot { stateId: ID; environmentId: ID; objects: SpatialObject[]; conditions: EnvironmentalCondition[]; issues: Issue[]; relations: EnvironmentRelation[] }
 export interface Environment { id: ID; name: string; type: EnvironmentType; description?: string; createdAt: ISODateTime; updatedAt: ISODateTime; currentStateId?: ID; stateIds: ID[]; roomIds: ID[]; objectIds: ID[]; issueIds: ID[] }
-export interface Change { id: ID; environmentId: ID; fromStateId: ID; toStateId: ID; type: ChangeType; entityId?: ID; title: string; description: string; confidence: Confidence; evidenceIds: ID[] }
+export interface Change { id: ID; environmentId: ID; fromStateId: ID; toStateId: ID; type: ChangeType; entityId?: ID; entityKind?: 'object' | 'condition' | 'issue'; title: string; description: string; confidence: Confidence; evidenceIds: ID[] }
 export interface EnvironmentalDiff { id: ID; environmentId: ID; fromStateId: ID; toStateId: ID; createdAt: ISODateTime; changes: Change[]; summary: string }
 export interface ActionStep { id: ID; title: string; description: string; priority: ActionPriority; status: ActionStatus; issueIds: ID[]; requiredSpecialist?: string; estimatedCost?: MoneyEstimate; evidenceIds: ID[] }
 export interface MoneyEstimate { currency: string; min: number; max: number; basis: string }
