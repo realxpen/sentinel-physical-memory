@@ -12,10 +12,13 @@ export default async function handler(req: Request, res: Response) {
     })
   }
 
-  const configuredOrigin = process.env.SENTINEL_ALLOWED_ORIGIN
-  const origin = header(req, 'origin')
+  const configuredOrigin = normalizedOrigin(process.env.SENTINEL_ALLOWED_ORIGIN)
+  const origin = normalizedOrigin(header(req, 'origin'))
   if (configuredOrigin && origin && origin !== configuredOrigin) {
-    return res.status(403).json({ error: 'ORIGIN_NOT_ALLOWED' })
+    return res.status(403).json({
+      error: 'ORIGIN_NOT_ALLOWED',
+      message: 'This browser URL is not allowed to call SENTINEL. Open the configured production URL or correct SENTINEL_ALLOWED_ORIGIN.',
+    })
   }
 
   try {
@@ -112,6 +115,16 @@ function requiredQuery(value: string | string[] | undefined, path: string): stri
 function optionalQuery(value: string | string[] | undefined): string | undefined {
   const candidate = Array.isArray(value) ? value[0] : value
   return typeof candidate === 'string' && candidate.trim() ? candidate.trim() : undefined
+}
+
+function normalizedOrigin(value: string | undefined): string | undefined {
+  if (!value?.trim()) return undefined
+  const candidate = value.trim().replace(/^['"]|['"]$/g, '').replace(/\/+$/, '')
+  try {
+    return new URL(candidate).origin.toLowerCase()
+  } catch {
+    return candidate.toLowerCase()
+  }
 }
 
 function header(req: Request, name: string) {

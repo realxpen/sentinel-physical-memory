@@ -208,8 +208,8 @@ function App() {
       })
 
       setStatus('Remembering · grounding observations')
-      const payload = await response.json() as ScanResponse & { message?: string }
-      if (!response.ok) throw new Error(payload.message ?? 'Scan request failed')
+      const payload = await response.json() as ScanResponse & { error?: string; message?: string }
+      if (!response.ok) throw new Error(payload.message ?? payload.error ?? `Scan request failed (${response.status})`)
       setResult(payload)
       setMemory(payload.memory)
       setStatus(payload.diff ? `${payload.diff.changes.length} supported change(s) remembered` : `${activeEnvironment.name} is now remembered`)

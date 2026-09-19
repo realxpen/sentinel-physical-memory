@@ -34,9 +34,14 @@ class ScanRequestError extends Error {
 
 export default async function handler(req: Request, res: Response) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'METHOD_NOT_ALLOWED', message: 'Use POST /api/scan' })
-  const configuredOrigin = process.env.SENTINEL_ALLOWED_ORIGIN
-  const origin = header(req, 'origin')
-  if (configuredOrigin && origin && origin !== configuredOrigin) return res.status(403).json({ error: 'ORIGIN_NOT_ALLOWED' })
+  const configuredOrigin = normalizedOrigin(process.env.SENTINEL_ALLOWED_ORIGIN)
+  const origin = normalizedOrigin(header(req, 'origin'))
+  if (configuredOrigin && origin && origin !== configuredOrigin) {
+    return res.status(403).json({
+      error: 'ORIGIN_NOT_ALLOWED',
+      message: 'This browser URL is not allowed to call SENTINEL. Open the configured production URL or correct SENTINEL_ALLOWED_ORIGIN.',
+    })
+  }
   const apiKey = process.env.NEBIUS_API_KEY
   if (!apiKey) return res.status(503).json({ error: 'NEBIUS_NOT_CONFIGURED', message: 'Server inference credentials are not configured' })
 
@@ -244,4 +249,14 @@ function requiredString(value: unknown, path: string): string { if (typeof value
 function optionalNumber(value: unknown): number | undefined { if (value === undefined || value === null) return undefined; if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) throw new ScanRequestError(400, 'INVALID_REQUEST', 'numeric media metadata must be a non-negative finite number'); return value }
 function record(value: unknown, path: string): Record<string, unknown> { if (!isRecord(value)) throw new ScanRequestError(400, 'INVALID_REQUEST', `${path} must be an object`); return value }
 function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value) }
+function normalizedOrigin(value: string | undefined): string | undefined {
+  if (!value?.trim()) return undefined
+  const candidate = value.trim().replace(/^['"]|['"]$/g, '').replace(/\/+$/, '')
+  try {
+    return new URL(candidate).origin.toLowerCase()
+  } catch {
+    return candidate.toLowerCase()
+  }
+}
+
 function header(req: Request, name: string) { const value = req.headers?.[name]; return Array.isArray(value) ? value[0] : value }

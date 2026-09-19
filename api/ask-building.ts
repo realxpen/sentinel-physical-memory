@@ -11,9 +11,14 @@ const DEFAULT_REASONING_MODEL = 'nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B'
 
 export default async function handler(req: Request, res: Response) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'METHOD_NOT_ALLOWED', message: 'Use POST /api/ask-building' })
-  const configuredOrigin = process.env.SENTINEL_ALLOWED_ORIGIN
-  const origin = header(req, 'origin')
-  if (configuredOrigin && origin && origin !== configuredOrigin) return res.status(403).json({ error: 'ORIGIN_NOT_ALLOWED' })
+  const configuredOrigin = normalizedOrigin(process.env.SENTINEL_ALLOWED_ORIGIN)
+  const origin = normalizedOrigin(header(req, 'origin'))
+  if (configuredOrigin && origin && origin !== configuredOrigin) {
+    return res.status(403).json({
+      error: 'ORIGIN_NOT_ALLOWED',
+      message: 'This browser URL is not allowed to call SENTINEL. Open the configured production URL or correct SENTINEL_ALLOWED_ORIGIN.',
+    })
+  }
   const apiKey = process.env.NEBIUS_API_KEY
   if (!apiKey) return res.status(503).json({ error: 'NEBIUS_NOT_CONFIGURED', message: 'Server inference credentials are not configured' })
 
@@ -46,5 +51,15 @@ function parseBody(value: unknown): { environmentId: string; question: string; s
 
 function requiredString(value: unknown, path: string): string { if (typeof value !== 'string' || !value.trim()) throw new Error(`${path} must be a non-empty string`); return value.trim() }
 function optionalString(value: unknown): string | undefined { return value === undefined || value === null ? undefined : requiredString(value, 'stateId') }
+function normalizedOrigin(value: string | undefined): string | undefined {
+  if (!value?.trim()) return undefined
+  const candidate = value.trim().replace(/^['"]|['"]$/g, '').replace(/\/+$/, '')
+  try {
+    return new URL(candidate).origin.toLowerCase()
+  } catch {
+    return candidate.toLowerCase()
+  }
+}
+
 function header(req: Request, name: string) { const value = req.headers?.[name]; return Array.isArray(value) ? value[0] : value }
 function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value) }
