@@ -43,6 +43,14 @@ try {
     throw new Error('coordinate-like provider position drift must not produce a moved change')
   }
 
+  const specificityOnly = engine.compare(
+    snapshot('state_specific_a', object('above the door')),
+    snapshot('state_specific_b', object('above green door')),
+  )
+  if (specificityOnly.changes.some((change) => change.type === 'moved')) {
+    throw new Error('generic-to-specific anchor wording must not produce false movement')
+  }
+
   const semanticMovement = engine.compare(
     snapshot('state_c', object('Wall A')),
     snapshot('state_d', object('Wall B')),
@@ -52,6 +60,7 @@ try {
   }
 
   console.log('PASS  coordinate-like position descriptions do not create false movement')
+  console.log('PASS  generic-to-specific semantic anchor wording does not create false movement')
   console.log('PASS  semantic physical anchor changes still create movement')
   console.log('SENTINEL REALITY DIFF POSITION GATE VERIFIED')
 } finally {

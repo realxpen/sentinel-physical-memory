@@ -343,7 +343,7 @@ export class EnvironmentalDiffEngine implements DiffEngine {
 
     const descriptionA = semanticPositionDescription(pa.description)
     const descriptionB = semanticPositionDescription(pb.description)
-    return Boolean(descriptionA && descriptionB && descriptionA !== descriptionB)
+    return Boolean(descriptionA && descriptionB && semanticPositionChanged(descriptionA, descriptionB))
   }
 
   private change(
@@ -558,11 +558,21 @@ function relationshipLocationChanged(
 }
 
 function locationRelations(objectId: string, snapshot: EnvironmentalSnapshot): EnvironmentRelation[] {
-  return snapshot.relations.filter((relation) =>
-    relation.confidence >= LOCATION_RELATION_MIN_CONFIDENCE &&
-    LOCATION_RELATION_TYPES.has(relation.type) &&
-    (relation.fromId === objectId || relation.toId === objectId),
-  )
+  return snapshot.relations.filter((relation) => {
+    if (
+      relation.confidence < LOCATION_RELATION_MIN_CONFIDENCE ||
+      !LOCATION_RELATION_TYPES.has(relation.type) ||
+      (relation.fromId !== objectId && relation.toId !== objectId)
+    ) return false
+
+    if (relation.type === 'located_in') {
+      const counterpartId = relationCounterpart(relation, objectId)
+      const counterpart = snapshot.objects.find((item) => item.id === counterpartId)
+      return counterpart?.category === 'room'
+    }
+
+    return true
+  })
 }
 
 function relationCounterpart(relation: EnvironmentRelation, objectId: string): string {
@@ -666,6 +676,33 @@ function hasUnresolvedFamilyCounterpart(item: SpatialObject, candidates: Spatial
   const key = semanticObjectIdentityKey(item)
   if (!key.startsWith('family:')) return false
   return candidates.some((candidate) => semanticObjectIdentityKey(candidate) === key)
+}
+
+function semanticPositionChanged(previous: string, current: string): boolean {
+  if (previous === current) return false
+
+  const a = parseRelativePosition(previous)
+  const b = parseRelativePosition(current)
+  if (!a || !b) return true
+  if (a.relation !== b.relation) return true
+  if (a.anchor === b.anchor) return false
+
+  const aTokens = new Set(a.anchor.split(' '))
+  const bTokens = new Set(b.anchor.split(' '))
+  const aSubset = [...aTokens].every((token) => bTokens.has(token))
+  const bSubset = [...bTokens].every((token) => aTokens.has(token))
+
+  // Generic-to-specific wording such as "above door" → "above green door"
+  // is refinement, not grounded evidence of physical movement.
+  if (aSubset || bSubset) return false
+  return true
+}
+
+function parseRelativePosition(value: string): { relation: string; anchor: string } | undefined {
+  const normalized = value.replace(/\bthe\b/g, ' ').replace(/\s+/g, ' ').trim()
+  const match = normalized.match(/^(left of|right of|above|below|in front of|behind|beside|near|on|inside)\s+(.+)$/)
+  if (!match) return undefined
+  return { relation: match[1], anchor: match[2] }
 }
 
 function semanticPositionDescription(value: string | undefined): string | undefined {

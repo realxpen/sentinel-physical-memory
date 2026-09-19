@@ -69,6 +69,31 @@ try {
     throw new Error('strong grounded inferred exit obstruction should become a medium access issue')
   }
 
+  const uniquelyAnchoredSign = structuredClone(base)
+  uniquelyAnchoredSign.objects[0].name = 'green door'
+  uniquelyAnchoredSign.objects[0].description = 'green door with white text and handle'
+  uniquelyAnchoredSign.observations = uniquelyAnchoredSign.observations.filter((item) => item.id !== 'obs_exit')
+  uniquelyAnchoredSign.objects.push({
+    id: 'sign_1', environmentId, category: 'signage', name: 'emergency exit sign',
+    description: 'green and white emergency exit sign', position: { description: 'above door' },
+    confidence: 1, firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: ['frame_door'],
+  })
+  const uniqueDoorDerived = deriveOperationalConditions(uniquelyAnchoredSign, capturedAt)
+  if (uniqueDoorDerived.derivedConditions.length !== 1) {
+    throw new Error('grounded exit sign explicitly above the only visible door must independently ground that door')
+  }
+
+  const ambiguousDoorSign = structuredClone(uniquelyAnchoredSign)
+  ambiguousDoorSign.objects.push({
+    id: 'door_2', environmentId, category: 'door', name: 'blue door',
+    description: 'blue door', confidence: 1,
+    firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: ['frame_door'],
+  })
+  const ambiguousDoorDerived = deriveOperationalConditions(ambiguousDoorSign, capturedAt)
+  if (ambiguousDoorDerived.derivedConditions.length !== 0) {
+    throw new Error('generic exit sign above door wording must not choose between multiple visible doors')
+  }
+
   const safePlacement = structuredClone(base)
   safePlacement.observations[1].description = 'An orange pallet jack is parked beside the shelving.'
   safePlacement.objects[1].description = 'orange pallet jack beside the shelving'
@@ -117,6 +142,8 @@ try {
   console.log('PASS  independently grounded exit signage + obstacle placement derives one inferred access condition')
   console.log('PASS  green emergency exit door aliases to grounded green-door wording without lowering confidence policy')
   console.log('PASS  derived condition preserves evidence and stays below source confidence')
+  console.log('PASS  grounded exit sign above the only visible door preserves independent exit grounding')
+  console.log('PASS  generic sign-above-door wording does not choose between multiple doors')
   console.log('PASS  safe obstacle placement does not create an access condition')
   console.log('PASS  grounded obstacle -> door in_front_of relation supports derivation when text omits placement')
   console.log('PASS  reversed spatial direction does not derive an access obstruction')

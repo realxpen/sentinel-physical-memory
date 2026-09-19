@@ -101,6 +101,24 @@ function findExitEvidenceForDoor(perception: PerceptionResult, door: SpatialObje
     return { confidence: item.confidence, evidenceIds: item.evidenceIds, phrase: 'at' }
   }
 
+  const visibleDoors = perception.objects.filter((item) => item.category === 'door')
+  if (visibleDoors.length === 1 && visibleDoors[0].id === door.id) {
+    const groundedExitSign = perception.objects.find((item) =>
+      item.id !== door.id &&
+      item.category === 'signage' &&
+      EXIT_CUE.test(semanticText(item)) &&
+      item.evidenceIds.length > 0 &&
+      /\b(?:above|over|on)\s+(?:the\s+)?door\b/i.test(item.position?.description ?? ''),
+    )
+    if (groundedExitSign) {
+      return {
+        confidence: groundedExitSign.confidence,
+        evidenceIds: groundedExitSign.evidenceIds,
+        phrase: 'at',
+      }
+    }
+  }
+
   return undefined
 }
 
