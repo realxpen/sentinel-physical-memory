@@ -66,7 +66,11 @@ jobs:
 
           def request_json(path, payload=None, timeout=180):
               body = None if payload is None else json.dumps(payload).encode('utf-8')
-              headers = {'Accept': 'application/json', 'User-Agent': 'sentinel-phase4-contract'}
+              headers = {
+                  'Accept': 'application/json',
+                  'User-Agent': 'sentinel-phase4-contract',
+                  'Origin': base,
+              }
               if body is not None:
                   headers['Content-Type'] = 'application/json'
               request = urllib.request.Request(base + path, data=body, method='POST' if body is not None else 'GET', headers=headers)
