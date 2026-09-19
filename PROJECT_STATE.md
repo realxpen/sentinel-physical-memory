@@ -14,7 +14,7 @@ Hackathon track: **Best Apps and Agents**.
 
 ## Current phase
 
-**Phase 7 — Environmental Diff Engine v2: READY / PHASE 6 COMPLETE**
+**Phase 7 — Environmental Diff Engine v2: IMPLEMENTED / CI + PRODUCTION DEPLOY PASS / REAL THREE-CHANGE PHONE PROOF NEXT**
 
 ## Phase 3 — COMPLETE
 
@@ -690,6 +690,144 @@ Canonical technical record:
 Transition record:
 
 `Archive/phase-6-transition-note.md`
+
+## Phase 7 — IMPLEMENTED / REAL THREE-CHANGE PROOF PENDING
+
+### Objective
+
+Make **What changed?** reliable enough to serve as SENTINEL's **Git diff for reality**.
+
+Phase 7 now supports deterministic change semantics for:
+
+- `added`;
+- `removed` when explicit current evidence says the object is absent/removed;
+- `moved`;
+- `changed`;
+- `resolved` when issue state explicitly becomes resolved;
+- `uncertain` when something is simply not re-observed.
+
+Non-observation alone still does **not** become removal or resolution.
+
+### Diff Engine v2 — IMPLEMENTED
+
+`src/memory/diff-engine.ts` now compares immutable Phase 6 snapshots and uses:
+
+- stable durable IDs first;
+- conservative semantic identity families;
+- normalized name/category identity;
+- semantic position;
+- grounded relation context;
+- confidence only as a weak tie-breaker.
+
+Repeated objects are still not fuzzy-merged. Relationship context may disambiguate repeated instances only when one match is mutually distinctive.
+
+### Relationship-aware movement — IMPLEMENTED
+
+Object movement can now be supported by:
+
+- structured room / relative anchors;
+- semantic position changes;
+- high-confidence grounded spatial-relation anchor changes.
+
+Provider image-coordinate tuples remain excluded from physical movement semantics.
+
+### First-class condition transitions — IMPLEMENTED
+
+The diff engine now compares conditions directly.
+
+It can distinguish:
+
+- new grounded condition;
+- condition trust/kind/status change;
+- condition not re-observed → `uncertain`.
+
+Promoted issues remain the user-facing operational event. The engine avoids duplicating one semantic change as both a new condition card and a new issue card.
+
+### Explicit entity kind — IMPLEMENTED
+
+New changes include:
+
+`entityKind = object | condition | issue`
+
+so later Reality Diff UI and verification logic can reason about the changed entity without parsing titles.
+
+### Diff retention — VERIFIED
+
+Every generated state-pair diff remains stored in environmental memory.
+
+### Provider support for Diff v2 — IMPLEMENTED
+
+The MiniCPM perception contract now explicitly prefers:
+
+- semantic physical position such as `left of green door` / `beside shelving`;
+- grounded stable spatial relations;
+- separate repeated-object instances with distinguishing context;
+- direct visible object state such as open/closed only.
+
+It explicitly rejects image-coordinate tuples as semantic `position.description` and does not force object state or relationships when visually unsupported.
+
+This improves the evidence supplied to Diff v2 without changing Phase 5 condition thresholds or promotion policy.
+
+### Automated gate — PASS
+
+`npm run check:phase7-diff` verifies:
+
+- Added;
+- explicit Removed;
+- Moved;
+- Changed;
+- Resolved;
+- repeated-object matching through distinctive relation context;
+- movement through changed grounded relationship anchor;
+- simple non-observation remains uncertain;
+- first-class condition transitions;
+- no duplicate condition/issue noise;
+- unresolved repeated-object multiplicity remains conservative;
+- generated diffs remain stored.
+
+Sentinel CI run `35435198030` passed the complete Phase 4/5/6/7 suite and production build on commit `238183d62a0c9a085269ff5725d0674e5e91298d`.
+
+The follow-up provider-context commit `2006cd7dab63bb964436c11957553fd959f32654` also passed Sentinel CI run `35435260985`.
+
+### Production deployment — PASS
+
+Phase 4 Observation Contract run `35435260980` waited for and detected the exact production deployment:
+
+`2006cd7dab63bb964436c11957553fd959f32654`
+
+at:
+
+`https://sentinel-physical-memory.vercel.app`
+
+The contract verified:
+
+- latest production commit matched;
+- production scan route accepted the valid 8-frame walkthrough;
+- `persistence: neon`;
+- new state persisted successfully.
+
+Therefore Phase 7 can be tested entirely from the deployed phone experience; no local laptop is required.
+
+### Remaining Phase 7 exit gate
+
+The locked build-plan exit condition still requires one controlled real environment where three intentional, visually obvious changes produce three understandable supported changes.
+
+Phone-only proof:
+
+1. baseline scan;
+2. intentionally add one obvious object;
+3. move one clearly identifiable stable object;
+4. visibly change one directly observable object state **or** later explicitly resolve a staged condition;
+5. comparison scan;
+6. inspect the resulting persisted Reality Diff.
+
+Unsupported disappearance must remain `uncertain`.
+
+Historical Phase 5/6 warehouse states/diffs remain immutable.
+
+Canonical Phase 7 technical record:
+
+`Knowledge/Technical/phase-7-diff-engine-v2.md`
 
 ## Verified implementation baseline
 
