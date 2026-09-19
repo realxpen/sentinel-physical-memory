@@ -14,7 +14,7 @@ Hackathon track: **Best Apps and Agents**.
 
 ## Current phase
 
-**Phase 7 — Environmental Diff Engine v2: IMPLEMENTED / CI + PRODUCTION DEPLOY PASS / REAL THREE-CHANGE PHONE PROOF NEXT**
+**Phase 8 — Reality Diff UI: IMPLEMENTED / FACILITY-OPERATIONS FRAMING / CI PASS / PHONE VISUAL VALIDATION NEXT; PHASE 7 REAL THREE-CHANGE PROOF STILL PENDING**
 
 ## Phase 3 — COMPLETE
 
@@ -868,10 +868,11 @@ Canonical Phase 7 technical record:
 
 ## Highest-priority gaps
 
-1. **Phase 7 — Environmental Diff Engine v2: richer repeated-instance matching + first-class condition transitions.**
-2. Phase 8 — Reality Diff UI refinement around the stronger Phase 7 diff semantics.
-3. Action + verification closed loop — Phases 11/12.
-4. Reliability, automated tests, security, and least-privilege database-role hardening.
+1. **Phase 7 real phone proof — intentionally create three supported changes and verify Diff v2 in production.**
+2. **Phase 8 phone visual validation — confirm the new facility-operations Reality Diff is understandable on mobile.**
+3. Phase 9 — Spatial Memory experience through the facility-operations lens.
+4. Action + verification closed loop — Phases 11/12.
+5. Reliability, automated tests, security, and least-privilege database-role hardening.
 
 ## Locked decisions
 
@@ -904,9 +905,9 @@ Canonical Phase 7 technical record:
 - [x] Phase 4 — Observation pipeline hardening (**COMPLETE — local/real-phone + exact latest-main production contract passed**)
 - [x] Phase 5 — Perception quality and condition model (**COMPLETE — sixth fresh warehouse proof passed clean condition/issue/diff gate**)
 - [x] Phase 6 — Environmental state history (**COMPLETE — immutable current/previous/by-ID/by-date retrieval + Memory timeline**)
-- [ ] Phase 7 — Environmental Diff Engine v2 (**NEXT**)
-- [ ] Phase 8 — Reality Diff UI
-- [ ] Phase 9 — Spatial Memory experience
+- [ ] Phase 7 — Environmental Diff Engine v2 (**IMPLEMENTED — CI + production deploy pass; real three-change phone proof pending**)
+- [ ] Phase 8 — Reality Diff UI (**IMPLEMENTED — facility-operations framing; phone visual validation pending**)
+- [ ] Phase 9 — Spatial Memory experience (**NEXT AFTER PHASE 7/8 PHONE GATES**)
 - [ ] Phase 10 — Ask the Building product layer
 - [ ] Phase 11 — Action Planner
 - [ ] Phase 12 — Verification Agent
@@ -961,4 +962,16 @@ Phase 6 real Neon immutable-history proof (`env_warehouse5_cbe5dde8`): **PASS �
 
 Phase 6: **COMPLETE**.
 
-**Next gate: begin Phase 7 — Environmental Diff Engine v2. Add first-class condition transitions and richer repeated-instance matching without weakening Phase 5 trust or Phase 6 immutable history.**
+Phase 7 Diff Engine v2 implementation: **CI PASS (`35435198030`, commit `238183d6`)**.
+
+Phase 7 provider diff-context hardening: **CI PASS (`35435260985`, commit `2006cd7d`)**.
+
+Phase 7 exact production deployment contract: **PASS (`35435260980`)**.
+
+Phase 7 real three-change phone proof: **PENDING**.
+
+Phase 8 facility-operations Reality Diff UI: **CI PASS (`35454475031`, commit `937ce9c0`)**.
+
+Phase 8 phone visual validation: **PENDING**.
+
+**Next gate: use the production app on phone for one controlled three-change Reality Diff test, then validate that the new Changes screen clearly separates Needs attention / Physical changes / Resolved / Needs verification before closing Phases 7 and 8.**
