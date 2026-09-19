@@ -4,7 +4,7 @@ import './styles.css'
 import './integration.css'
 import './environment.css'
 import './history.css'
-import type { AskBuildingResponse, EnvironmentalCondition, EnvironmentalDiff, EnvironmentalMemory, EnvironmentalState, EnvironmentType, Observation } from './domain/sentinel'
+import type { AskBuildingResponse, Change, EnvironmentalCondition, EnvironmentalDiff, EnvironmentalMemory, EnvironmentalState, EnvironmentType, Observation } from './domain/sentinel'
 import type { EnvironmentalStateHistoryEntry, EnvironmentalStateHistoryRecord } from './memory/history'
 import { createEnvironmentProfile, DEFAULT_ENVIRONMENT, ENVIRONMENT_TYPES, loadActiveEnvironmentId, loadEnvironmentDirectory, saveActiveEnvironmentId, saveEnvironmentDirectory, type EnvironmentProfile } from './environment/directory'
 import { ingestVideoFile } from './scan/video-ingestion'
@@ -72,10 +72,16 @@ function App() {
   const [historySelection, setHistorySelection] = useState<EnvironmentalStateHistoryRecord | null>(null)
   const [historyStatus, setHistoryStatus] = useState('')
   const [historyAt, setHistoryAt] = useState('')
+  const [selectedChangeId, setSelectedChangeId] = useState<string | null>(null)
 
   const activeEnvironment = environments.find((item) => item.id === activeEnvironmentId) ?? environments[0] ?? DEFAULT_ENVIRONMENT
   const isWorking = status.startsWith('Observing') || status.startsWith('Understanding') || status.startsWith('Remembering')
   const latestDiff = result?.diff ?? memory?.diffs.at(-1)
+  const selectedChange = selectedChangeId ? latestDiff?.changes.find((change) => change.id === selectedChangeId) ?? null : null
+  const attentionChanges = latestDiff?.changes.filter((change) => changeBucket(change) === 'attention') ?? []
+  const physicalChanges = latestDiff?.changes.filter((change) => changeBucket(change) === 'physical') ?? []
+  const resolvedChanges = latestDiff?.changes.filter((change) => changeBucket(change) === 'resolved') ?? []
+  const verificationChanges = latestDiff?.changes.filter((change) => changeBucket(change) === 'verification') ?? []
 
   useEffect(() => {
     saveEnvironmentDirectory(environments)
@@ -95,6 +101,7 @@ function App() {
     setHistorySelection(null)
     setHistoryStatus('')
     setHistoryAt('')
+    setSelectedChangeId(null)
     setError('')
     setStatus(`Loading ${activeEnvironment.name} memory`)
 
@@ -176,6 +183,7 @@ function App() {
     setAnswer(null)
     setView('observe')
     setSelectedObservation(null)
+    setSelectedChangeId(null)
 
     try {
       setStatus('Observing · extracting evidence')
@@ -372,12 +380,92 @@ function App() {
         {error && <div className="error" role="alert"><strong>Observation interrupted</strong><span>{error}</span></div>}
       </section>}
 
-      {view === 'changes' && <section className="changes-view">
-        <div className="hero-copy compact"><div className="eyebrow">REALITY DIFF / {activeEnvironment.name.toUpperCase()}</div><h1>What changed.</h1><p>{latestDiff ? latestDiff.summary : memory ? `Observe ${activeEnvironment.name} again. SENTINEL will compare the new grounded state with the one it remembers for this location.` : `${activeEnvironment.name} needs a first observation before Reality Diff can begin.`}</p></div>
-        <div className="diff-stage"><div className="diff-half previous"><span>PREVIOUS</span><strong>{latestDiff ? latestDiff.fromStateId : memory?.environment.currentStateId ?? 'No state'}</strong></div><div className="diff-divider"><i /></div><div className="diff-half current"><span>{latestDiff ? 'CURRENT' : 'NEXT OBSERVATION'}</span><strong>{latestDiff ? latestDiff.toStateId : 'Awaiting rescan'}</strong></div><div className="diff-label">BEFORE <b>↔</b> AFTER</div></div>
-        <div className="change-list" aria-label="Environmental changes">{latestDiff ? latestDiff.changes.length === 0 ? <div className="empty-diff">No supported environmental changes were detected between these states.</div> : latestDiff.changes.map((change) => <div className="change-row" key={change.id}><span className={`change-mark ${change.type}`}>{change.type === 'added' ? '+' : change.type === 'removed' ? '−' : change.type === 'moved' ? '↔' : change.type === 'resolved' ? '✓' : '△'}</span><div><strong>{change.title}</strong><small>{change.description} · {Math.round(change.confidence * 100)}% confidence</small></div></div>) : <><div className="preview-label">INTERACTION PREVIEW — NOT DETECTED EVENTS</div>{previewChanges.map((change) => <div className="change-row" key={change.type}><span className={`change-mark ${change.type.toLowerCase()}`}>{change.mark}</span><div><strong>{change.type}</strong><small>{change.detail}</small></div></div>)}</>}</div>
-        <button className="wide-observe" type="button" onClick={() => inputRef.current?.click()}><span>Observe {activeEnvironment.name} again</span><span>Build the next environmental state ↗</span></button>
+      {view === 'changes' && <section className="changes-view operations-diff">
+        <div className="hero-copy compact operations-diff-hero">
+          <div className="eyebrow">FACILITY OPERATIONS / REALITY DIFF / {activeEnvironment.name.toUpperCase()}</div>
+          <h1>{latestDiff ? 'Operations update.' : 'What changed.'}</h1>
+          <p>{latestDiff ? `SENTINEL compared the previous remembered state with the current one and found ${latestDiff.changes.length} supported change${latestDiff.changes.length === 1 ? '' : 's'}. Review what needs attention, what physically changed, and what has been resolved.` : memory ? `Observe ${activeEnvironment.name} again. SENTINEL will compare the new grounded state with the one it remembers for this location.` : `${activeEnvironment.name} needs a first observation before Reality Diff can begin.`}</p>
+        </div>
+
+        {latestDiff && <div className="operations-summary" aria-label="Facility operations change summary">
+          <div className={attentionChanges.length > 0 ? 'operations-stat attention active' : 'operations-stat attention'}>
+            <span>Needs attention</span>
+            <strong>{attentionChanges.length}</strong>
+            <small>{attentionChanges.length ? 'Operational changes to review' : 'No new operational concern'}</small>
+          </div>
+          <div className={physicalChanges.length > 0 ? 'operations-stat physical active' : 'operations-stat physical'}>
+            <span>Physical changes</span>
+            <strong>{physicalChanges.length}</strong>
+            <small>{physicalChanges.length ? 'Added, moved, removed or changed' : 'No supported physical change'}</small>
+          </div>
+          <div className={resolvedChanges.length > 0 ? 'operations-stat resolved active' : 'operations-stat resolved'}>
+            <span>Resolved</span>
+            <strong>{resolvedChanges.length}</strong>
+            <small>{resolvedChanges.length ? 'Supported resolution events' : 'No newly verified resolution'}</small>
+          </div>
+          <div className={verificationChanges.length > 0 ? 'operations-stat verification active' : 'operations-stat verification'}>
+            <span>Needs verification</span>
+            <strong>{verificationChanges.length}</strong>
+            <small>{verificationChanges.length ? 'Not re-observed is not resolved' : 'No uncertain disappearance'}</small>
+          </div>
+        </div>}
+
+        <div className="diff-stage operations-diff-stage">
+          <div className="diff-half previous"><span>PREVIOUS MEMORY</span><strong>{latestDiff ? stateLabel(memory, latestDiff.fromStateId) : memory?.environment.currentStateId ? stateLabel(memory, memory.environment.currentStateId) : 'No state'}</strong>{latestDiff && <small>{shortStateId(latestDiff.fromStateId)}</small>}</div>
+          <div className="diff-divider"><i /></div>
+          <div className="diff-half current"><span>{latestDiff ? 'CURRENT MEMORY' : 'NEXT OBSERVATION'}</span><strong>{latestDiff ? stateLabel(memory, latestDiff.toStateId) : 'Awaiting rescan'}</strong>{latestDiff && <small>{shortStateId(latestDiff.toStateId)}</small>}</div>
+          <div className="diff-label">BEFORE <b>↔</b> AFTER</div>
+          {latestDiff && <div className="diff-operation-caption"><span>BUILDING MEMORY UPDATED</span><strong>{latestDiff.summary}</strong></div>}
+        </div>
+
+        {latestDiff ? latestDiff.changes.length === 0 ? <div className="empty-diff operations-empty"><strong>No material change detected.</strong><span>The building state is materially consistent with the previous observation.</span></div> : <div className="operations-change-groups">
+          {attentionChanges.length > 0 && <ChangeGroup title="Needs attention" subtitle="Operational conditions or issues that deserve review." changes={attentionChanges} onSelect={setSelectedChangeId} />}
+          {physicalChanges.length > 0 && <ChangeGroup title="Physical changes" subtitle="Grounded changes to objects or their visible state/location." changes={physicalChanges} onSelect={setSelectedChangeId} />}
+          {resolvedChanges.length > 0 && <ChangeGroup title="Resolved" subtitle="Changes explicitly supported as resolved." changes={resolvedChanges} onSelect={setSelectedChangeId} />}
+          {verificationChanges.length > 0 && <ChangeGroup title="Needs verification" subtitle="Previously remembered items were not re-observed. SENTINEL does not call that resolved." changes={verificationChanges} onSelect={setSelectedChangeId} />}
+        </div> : <div className="change-list" aria-label="Environmental changes"><div className="preview-label">INTERACTION PREVIEW — NOT DETECTED EVENTS</div>{previewChanges.map((change) => <div className="change-row" key={change.type}><span className={`change-mark ${change.type.toLowerCase()}`}>{change.mark}</span><div><strong>{change.type}</strong><small>{change.detail}</small></div></div>)}</div>}
+
+        <div className="operations-next-step">
+          <div><span className="eyebrow">NEXT OPERATION</span><strong>{latestDiff && attentionChanges.length > 0 ? 'Review what needs attention, then ask SENTINEL what should happen next.' : latestDiff ? 'No urgent action is implied by the diff alone. Observe again when the physical state changes.' : 'Create a second state to unlock Reality Diff.'}</strong></div>
+          <button className="wide-observe" type="button" onClick={() => inputRef.current?.click()}><span>Observe {activeEnvironment.name} again</span><span>Build the next environmental state ↗</span></button>
+        </div>
       </section>}
+
+      {selectedChange && latestDiff && <div className="drawer-backdrop" role="presentation" onClick={() => setSelectedChangeId(null)}>
+        <aside className="evidence-drawer change-drawer" role="dialog" aria-modal="true" aria-label={selectedChange.title} onClick={(event) => event.stopPropagation()}>
+          <button className="drawer-close" type="button" onClick={() => setSelectedChangeId(null)}>×</button>
+          <span className="eyebrow">{changeTypeLabel(selectedChange.type)} / {changeEntityLabel(selectedChange)}</span>
+          <div className="change-drawer-mark"><span className={`change-mark ${selectedChange.type}`}>{changeMark(selectedChange.type)}</span><small>{Math.round(selectedChange.confidence * 100)}% confidence</small></div>
+          <h2>{selectedChange.title}</h2>
+          <p>{selectedChange.description}</p>
+
+          <div className="change-state-transition">
+            <div><span>Previous</span><strong>{stateLabel(memory, latestDiff.fromStateId)}</strong><small>{shortStateId(latestDiff.fromStateId)}</small></div>
+            <b>→</b>
+            <div><span>Current</span><strong>{stateLabel(memory, latestDiff.toStateId)}</strong><small>{shortStateId(latestDiff.toStateId)}</small></div>
+          </div>
+
+          <div className="history-lock-note change-evidence-note">
+            <span>Grounded change</span>
+            <strong>SENTINEL only reports this change from persisted environmental evidence.</strong>
+            <p>{selectedChange.evidenceIds.length > 0 ? `${selectedChange.evidenceIds.length} evidence reference${selectedChange.evidenceIds.length === 1 ? '' : 's'} support this change.` : 'This change is supported by the immutable state comparison; no standalone evidence reference was attached.'}</p>
+          </div>
+
+          {selectedChange.evidenceIds.length > 0 && <div className="change-evidence-ids">
+            <span className="eyebrow">EVIDENCE REFERENCES</span>
+            {selectedChange.evidenceIds.map((id) => <code key={id}>{id}</code>)}
+          </div>}
+
+          <div className="change-manager-actions">
+            {(changeBucket(selectedChange) === 'attention' || changeBucket(selectedChange) === 'verification') && <button type="button" className="change-ask-action" onClick={() => {
+              setQuestion(`What should I do about: ${selectedChange.title}?`)
+              setSelectedChangeId(null)
+              setView('memory')
+            }}>Ask SENTINEL what to do ↗</button>}
+            <button type="button" onClick={() => { setSelectedChangeId(null); inputRef.current?.click() }}>Observe again</button>
+          </div>
+        </aside>
+      </div>}
 
       {historySelection && <div className="drawer-backdrop" role="presentation" onClick={() => setHistorySelection(null)}>
         <aside className="evidence-drawer history-drawer" role="dialog" aria-modal="true" aria-label={`State v${historySelection.state.version} historical snapshot`} onClick={(event) => event.stopPropagation()}>
@@ -444,6 +532,69 @@ function App() {
       <input ref={inputRef} hidden type="file" accept="video/*" onChange={(event) => { const file = event.target.files?.[0]; if (file) void handleVideo(file); event.target.value = '' }} />
     </main>
   )
+}
+
+function ChangeGroup({ title, subtitle, changes, onSelect }: { title: string; subtitle: string; changes: Change[]; onSelect: (id: string) => void }) {
+  return <section className="operations-change-group">
+    <div className="operations-group-heading"><div><span>{title.toUpperCase()}</span><strong>{title}</strong></div><small>{subtitle}</small></div>
+    <div className="operations-change-list">
+      {changes.map((change) => <button className="operations-change-card" type="button" key={change.id} onClick={() => onSelect(change.id)}>
+        <span className={`change-mark ${change.type}`}>{changeMark(change.type)}</span>
+        <span className="operations-change-copy">
+          <span className="change-card-meta"><b>{changeTypeLabel(change.type)}</b><i>{changeEntityLabel(change)}</i></span>
+          <strong>{change.title}</strong>
+          <small>{change.description}</small>
+        </span>
+        <span className="change-card-confidence">{Math.round(change.confidence * 100)}%<i>↗</i></span>
+      </button>)}
+    </div>
+  </section>
+}
+
+function changeBucket(change: Change): 'attention' | 'physical' | 'resolved' | 'verification' {
+  if (change.type === 'resolved') return 'resolved'
+  if (change.type === 'uncertain') return 'verification'
+  const entityKind = change.entityKind ?? (/issue|condition/i.test(change.title) ? 'issue' : 'object')
+  if (entityKind === 'issue' || entityKind === 'condition') return 'attention'
+  return 'physical'
+}
+
+function changeMark(type: Change['type']): string {
+  if (type === 'added') return '+'
+  if (type === 'removed') return '−'
+  if (type === 'moved') return '↔'
+  if (type === 'changed') return '!'
+  if (type === 'resolved') return '✓'
+  if (type === 'uncertain') return '?'
+  return '·'
+}
+
+function changeTypeLabel(type: Change['type']): string {
+  if (type === 'added') return 'Added'
+  if (type === 'removed') return 'Removed'
+  if (type === 'moved') return 'Moved'
+  if (type === 'changed') return 'Changed'
+  if (type === 'resolved') return 'Resolved'
+  if (type === 'uncertain') return 'Needs verification'
+  return 'Unchanged'
+}
+
+function changeEntityLabel(change: Change): string {
+  if (change.entityKind === 'issue') return 'Operational issue'
+  if (change.entityKind === 'condition') return 'Environmental condition'
+  if (change.entityKind === 'object') return 'Physical object'
+  if (/issue/i.test(change.title)) return 'Operational issue'
+  if (/condition/i.test(change.title)) return 'Environmental condition'
+  return 'Physical change'
+}
+
+function stateLabel(memory: EnvironmentalMemory | null, stateId: string): string {
+  const state = memory?.states.find((item) => item.id === stateId)
+  return state ? `State v${state.version}` : 'Remembered state'
+}
+
+function shortStateId(value: string): string {
+  return value.length > 22 ? `${value.slice(0, 18)}…` : value
 }
 
 function formatStateTimestamp(value: string): string {
