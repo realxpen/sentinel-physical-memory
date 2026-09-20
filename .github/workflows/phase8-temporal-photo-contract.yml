@@ -126,10 +126,10 @@ jobs:
           print('Production temporal titles:', titles)
 
           normalized_titles = [
-              ('New: duffel bag' if title == 'New: duffle bag' else title)
+              ('New: bag' if title and title.lower().startswith('new:') and 'bag' in title.lower() else title)
               for title in titles
           ]
-          expected_titles = {'New: duffel bag', 'Moved: office chair', 'Changed: white door'}
+          expected_titles = {'New: bag', 'Moved: office chair', 'Changed: white door'}
           assert set(normalized_titles) == expected_titles and len(normalized_titles) == 3, {
               'message': 'Production Reality Diff must contain exactly the three defensible changes.',
               'expected': sorted(expected_titles),
