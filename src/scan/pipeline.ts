@@ -717,16 +717,6 @@ function pruneNegativeAuditObservations(result: PerceptionResult): PerceptionRes
   return { ...result, observations: [] }
 }
 
-function isGenericNegativeFinding(label: string, description: string): boolean {
-  const text = normalizeSemanticText(`${label} ${description}`)
-  return /^(?:no|none)\b/.test(text) ||
-    /\bno visible\b/.test(text) ||
-    /\bno signs? of\b/.test(text) ||
-    /\bno evidence of\b/.test(text) ||
-    /\bclear of (?:obstruction|hazard|damage)/.test(text) ||
-    /\bunobstructed\b/.test(text)
-}
-
 function normalizeTemporalName(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim()
 }
