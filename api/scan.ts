@@ -1,4 +1,5 @@
 import { createNebiusNemotronAdapter } from '../src/ai/nebius.js'
+import { ModelAdapterError } from '../src/ai/model.js'
 import type { ScanArtifact, ScanFrame, ScanInput } from '../src/scan/types.js'
 import { ScanPipeline } from '../src/scan/pipeline.js'
 import { getMemoryPersistenceMode, getRuntimeEnvironmentalMemoryRepository } from '../server/memory-repository.js'
@@ -53,6 +54,29 @@ export default async function handler(req: Request, res: Response) {
 
     const input = parseScanInput(req.body)
     const repository = getRuntimeEnvironmentalMemoryRepository()
+
+    const existingMemory = await repository.get(input.environmentId)
+    const existingState = existingMemory?.states.find((state) => state.sourceIds.includes(input.source.id))
+    if (existingMemory && existingState) {
+      const existingSnapshot = existingMemory.snapshots.find((snapshot) => snapshot.stateId === existingState.id)
+      const existingDiff = existingMemory.diffs.find((diff) => diff.toStateId === existingState.id)
+      return res.status(200).json({
+        scanId: `replay_${input.source.id}`,
+        environmentId: input.environmentId,
+        sourceId: input.source.id,
+        completedAt: existingState.capturedAt,
+        persistence: getMemoryPersistenceMode(),
+        frames: [],
+        artifacts: [],
+        observations: existingMemory.observations.filter((item) => item.sourceId === input.source.id),
+        conditions: existingSnapshot?.conditions ?? [],
+        state: existingState,
+        diff: existingDiff,
+        memory: existingMemory,
+        replayed: true,
+      })
+    }
+
     const adapter = createNebiusNemotronAdapter(apiKey, {
       baseUrl: process.env.NEBIUS_TOKEN_FACTORY_BASE_URL,
       model: process.env.NEBIUS_PERCEPTION_MODEL?.trim() || DEFAULT_PERCEPTION_MODEL,
