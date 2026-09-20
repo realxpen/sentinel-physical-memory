@@ -753,7 +753,7 @@ function spatialObjectTone(item: SpatialObject, snapshot: EnvironmentalStateSnap
 }
 
 function spatialObjectSubtitle(item: SpatialObject): string {
-  const parts = [item.category]
+  const parts: string[] = [item.category]
   if (item.state) parts.push(item.state)
   else if (item.position?.description) parts.push(item.position.description)
   return parts.join(' · ')
