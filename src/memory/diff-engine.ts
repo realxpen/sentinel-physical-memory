@@ -126,7 +126,9 @@ export class EnvironmentalDiffEngine implements DiffEngine {
         continue
       }
 
-      if (normalizedObjectState(current.state) !== normalizedObjectState(previous.state)) {
+      const previousState = normalizedObjectState(previous.state)
+      const currentState = normalizedObjectState(current.state)
+      if (previousState && currentState && currentState !== previousState) {
         changes.push(this.change(
           normalizedFrom,
           normalizedTo,
@@ -134,7 +136,7 @@ export class EnvironmentalDiffEngine implements DiffEngine {
           'object',
           current.id,
           `Changed: ${current.name}`,
-          `${current.name} changed from ${previous.state ?? 'unknown'} to ${current.state ?? 'unknown'}.`,
+          `${current.name} changed from ${previous.state} to ${current.state}.`,
           Math.min(current.confidence, previous.confidence),
           [...previous.evidenceIds, ...current.evidenceIds],
         ))
@@ -168,6 +170,7 @@ export class EnvironmentalDiffEngine implements DiffEngine {
     for (const [previousIndex, previous] of normalizedFrom.objects.entries()) {
       if (matchedPrevious.has(previousIndex)) continue
       if (hasUnresolvedFamilyCounterpart(previous, normalizedTo.objects)) continue
+      if (isExplicitlyReobservedInCurrentDescriptions(previous, normalizedTo.objects)) continue
       if (isLowSalienceInventoryNoise(previous)) continue
       changes.push(this.change(
         normalizedFrom,
@@ -663,6 +666,22 @@ function sameIssue(a: Issue, b: Issue): boolean {
       normalizedConditionTitle(a.title) === normalizedConditionTitle(b.title) &&
       (a.roomId ?? '') === (b.roomId ?? '')
     )
+}
+
+function isExplicitlyReobservedInCurrentDescriptions(previous: SpatialObject, currentObjects: SpatialObject[]): boolean {
+  const name = normalize(previous.name)
+  if (name.length < 4) return false
+
+  return currentObjects.some((item) => {
+    const description = normalize(item.description ?? '')
+    if (!description) return false
+    const index = description.indexOf(name)
+    if (index < 0) return false
+
+    const before = description.slice(Math.max(0, index - 24), index)
+    if (/\b(?:no|without|missing|absent)\s*$/.test(before)) return false
+    return true
+  })
 }
 
 function isLowSalienceInventoryNoise(item: SpatialObject): boolean {
