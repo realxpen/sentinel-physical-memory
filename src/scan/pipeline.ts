@@ -244,6 +244,7 @@ export class ScanPipeline {
       'Use basis="observed" only for the directly visible state. Use basis="inferred" and status="uncertain" when interpreting what the visible state may mean.',
       'Do not recommend actions and do not infer invisible causes or risks.',
       'Reference only the exact supplied FRAME_ID values in evidenceIds. SENTINEL owns frame evidence records.',
+      'Do not enumerate negative findings. Never emit observations such as "no visible damage", "no visible obstruction", "no visible hazard", "area is clear", or statements about rooms/areas that are not directly visible. If there is no concrete operational condition, return conditions=[] and do not add audit observations.',
       'Return the full SENTINEL PerceptionResult JSON schema. It is acceptable for conditions to be empty if no operational condition is visually supported.',
     ].join('\n')
 
