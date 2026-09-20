@@ -77,6 +77,7 @@ function App() {
   const [historyStatus, setHistoryStatus] = useState('')
   const [historyAt, setHistoryAt] = useState('')
   const [selectedChangeId, setSelectedChangeId] = useState<string | null>(null)
+  const [showAllObservations, setShowAllObservations] = useState(false)
 
   const activeEnvironment = environments.find((item) => item.id === activeEnvironmentId) ?? environments[0] ?? DEFAULT_ENVIRONMENT
   const isWorking = status.startsWith('Observing') || status.startsWith('Understanding') || status.startsWith('Remembering')
@@ -87,6 +88,8 @@ function App() {
   const physicalChanges = presentedChanges.filter((change) => changeBucket(change) === 'physical')
   const resolvedChanges = presentedChanges.filter((change) => changeBucket(change) === 'resolved')
   const verificationChanges = presentedChanges.filter((change) => changeBucket(change) === 'verification')
+  const displayObservations = (result?.observations ?? []).filter(isDisplayableObservation)
+  const visibleObservations = showAllObservations ? displayObservations : displayObservations.slice(0, 14)
   const previousDiffState = latestDiff ? memory?.states.find((state) => state.id === latestDiff.fromStateId) : undefined
   const currentDiffState = latestDiff ? memory?.states.find((state) => state.id === latestDiff.toStateId) : undefined
   const previousDiffImage = previousDiffState ? memory?.sources.find((source) => previousDiffState.sourceIds.includes(source.id) && source.modality === 'image')?.uri : undefined
@@ -111,6 +114,7 @@ function App() {
     setHistoryStatus('')
     setHistoryAt('')
     setSelectedChangeId(null)
+    setShowAllObservations(false)
     setError('')
     setStatus(`Loading ${activeEnvironment.name} memory`)
 
@@ -193,6 +197,7 @@ function App() {
     setView('observe')
     setSelectedObservation(null)
     setSelectedChangeId(null)
+    setShowAllObservations(false)
 
     try {
       setStatus('Observing · preparing photo evidence')
@@ -427,7 +432,11 @@ function App() {
 
         {result && <section className="evidence-section">
           <div className="section-heading"><div><span className="eyebrow">EVIDENCE / CURRENT STATE</span><h2>What SENTINEL observed.</h2></div><span className="scan-id">{result.scanId}</span></div>
-          <div className="observation-list">{result.observations.length === 0 ? <div className="empty-observation">No grounded observations were returned for this walkthrough.</div> : result.observations.map((item, index) => <button className="observation-row" type="button" key={`${item.label}-${index}`} onClick={() => setSelectedObservation(index)}><span className="observation-index">{String(index + 1).padStart(2, '0')}</span><span className="observation-copy"><strong>{item.label}</strong><small>{item.description}</small></span><span className="observation-confidence">{Math.round(item.confidence * 100)}%</span><span className="arrow">↗</span></button>)}</div>
+          <div className="observation-list">{displayObservations.length === 0 ? <div className="empty-observation">No material grounded observations were returned for this scan.</div> : visibleObservations.map((item) => {
+            const index = result.observations.indexOf(item)
+            return <button className="observation-row" type="button" key={item.id} onClick={() => setSelectedObservation(index)}><span className="observation-index">{String(index + 1).padStart(2, '0')}</span><span className="observation-copy"><strong>{item.label}</strong><small>{item.description}</small></span><span className="observation-confidence">{Math.round(item.confidence * 100)}%</span><span className="arrow">↗</span></button>
+          })}</div>
+          {displayObservations.length > 14 && <button className="observation-expand" type="button" onClick={() => setShowAllObservations((value) => !value)}>{showAllObservations ? 'Show less evidence' : `Show all ${displayObservations.length} observations`}</button>}
         </section>}
       </section>}
 
@@ -663,6 +672,16 @@ function stateLabel(memory: EnvironmentalMemory | null, stateId: string): string
 
 function shortStateId(value: string): string {
   return value.length > 22 ? `${value.slice(0, 18)}…` : value
+}
+
+function isDisplayableObservation(item: Observation): boolean {
+  const text = `${item.label} ${item.description}`.toLowerCase()
+  return !(
+    /^\s*(?:no|none)\b/.test(text) ||
+    /\bno visible\b/.test(text) ||
+    /\bno signs? of\b/.test(text) ||
+    /\bno evidence of\b/.test(text)
+  )
 }
 
 function formatStateTimestamp(value: string): string {
