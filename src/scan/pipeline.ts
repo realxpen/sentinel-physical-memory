@@ -1,8 +1,9 @@
-import type { ConditionKind, EnvironmentType, PerceptionResult, SpatialObject } from '../domain/sentinel.js'
+import type { ConditionKind, EnvironmentType, PerceptionResult, SpatialObject, VerifiedTemporalChange, ScanSource, EnvironmentalStateSnapshot } from '../domain/sentinel.js'
 import { PerceptionValidationError, validatePerceptionForScan } from '../ai/perception-schema.js'
 import { groundPerceptionToTrustedFrames } from '../ai/trusted-evidence.js'
-import { ModelAdapterError, type ModelAdapter } from '../ai/model.js'
+import { ModelAdapterError, type ModelAdapter, type TemporalVerificationCandidate } from '../ai/model.js'
 import { EnvironmentalMemoryStore } from '../memory/store.js'
+import { matchObjectsConservatively } from '../memory/object-identity.js'
 import { InMemoryEnvironmentalMemoryRepository, type EnvironmentalMemoryRepository } from '../memory/repository.js'
 import { deriveOperationalConditions } from '../perception/condition-derivation.js'
 import type { ScanArtifact, ScanError, ScanFrame, ScanInput, ScanProgress, ScanResult } from './types.js'
@@ -56,6 +57,10 @@ export class ScanPipeline {
       ? existingMemory.snapshots.find((item) => item.stateId === existingMemory.environment.currentStateId)
       : undefined
     const priorObjects = priorSnapshot?.objects ?? []
+    const priorState = priorSnapshot ? existingMemory?.states.find((item) => item.id === priorSnapshot.stateId) : undefined
+    const priorImageSource = priorState
+      ? existingMemory?.sources.find((source) => priorState.sourceIds.includes(source.id) && source.modality === 'image')
+      : undefined
 
     const perceived = await this.perceive(scanId, artifacts, frames, input, priorObjects)
     const completed = materializeExplicitGroundedObjects(perceived, input.source.capturedAt)
@@ -71,7 +76,20 @@ export class ScanPipeline {
       })
     }
     const derived = deriveOperationalConditions(completed.result, input.source.capturedAt)
-    const perception = validatePerceptionForScan(derived.result, input.environmentId, input.source.id)
+    let perception = validatePerceptionForScan(derived.result, input.environmentId, input.source.id)
+    let verifiedTemporalChanges: VerifiedTemporalChange[] = []
+    if (input.media.kind === 'image' && priorSnapshot && priorImageSource && this.model?.verifyTemporal) {
+      const temporal = await this.verifyTemporalPhotoChanges(
+        scanId,
+        input,
+        artifacts,
+        priorSnapshot,
+        priorImageSource,
+        perception,
+      )
+      perception = temporal.perception
+      verifiedTemporalChanges = temporal.verified
+    }
     console.warn('SENTINEL_CONDITION_DERIVATION_COMPLETED', {
       scanId,
       derivedConditions: derived.derivedConditions.length,
@@ -103,6 +121,14 @@ export class ScanPipeline {
     if (previous) {
       this.emit(scanId, 'comparing', 94, `Comparing state v${previous.version} with v${state.version}`)
       diff = memory.compare(input.environmentId, previous.id, state.id)
+      if (verifiedTemporalChanges.length > 0) {
+        diff = memory.applyVerifiedTemporalChanges(
+          input.environmentId,
+          previous.id,
+          state.id,
+          verifiedTemporalChanges,
+        )
+      }
     }
 
     const updatedMemory = memory.get(input.environmentId)
@@ -127,6 +153,115 @@ export class ScanPipeline {
     const existing = await this.memoryRepository.get(environmentId)
     if (existing) store.hydrate(existing)
     return store
+  }
+
+  private async verifyTemporalPhotoChanges(
+    scanId: string,
+    input: ScanInput,
+    currentArtifacts: ScanArtifact[],
+    priorSnapshot: EnvironmentalStateSnapshot,
+    priorSource: ScanSource,
+    perception: PerceptionResult,
+  ): Promise<{ perception: PerceptionResult; verified: VerifiedTemporalChange[] }> {
+    if (!this.model?.verifyTemporal) return { perception, verified: [] }
+
+    const matches = matchObjectsConservatively(priorSnapshot.objects, perception.objects)
+    const previousNameCounts = countObjectNames(priorSnapshot.objects)
+    const currentNameCounts = countObjectNames(perception.objects)
+    const candidates: TemporalVerificationCandidate[] = []
+    const candidateByKey = new Map<string, { previous: SpatialObject; current: SpatialObject }>()
+
+    for (const [currentIndex, previousIndex] of matches.entries()) {
+      const previous = priorSnapshot.objects[previousIndex]
+      const current = perception.objects[currentIndex]
+      if (!temporalCandidateAllowed(current)) continue
+      if ((previousNameCounts.get(normalizeTemporalName(previous.name)) ?? 0) !== 1) continue
+      if ((currentNameCounts.get(normalizeTemporalName(current.name)) ?? 0) !== 1) continue
+
+      const key = `candidate_${candidates.length}`
+      candidates.push({
+        key,
+        previousObjectName: previous.name,
+        currentObjectName: current.name,
+        category: current.category,
+      })
+      candidateByKey.set(key, { previous, current })
+      if (candidates.length >= 16) break
+    }
+
+    const currentFrame = currentArtifacts.find((artifact) => artifact.kind === 'frame')
+    if (!currentFrame || candidates.length === 0) return { perception, verified: [] }
+
+    const previousArtifact: ScanArtifact = {
+      artifactId: `temporal_previous_${priorSource.id}`,
+      frameId: `previous_${priorSource.id}`,
+      kind: 'frame',
+      uri: priorSource.uri,
+    }
+
+    try {
+      const result = await this.model.verifyTemporal({
+        environmentId: input.environmentId,
+        previousSourceId: priorSource.id,
+        currentSourceId: input.source.id,
+        artifacts: [previousArtifact, currentFrame],
+        candidates,
+      })
+
+      const verified = result.changes.flatMap((change): VerifiedTemporalChange[] => {
+        if (change.confidence < 0.9) return []
+        const pair = candidateByKey.get(change.candidateKey)
+        if (!pair) return []
+
+        if (change.kind === 'state_change') {
+          if (!change.previousState || !change.currentState || change.previousState === change.currentState) return []
+          return [{
+            kind: 'state_change',
+            previousObjectName: pair.previous.name,
+            currentObjectName: pair.current.name,
+            previousState: change.previousState,
+            currentState: change.currentState,
+            confidence: change.confidence,
+          }]
+        }
+
+        return [{
+          kind: 'moved',
+          previousObjectName: pair.previous.name,
+          currentObjectName: pair.current.name,
+          confidence: change.confidence,
+        }]
+      })
+
+      if (verified.length === 0) return { perception, verified: [] }
+
+      const stateUpdates = new Map(
+        verified
+          .filter((change) => change.kind === 'state_change' && change.currentState)
+          .map((change) => [normalizeTemporalName(change.currentObjectName), change.currentState!]),
+      )
+      const refined = {
+        ...perception,
+        objects: perception.objects.map((item) => {
+          const state = stateUpdates.get(normalizeTemporalName(item.name))
+          return state ? { ...item, state } : item
+        }),
+      }
+
+      console.warn('SENTINEL_TEMPORAL_VERIFICATION_COMPLETED', {
+        scanId,
+        candidates: candidates.length,
+        verified,
+      })
+      return { perception: refined, verified }
+    } catch (error) {
+      console.warn('SENTINEL_TEMPORAL_VERIFICATION_SKIPPED', {
+        scanId,
+        code: errorCode(error),
+        message: error instanceof Error ? error.message : 'Unknown temporal verification failure',
+      })
+      return { perception, verified: [] }
+    }
   }
 
   private ensureEnvironment(memory: EnvironmentalMemoryStore, input: ScanInput) {
@@ -185,7 +320,7 @@ export class ScanPipeline {
     // Still-photo state audit: open/closed is operationally important but the broad
     // scene pass can omit it. Re-inspect only visible openable objects whose state
     // is missing; this pass may confirm state but must not invent unseen objects.
-    if (input.media.kind === 'image' && shouldRunOpenableStateAudit(scene)) {
+    if (input.media.kind === 'image' && priorObjects.length === 0 && shouldRunOpenableStateAudit(scene)) {
       const candidates = scene.objects
         .filter(isOpenableObject)
         .filter((item) => !hasExplicitOpenClosedState(item))
@@ -559,10 +694,10 @@ function sanitizeStateAudit(result: PerceptionResult): PerceptionResult {
 }
 
 function pruneNegativeAuditObservations(result: PerceptionResult): PerceptionResult {
-  return {
-    ...result,
-    observations: result.observations.filter((item) => !isGenericNegativeFinding(item.label, item.description)),
-  }
+  // Condition-audit conditions already carry grounded evidence. Audit prose is
+  // intentionally not persisted: it is a common source of repetitive "normal"
+  // inventory narration and does not add operational truth.
+  return { ...result, observations: [] }
 }
 
 function isGenericNegativeFinding(label: string, description: string): boolean {
@@ -573,6 +708,26 @@ function isGenericNegativeFinding(label: string, description: string): boolean {
     /\bno evidence of\b/.test(text) ||
     /\bclear of (?:obstruction|hazard|damage)/.test(text) ||
     /\bunobstructed\b/.test(text)
+}
+
+function normalizeTemporalName(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim()
+}
+
+function countObjectNames(objects: SpatialObject[]): Map<string, number> {
+  const counts = new Map<string, number>()
+  for (const item of objects) {
+    const key = normalizeTemporalName(item.name)
+    counts.set(key, (counts.get(key) ?? 0) + 1)
+  }
+  return counts
+}
+
+function temporalCandidateAllowed(item: SpatialObject): boolean {
+  if (isOpenableObject(item)) return true
+  if (!new Set(['furniture', 'equipment', 'obstruction']).has(item.category)) return false
+  const name = normalizeTemporalName(item.name)
+  return !/^(?:desk|bookshelf|shelf|rug|carpet|lamp|table lamp|picture|picture frame|books|globe|plant|potted plant|wicker basket|basket|cup|mouse|computer mouse|laptop)$/.test(name)
 }
 
 function isOpenableObject(item: SpatialObject): boolean {
