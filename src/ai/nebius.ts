@@ -219,22 +219,25 @@ export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapte
     }
 
     const allowed = new Set(request.candidates.map((candidate) => candidate.key))
-    const changes = value.changes.flatMap((raw) => {
-      if (!isRecord(raw)) return []
+    const changes: TemporalVerificationResult['changes'] = []
+
+    for (const raw of value.changes) {
+      if (!isRecord(raw)) continue
       const candidateKey = typeof raw.candidateKey === 'string' ? raw.candidateKey : ''
       const kind = raw.kind === 'state_change' || raw.kind === 'moved' ? raw.kind : undefined
       const confidence = typeof raw.confidence === 'number' ? raw.confidence : Number(raw.confidence)
-      if (!allowed.has(candidateKey) || !kind || !Number.isFinite(confidence)) return []
+      if (!allowed.has(candidateKey) || !kind || !Number.isFinite(confidence)) continue
 
       if (kind === 'state_change') {
         const previousState = raw.previousState === 'open' || raw.previousState === 'closed' ? raw.previousState : undefined
         const currentState = raw.currentState === 'open' || raw.currentState === 'closed' ? raw.currentState : undefined
-        if (!previousState || !currentState || previousState === currentState) return []
-        return [{ candidateKey, kind, previousState, currentState, confidence: Math.max(0, Math.min(1, confidence)) }]
+        if (!previousState || !currentState || previousState === currentState) continue
+        changes.push({ candidateKey, kind, previousState, currentState, confidence: Math.max(0, Math.min(1, confidence)) })
+        continue
       }
 
-      return [{ candidateKey, kind, confidence: Math.max(0, Math.min(1, confidence)) }]
-    })
+      changes.push({ candidateKey, kind, confidence: Math.max(0, Math.min(1, confidence)) })
+    }
 
     return { changes }
   }
