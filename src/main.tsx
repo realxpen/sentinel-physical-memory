@@ -376,7 +376,7 @@ function App() {
 
         <div className="memory-summary">
           <div><span>Since you were last here</span><strong>{latestDiff ? latestDiff.summary : memory ? 'No comparison yet' : 'No previous state yet'}</strong></div>
-          <button className="observe-cta" type="button" onClick={() => inputRef.current?.click()}><span className="observe-orb"><i /></span><span><strong>{memory ? 'Take update photo' : 'Take first photo'}</strong><small>{memory ? `Create the next ${activeEnvironment.name} state` : `Create ${activeEnvironment.name} memory v1`}</small></span></button>
+          <button className="observe-cta" type="button" onClick={() => libraryInputRef.current?.click()}><span className="observe-orb"><i /></span><span><strong>{memory ? 'Choose update photo' : 'Choose first photo'}</strong><small>{memory ? `Select an image for the next ${activeEnvironment.name} state` : `Select an image to create ${activeEnvironment.name} memory v1`}</small></span></button>
         </div>
 
         {memory && <section className="history-section" aria-label="Environmental state history">
@@ -426,7 +426,7 @@ function App() {
       </section>}
 
       {view === 'observe' && <section className="observe-view">
-        <div className="observe-camera"><div className="camera-noise" /><div className="scan-line" /><div className="camera-topline"><SentinelMark active /><span>{isWorking ? status : `${activeEnvironment.name.toUpperCase()} / OBSERVATION MODE`}</span></div><div className="focus-frame focus-one"><span>Workspace</span></div><div className="focus-frame focus-two"><span>Evidence region</span></div><div className="observe-message"><span className="eyebrow">PHONE-FIRST OBSERVATION</span><h2>{isWorking ? status : memory ? `Photograph what changed in ${activeEnvironment.name}.` : `Create the first memory for ${activeEnvironment.name}.`}</h2><p>Take one clear photo or choose one from Photos. SENTINEL grounds visible evidence and updates only this location's persistent environmental state. Video remains optional for larger spaces.</p></div><div className="observe-capture-actions"><button className="capture-button" type="button" onClick={() => inputRef.current?.click()} aria-label="Take a photo"><span><i /></span><strong>{isWorking ? 'Observing' : memory ? 'Take update photo' : 'Take first photo'}</strong></button><div className="observe-secondary-actions"><button className="walkthrough-option" type="button" onClick={() => libraryInputRef.current?.click()} disabled={isWorking}>Choose from Photos</button><button className="walkthrough-option" type="button" onClick={() => videoInputRef.current?.click()} disabled={isWorking}>Choose video</button></div></div></div>
+        <div className="observe-camera"><div className="camera-noise" /><div className="scan-line" /><div className="camera-topline"><SentinelMark active /><span>{isWorking ? status : `${activeEnvironment.name.toUpperCase()} / OBSERVATION MODE`}</span></div><div className="focus-frame focus-one"><span>Workspace</span></div><div className="focus-frame focus-two"><span>Evidence region</span></div><div className="observe-message"><span className="eyebrow">PHONE-FIRST OBSERVATION</span><h2>{isWorking ? status : memory ? `Photograph what changed in ${activeEnvironment.name}.` : `Create the first memory for ${activeEnvironment.name}.`}</h2><p>Take one clear photo or choose one from Photos. SENTINEL grounds visible evidence and updates only this location's persistent environmental state. Video remains optional for larger spaces.</p></div><div className="observe-capture-actions"><button className="capture-button" type="button" onClick={() => libraryInputRef.current?.click()} aria-label="Choose a photo from library"><span><i /></span><strong>{isWorking ? 'Observing' : memory ? 'Choose update photo' : 'Choose first photo'}</strong></button><div className="observe-secondary-actions"><button className="walkthrough-option" type="button" onClick={() => inputRef.current?.click()} disabled={isWorking}>Take photo</button><button className="walkthrough-option" type="button" onClick={() => videoInputRef.current?.click()} disabled={isWorking}>Choose video</button></div></div></div>
         {error && <div className="error" role="alert"><strong>Observation interrupted</strong><span>{error}</span></div>}
       </section>}
 
@@ -477,7 +477,7 @@ function App() {
 
         <div className="operations-next-step">
           <div><span className="eyebrow">NEXT OPERATION</span><strong>{latestDiff && attentionChanges.length > 0 ? 'Review what needs attention, then ask SENTINEL what should happen next.' : latestDiff && verificationChanges.length > 0 ? 'Verification is required before treating this as resolved. Re-observe the area and confirm the physical condition.' : latestDiff ? 'No urgent action is implied by the diff alone. Observe again when the physical state changes.' : 'Create a second state to unlock Reality Diff.'}</strong></div>
-          <button className="wide-observe" type="button" onClick={() => inputRef.current?.click()}><span>Take update photo</span><span>Build the next environmental state ↗</span></button>
+          <button className="wide-observe" type="button" onClick={() => libraryInputRef.current?.click()}><span>Choose update photo</span><span>Select the next environmental state image ↗</span></button>
         </div>
       </section>}
 
@@ -512,7 +512,7 @@ function App() {
               setSelectedChangeId(null)
               setView('memory')
             }}>Ask SENTINEL what to do ↗</button>}
-            <button type="button" onClick={() => { setSelectedChangeId(null); inputRef.current?.click() }}>Take verification photo</button>
+            <button type="button" onClick={() => { setSelectedChangeId(null); libraryInputRef.current?.click() }}>Choose verification photo</button>
           </div>
         </aside>
       </div>}
