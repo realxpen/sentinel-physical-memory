@@ -7,6 +7,7 @@ import './history.css'
 import type { AskBuildingResponse, Change, EnvironmentalCondition, EnvironmentalDiff, EnvironmentalMemory, EnvironmentalState, EnvironmentType, Observation } from './domain/sentinel'
 import type { EnvironmentalStateHistoryEntry, EnvironmentalStateHistoryRecord } from './memory/history'
 import { createEnvironmentProfile, DEFAULT_ENVIRONMENT, ENVIRONMENT_TYPES, loadActiveEnvironmentId, loadEnvironmentDirectory, saveActiveEnvironmentId, saveEnvironmentDirectory, type EnvironmentProfile } from './environment/directory'
+import { ingestImageFile } from './scan/image-ingestion'
 import { ingestVideoFile } from './scan/video-ingestion'
 
 interface ScanResponse {
@@ -54,6 +55,7 @@ function Confidence({ value }: { value: number }) {
 
 function App() {
   const inputRef = useRef<HTMLInputElement>(null)
+  const videoInputRef = useRef<HTMLInputElement>(null)
   const [environments, setEnvironments] = useState<EnvironmentProfile[]>(loadEnvironmentDirectory)
   const [activeEnvironmentId, setActiveEnvironmentId] = useState(() => loadActiveEnvironmentId(environments))
   const [showEnvironmentDialog, setShowEnvironmentDialog] = useState(false)
@@ -175,6 +177,53 @@ function App() {
     setNewEnvironmentType('office')
     setShowEnvironmentDialog(false)
     setView('memory')
+  }
+
+  async function handleImage(file: File) {
+    setError('')
+    setResult(null)
+    setAnswer(null)
+    setView('observe')
+    setSelectedObservation(null)
+    setSelectedChangeId(null)
+
+    try {
+      setStatus('Observing · preparing photo evidence')
+      const id = (prefix: string) => `${prefix}_${crypto.randomUUID()}`
+      const ingestion = await ingestImageFile(file, { maxWidth: 1280, jpegQuality: 0.78, maxBytes: 900_000 })
+      setStatus('Understanding · 1 grounded photo')
+
+      const response = await fetch('/api/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          environmentId: activeEnvironment.id,
+          source: {
+            id: id('source'),
+            environmentId: activeEnvironment.id,
+            capturedAt: new Date().toISOString(),
+            metadata: { name: activeEnvironment.name, environmentType: activeEnvironment.type, captureMode: 'photo' },
+          },
+          media: {
+            kind: 'image',
+            uri: ingestion.uri,
+            mimeType: 'image/jpeg',
+            sizeBytes: ingestion.sizeBytes,
+          },
+        }),
+      })
+
+      setStatus('Remembering · grounding observations')
+      const payload = await response.json() as ScanResponse & { error?: string; message?: string }
+      if (!response.ok) throw new Error(payload.message ?? payload.error ?? `Scan request failed (${response.status})`)
+      setResult(payload)
+      setMemory(payload.memory)
+      setStatus(payload.diff ? `${payload.diff.changes.length} supported change(s) remembered` : `${activeEnvironment.name} is now remembered`)
+      setView(payload.diff ? 'changes' : 'memory')
+    } catch (scanError) {
+      setStatus('Observation interrupted')
+      setError(scanError instanceof Error ? scanError.message : 'Unknown scan error')
+    }
   }
 
   async function handleVideo(file: File) {
@@ -306,7 +355,7 @@ function App() {
         <div className="hero-copy">
           <div className="eyebrow">PHYSICAL MEMORY / {activeEnvironment.name.toUpperCase()}</div>
           <h1>{memory ? 'This space remembers.' : 'Give this place a memory.'}</h1>
-          <p>{memory ? `SENTINEL holds ${memory.states.length} grounded environmental state${memory.states.length === 1 ? '' : 's'}, ${memory.objects.length} remembered objects, ${memory.conditions.length} condition${memory.conditions.length === 1 ? '' : 's'} and ${memory.issues.length} actionable issue${memory.issues.length === 1 ? '' : 's'} for ${activeEnvironment.name}.` : `${activeEnvironment.name} has no saved scan yet. Walk through this location once and SENTINEL will create its own independent environmental memory.`}</p>
+          <p>{memory ? `SENTINEL holds ${memory.states.length} grounded environmental state${memory.states.length === 1 ? '' : 's'}, ${memory.objects.length} remembered objects, ${memory.conditions.length} condition${memory.conditions.length === 1 ? '' : 's'} and ${memory.issues.length} actionable issue${memory.issues.length === 1 ? '' : 's'} for ${activeEnvironment.name}.` : `${activeEnvironment.name} has no saved observation yet. Take a photo of the area or use a walkthrough video and SENTINEL will create its own independent environmental memory.`}</p>
         </div>
 
         {answer && <section className="answer-panel" aria-live="polite">
@@ -326,7 +375,7 @@ function App() {
 
         <div className="memory-summary">
           <div><span>Since you were last here</span><strong>{latestDiff ? latestDiff.summary : memory ? 'No comparison yet' : 'No previous state yet'}</strong></div>
-          <button className="observe-cta" type="button" onClick={() => inputRef.current?.click()}><span className="observe-orb"><i /></span><span><strong>{memory ? 'Observe again' : 'Observe environment'}</strong><small>{memory ? `Create the next ${activeEnvironment.name} state` : `Create ${activeEnvironment.name} memory v1`}</small></span></button>
+          <button className="observe-cta" type="button" onClick={() => inputRef.current?.click()}><span className="observe-orb"><i /></span><span><strong>{memory ? 'Take update photo' : 'Take first photo'}</strong><small>{memory ? `Create the next ${activeEnvironment.name} state` : `Create ${activeEnvironment.name} memory v1`}</small></span></button>
         </div>
 
         {memory && <section className="history-section" aria-label="Environmental state history">
@@ -376,7 +425,7 @@ function App() {
       </section>}
 
       {view === 'observe' && <section className="observe-view">
-        <div className="observe-camera"><div className="camera-noise" /><div className="scan-line" /><div className="camera-topline"><SentinelMark active /><span>{isWorking ? status : `${activeEnvironment.name.toUpperCase()} / OBSERVATION MODE`}</span></div><div className="focus-frame focus-one"><span>Workspace</span></div><div className="focus-frame focus-two"><span>Evidence region</span></div><div className="observe-message"><span className="eyebrow">LIVE STATE</span><h2>{isWorking ? status : memory ? `Observe what changed in ${activeEnvironment.name}.` : `Create the first memory for ${activeEnvironment.name}.`}</h2><p>SENTINEL extracts selected key frames as evidence, grounds its observations, then updates only this location's persistent environmental state.</p></div><button className="capture-button" type="button" onClick={() => inputRef.current?.click()} aria-label="Choose walkthrough video"><span><i /></span><strong>{isWorking ? 'Observing' : memory ? 'Rescan environment' : 'Begin observation'}</strong></button></div>
+        <div className="observe-camera"><div className="camera-noise" /><div className="scan-line" /><div className="camera-topline"><SentinelMark active /><span>{isWorking ? status : `${activeEnvironment.name.toUpperCase()} / OBSERVATION MODE`}</span></div><div className="focus-frame focus-one"><span>Workspace</span></div><div className="focus-frame focus-two"><span>Evidence region</span></div><div className="observe-message"><span className="eyebrow">PHONE-FIRST OBSERVATION</span><h2>{isWorking ? status : memory ? `Photograph what changed in ${activeEnvironment.name}.` : `Create the first memory for ${activeEnvironment.name}.`}</h2><p>Take one clear photo that shows the relevant area. SENTINEL grounds visible evidence and updates only this location's persistent environmental state. Walkthrough video remains optional for larger spaces.</p></div><div className="observe-capture-actions"><button className="capture-button" type="button" onClick={() => inputRef.current?.click()} aria-label="Take a photo"><span><i /></span><strong>{isWorking ? 'Observing' : memory ? 'Take update photo' : 'Take first photo'}</strong></button><button className="walkthrough-option" type="button" onClick={() => videoInputRef.current?.click()} disabled={isWorking}>Use walkthrough video instead</button></div></div>
         {error && <div className="error" role="alert"><strong>Observation interrupted</strong><span>{error}</span></div>}
       </section>}
 
@@ -427,7 +476,7 @@ function App() {
 
         <div className="operations-next-step">
           <div><span className="eyebrow">NEXT OPERATION</span><strong>{latestDiff && attentionChanges.length > 0 ? 'Review what needs attention, then ask SENTINEL what should happen next.' : latestDiff && verificationChanges.length > 0 ? 'Verification is required before treating this as resolved. Re-observe the area and confirm the physical condition.' : latestDiff ? 'No urgent action is implied by the diff alone. Observe again when the physical state changes.' : 'Create a second state to unlock Reality Diff.'}</strong></div>
-          <button className="wide-observe" type="button" onClick={() => inputRef.current?.click()}><span>Observe {activeEnvironment.name} again</span><span>Build the next environmental state ↗</span></button>
+          <button className="wide-observe" type="button" onClick={() => inputRef.current?.click()}><span>Take update photo</span><span>Build the next environmental state ↗</span></button>
         </div>
       </section>}
 
@@ -462,7 +511,7 @@ function App() {
               setSelectedChangeId(null)
               setView('memory')
             }}>Ask SENTINEL what to do ↗</button>}
-            <button type="button" onClick={() => { setSelectedChangeId(null); inputRef.current?.click() }}>Observe again</button>
+            <button type="button" onClick={() => { setSelectedChangeId(null); inputRef.current?.click() }}>Take verification photo</button>
           </div>
         </aside>
       </div>}
@@ -529,7 +578,8 @@ function App() {
 
       <nav className="mobile-nav" aria-label="Primary navigation"><button className={view === 'memory' ? 'active' : ''} type="button" onClick={() => setView('memory')}><span>◎</span><small>Memory</small></button><button className={view === 'observe' ? 'active observe-nav' : 'observe-nav'} type="button" onClick={() => setView('observe')}><span>◉</span><small>Observe</small></button><button className={view === 'changes' ? 'active' : ''} type="button" onClick={() => setView('changes')}><span>↺</span><small>Changes</small></button></nav>
 
-      <input ref={inputRef} hidden type="file" accept="video/*" onChange={(event) => { const file = event.target.files?.[0]; if (file) void handleVideo(file); event.target.value = '' }} />
+      <input ref={inputRef} hidden type="file" accept="image/*" capture="environment" onChange={(event) => { const file = event.target.files?.[0]; if (file) void handleImage(file); event.target.value = '' }} />
+      <input ref={videoInputRef} hidden type="file" accept="video/*" onChange={(event) => { const file = event.target.files?.[0]; if (file) void handleVideo(file); event.target.value = '' }} />
     </main>
   )
 }

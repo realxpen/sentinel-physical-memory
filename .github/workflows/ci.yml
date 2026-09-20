@@ -38,5 +38,7 @@ jobs:
         run: npm run check:phase6-history
       - name: Verify Phase 7 Diff Engine v2
         run: npm run check:phase7-diff
+      - name: Verify phone photo observation
+        run: npm run check:photo-observation
       - name: Build
         run: npm run build

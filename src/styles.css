@@ -118,7 +118,10 @@ h1 { margin: 18px 0 22px; font-size: clamp(58px, 8.4vw, 128px); line-height: .88
 .observe-message .eyebrow { color: var(--green); }
 .observe-message h2 { margin: 13px 0 15px; font-size: clamp(44px, 6vw, 88px); line-height: .92; letter-spacing: -.065em; }
 .observe-message p { max-width: 560px; margin: 0; color: #97a399; font-size: 14px; line-height: 1.55; }
-.capture-button { position: absolute; right: 4%; bottom: 6%; z-index: 6; display: flex; align-items: center; gap: 12px; border: 0; background: transparent; color: white; }
+.observe-capture-actions { position: absolute; right: 4%; bottom: 5%; z-index: 6; display: grid; justify-items: end; gap: 12px; }
+.capture-button { position: static; display: flex; align-items: center; gap: 12px; border: 0; background: transparent; color: white; }
+.walkthrough-option { padding: 9px 13px; border: 1px solid rgba(255,255,255,.14); border-radius: 999px; background: rgba(8,11,9,.62); color: #98a49b; font: inherit; font-size: 9px; font-weight: 750; letter-spacing: .05em; text-transform: uppercase; backdrop-filter: blur(14px); }
+.walkthrough-option:disabled { opacity: .45; }
 .capture-button > span { width: 72px; height: 72px; display: grid; place-items: center; border: 1px solid rgba(91,255,138,.44); border-radius: 50%; background: rgba(91,255,138,.09); box-shadow: 0 0 30px rgba(91,255,138,.08); }
 .capture-button > span i { width: 46px; height: 46px; border-radius: 50%; background: var(--green); box-shadow: 0 0 28px rgba(91,255,138,.34); }
 .capture-button strong { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
@@ -274,7 +277,9 @@ h1 { margin: 18px 0 22px; font-size: clamp(58px, 8.4vw, 128px); line-height: .88
   .change-card-confidence { grid-column: 2; justify-content: flex-start; margin-top: -5px; }
   .operations-next-step > div { grid-template-columns: 1fr; gap: 8px; }
   .observe-view { width: calc(100% - 20px); }
-  .capture-button { right: 50%; transform: translateX(50%); bottom: 5%; flex-direction: column; }
+  .observe-capture-actions { right: 50%; transform: translateX(50%); bottom: 4%; justify-items: center; width: min(300px, 88%); }
+  .capture-button { flex-direction: column; }
+  .walkthrough-option { width: 100%; }
   .observe-message { bottom: 27%; right: 6%; }
   .ask-bar { bottom: 92px; }
   .mobile-nav { position: fixed; z-index: 35; left: 50%; bottom: 14px; transform: translateX(-50%); display: grid; grid-template-columns: repeat(3, 1fr); width: min(330px, calc(100% - 30px)); padding: 7px; border: 1px solid rgba(255,255,255,.11); border-radius: 999px; background: rgba(10,13,11,.82); backdrop-filter: blur(22px); box-shadow: 0 14px 40px rgba(0,0,0,.2); }
