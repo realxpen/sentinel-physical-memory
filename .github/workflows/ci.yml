@@ -40,6 +40,8 @@ jobs:
         run: npm run check:phase7-diff
       - name: Verify phone photo observation
         run: npm run check:photo-observation
+      - name: Verify paired-photo temporal diff
+        run: npm run check:temporal-photo-diff
       - name: Verify state concurrency guard
         run: npm run check:state-concurrency
       - name: Verify Phase 8 change presentation
