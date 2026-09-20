@@ -257,7 +257,8 @@ function isCrossPassAlias(a: SpatialObject, b: SpatialObject): boolean {
   return perceptionPass(a.id) !== perceptionPass(b.id)
 }
 
-function perceptionPass(id: string): 'scene' | 'audit' | 'identity' | 'geometry' {
+function perceptionPass(id: string): 'scene' | 'state' | 'audit' | 'identity' | 'geometry' {
+  if (id.startsWith('state_')) return 'state'
   if (id.startsWith('audit_')) return 'audit'
   if (id.startsWith('identity_')) return 'identity'
   if (id.startsWith('geometry_')) return 'geometry'
