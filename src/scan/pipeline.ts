@@ -204,7 +204,8 @@ export class ScanPipeline {
       ].join('\n')
       try {
         const stateAudit = sanitizeStateAudit(await this.inferPerceptionPass('state-audit', statePrompt, artifacts, frames, input))
-        scene = mergePerceptionPasses(scene, stateAudit, 'state_')
+        const firstStateUpdate = applyOpenableStateAudit(scene, stateAudit)
+        scene = firstStateUpdate.scene
 
         const unresolvedOpenables = scene.objects
           .filter(isOpenableObject)
@@ -224,13 +225,14 @@ export class ScanPipeline {
           ].join('\n')
 
           const confirmation = sanitizeStateAudit(await this.inferPerceptionPass('state-audit', confirmationPrompt, artifacts, frames, input))
-          confirmationObjects = confirmation.objects
-          scene = mergePerceptionPasses(scene, confirmation, 'state_confirm_')
+          const confirmationUpdate = applyOpenableStateAudit(scene, confirmation)
+          confirmationObjects = confirmationUpdate.accepted
+          scene = confirmationUpdate.scene
         }
 
         console.warn('SENTINEL_OPENABLE_STATE_AUDIT_COMPLETED', {
           scanId,
-          objects: [...stateAudit.objects, ...confirmationObjects].map((item) => ({ name: item.name, state: item.state, confidence: item.confidence })),
+          objects: [...firstStateUpdate.accepted, ...confirmationObjects].map((item) => ({ name: item.name, state: item.state, confidence: item.confidence })),
         })
       } catch (error) {
         console.warn('SENTINEL_OPENABLE_STATE_AUDIT_SKIPPED', {
@@ -496,6 +498,74 @@ export class ScanPipeline {
   private error(code: string, message: string): ScanError {
     return Object.assign(new Error(message), { code, recoverable: false })
   }
+}
+
+function applyOpenableStateAudit(
+  scene: PerceptionResult,
+  audit: PerceptionResult,
+): { scene: PerceptionResult; accepted: SpatialObject[] } {
+  const sceneOpenables = scene.objects.filter(isOpenableObject)
+  const accepted: SpatialObject[] = []
+  const updates = new Map<string, SpatialObject>()
+
+  for (const target of sceneOpenables) {
+    const matches = audit.objects
+      .filter(hasExplicitOpenClosedState)
+      .filter((candidate) => stateAuditObjectMatchesTarget(candidate, target))
+
+    if (matches.length === 0) continue
+
+    const states = new Set(matches.map((item) => normalizeSemanticText(item.state ?? '')))
+    if (states.size !== 1) continue
+
+    const chosen = [...matches].sort((a, b) => b.confidence - a.confidence)[0]
+    updates.set(target.id, chosen)
+    accepted.push(chosen)
+  }
+
+  if (updates.size === 0) return { scene, accepted }
+
+  return {
+    scene: {
+      ...scene,
+      objects: scene.objects.map((item) => {
+        const update = updates.get(item.id)
+        if (!update) return item
+        return {
+          ...item,
+          state: normalizeSemanticText(update.state ?? ''),
+          confidence: Math.max(item.confidence, update.confidence),
+          evidenceIds: [...new Set([...item.evidenceIds, ...update.evidenceIds])],
+        }
+      }),
+    },
+    accepted,
+  }
+}
+
+function stateAuditObjectMatchesTarget(candidate: SpatialObject, target: SpatialObject): boolean {
+  if (!isOpenableObject(candidate) || !isOpenableObject(target)) return false
+
+  const candidateName = stableAuditObjectName(candidate.name)
+  const targetName = stableAuditObjectName(target.name)
+  if (!candidateName || !targetName) return false
+  if (candidateName === targetName) return true
+
+  const partWords = /\b(?:handle|hinge|frame|leaf|threshold|sill|hardware|panel|knob|latch)\b/
+  if (partWords.test(candidateName)) return false
+
+  const kind = (value: string) => value.match(/\b(?:closet|cabinet|cupboard|drawer|gate|door)\b/)?.[0]
+  const candidateKind = kind(candidateName)
+  const targetKind = kind(targetName)
+  if (!candidateKind || !targetKind || candidateKind !== targetKind) return false
+
+  return candidateName.includes(targetName) || targetName.includes(candidateName)
+}
+
+function stableAuditObjectName(value: string): string {
+  return normalizeSemanticText(value.replace(/\([^)]*\)/g, ' '))
+    .replace(/\s+/g, ' ')
+    .trim()
 }
 
 function sanitizeStateAudit(result: PerceptionResult): PerceptionResult {
