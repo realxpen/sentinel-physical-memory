@@ -178,6 +178,13 @@ export class EnvironmentalMemoryStore {
     const toSnapshot = this.snapshots.get(toStateId)
     if (!fromSnapshot || !toSnapshot) throw new Error('Historical snapshot unavailable for temporal verification')
 
+    // For still-photo updates, free-form per-photo position/state wording is not
+    // sufficient to prove movement or an open/closed transition. Those object
+    // changes must survive the paired-image temporal verifier below.
+    diff.changes = diff.changes.filter((item) =>
+      !(item.entityKind === 'object' && (item.type === 'moved' || item.type === 'changed')),
+    )
+
     for (const candidate of verified) {
       if (candidate.confidence < 0.9) continue
       const previous = uniqueObjectByName(fromSnapshot.objects, candidate.previousObjectName)
