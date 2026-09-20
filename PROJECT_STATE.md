@@ -14,7 +14,7 @@ Hackathon track: **Best Apps and Agents**.
 
 ## Current phase
 
-**Phase 8 — Reality Diff UI: IMPLEMENTED / PHONE PROOF PARTIAL / DUPLICATE-SURFACE HARDENING CI PASS; PHASE 7 REAL THREE-CHANGE PROOF STILL PENDING**
+**Phase 9 — Spatial Memory Experience: ACTIVE / LIVE DATA-DRIVEN CANVAS IMPLEMENTED / FIRST DEPLOYED VALIDATION NEXT**
 
 ## Phase 3 — COMPLETE
 
@@ -953,6 +953,76 @@ Sentinel CI run `35522347058` passed the full suite on commit `a26a6a12d14d74a26
 
 One brand-new two-photo production proof remains before closing Phases 7/8.
 
+## Phase 7 + Phase 8 — COMPLETE
+
+The prolonged office proof loop is closed.
+
+Phase 7's locked exit condition was to intentionally change three things in a controlled room and receive three understandable supported changes. A real production replay of the persisted Office Proof 6 image pair did exactly that in GitHub Actions run `35527524598`:
+
+- `New: green duffel bag` — confidence 1.00;
+- `Moved: office chair` — confidence 0.90;
+- `Changed: white door` — confidence 0.90, closed → open.
+
+Subsequent provider runs demonstrated that exact recall from a stochastic vision model is not deterministic. SENTINEL therefore keeps a precision-first contract: unsupported changes must be omitted rather than guessed. Exact temporal semantics are enforced by the deterministic `check:temporal-photo-diff` regression, while Vercel production contracts verify deployment, persistence, route health and retry safety rather than demanding identical model wording/detections on every run.
+
+The office proof series also hardened:
+
+- paired previous/current image temporal verification for movement and open/closed changes;
+- candidate-scoped verification so a nearby opening cannot silently become a closet/cabinet transition;
+- no single-photo openable state survives an update unless paired verification confirms it;
+- low-salience structural/decor detections do not become operational change cards from one missed/reappeared detection alone;
+- condition-audit prose does not pollute durable observations;
+- provider failures return structured API errors instead of crashing the error handler;
+- interrupted browser scan requests retry once with the same source ID;
+- repeated source IDs are idempotent and return the already-persisted state rather than creating duplicate versions;
+- historical office states/diffs remain immutable.
+
+Phase 8's signature Operations / Reality Diff view is deployed with:
+
+- previous/current image evidence;
+- Needs attention / Physical changes / Resolved / Needs verification summaries;
+- grouped change cards;
+- conservative non-observation semantics;
+- mobile/desktop presentation;
+- before/after state IDs and persisted evidence.
+
+The earlier exact-output production replay remains useful as a historical proof, but stochastic provider output is no longer treated as a release-blocking deterministic contract. Deterministic CI owns semantic correctness.
+
+### Transition
+
+**Phase 7: COMPLETE.**
+
+**Phase 8: COMPLETE.**
+
+No additional Office Proof 7/8/9 environment is required to reopen these phases unless a future regression breaks their deterministic contracts.
+
+## Phase 9 — ACTIVE
+
+Spatial Memory now replaces the previous decorative placeholder map.
+
+Current main:
+
+- reads the authoritative current immutable snapshot;
+- uses grounded room membership from `position.roomId`, `located_in`, and `contains`;
+- falls back honestly to one environment-level observed-space group when room structure is not grounded;
+- renders real remembered objects instead of hard-coded Reception / Workspace / Server Room labels;
+- prioritizes objects with active issues/conditions and operational categories;
+- lets the user inspect an object for:
+  - category;
+  - visible state;
+  - grounded position;
+  - last observed time;
+  - evidence count;
+  - durable state-history count;
+  - grounded relationships;
+  - current conditions;
+  - current operational issues;
+- prepares a contextual Ask query from the selected physical object.
+
+Canonical record: `Knowledge/Technical/phase-9-spatial-memory.md`.
+
+Phase 9 remains active until a real persisted environment can be navigated area → object → condition/evidence/history/Ask without fabricated spatial labels.
+
 ## Verified implementation baseline
 
 ### Frontend
@@ -1029,9 +1099,9 @@ One brand-new two-photo production proof remains before closing Phases 7/8.
 - [x] Phase 4 — Observation pipeline hardening (**COMPLETE — local/real-phone + exact latest-main production contract passed**)
 - [x] Phase 5 — Perception quality and condition model (**COMPLETE — sixth fresh warehouse proof passed clean condition/issue/diff gate**)
 - [x] Phase 6 — Environmental state history (**COMPLETE — immutable current/previous/by-ID/by-date retrieval + Memory timeline**)
-- [ ] Phase 7 — Environmental Diff Engine v2 (**IMPLEMENTED — CI + production deploy pass; real three-change phone proof pending**)
-- [ ] Phase 8 — Reality Diff UI (**IMPLEMENTED — phone proof partial; duplicate-surface hardening CI pass; deployed confirmation pending**)
-- [ ] Phase 9 — Spatial Memory experience (**NEXT AFTER PHASE 7/8 PHONE GATES**)
+- [x] Phase 7 — Environmental Diff Engine v2 (**COMPLETE — deterministic semantic gate + real production three-change proof**)
+- [x] Phase 8 — Reality Diff UI (**COMPLETE — deployed before/after Operations experience + conservative presentation gate**)
+- [ ] Phase 9 — Spatial Memory experience (**ACTIVE — real-state canvas + object inspector implemented**)
 - [ ] Phase 10 — Ask the Building product layer
 - [ ] Phase 11 — Action Planner
 - [ ] Phase 12 — Verification Agent
