@@ -96,10 +96,12 @@ try {
 
   const photoPlantA = object('plant-photo-a', 'furniture', 'potted plant', 'potted plant', { evidenceIds: ['photo_frame'], position: { description: 'on shelf' } })
   const photoPlantB = object('plant-photo-b', 'furniture', 'potted plant', 'potted plant', { evidenceIds: ['photo_frame'], position: { description: 'on shelf' } })
+  const photoPlantAlias = object('plant-photo-alias', 'furniture', 'plant pot', 'plant pot', { evidenceIds: ['photo_frame'], position: { description: 'on shelf' } })
   const photoPlantDesk = object('plant-photo-desk', 'furniture', 'potted plant', 'potted plant', { evidenceIds: ['photo_frame'], position: { description: 'on desk' } })
   if (!sameFrameStillObjectsCanConsolidate(photoPlantA, photoPlantB)) {
     throw new Error('still-photo exact duplicate objects with identical grounding should consolidate')
   }
+  if (!sameFrameStillObjectsCanConsolidate(photoPlantA, photoPlantAlias)) throw new Error('plant pot / potted plant aliases at the same grounded location should consolidate')
   if (sameFrameStillObjectsCanConsolidate(photoPlantA, photoPlantDesk)) {
     throw new Error('still-photo objects with distinct grounded locations must remain separate')
   }
@@ -180,6 +182,7 @@ try {
     source('photo-noise'),
     perception('photo-noise', [
       ...Array.from({ length: 20 }, (_, index) => object(`plant-shelf-${index}`, 'furniture', 'potted plant', 'potted plant', { evidenceIds: ['e_photo_noise'], position: { description: 'on shelf' } })),
+      object('plant-shelf-alias', 'furniture', 'plant pot', 'plant pot', { evidenceIds: ['e_photo_noise'], position: { description: 'on shelf' } }),
       object('plant-desk', 'furniture', 'potted plant', 'potted plant', { evidenceIds: ['e_photo_noise'], position: { description: 'on desk' } }),
     ]),
   )
