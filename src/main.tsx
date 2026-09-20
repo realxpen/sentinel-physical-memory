@@ -634,6 +634,41 @@ function App() {
         </aside>
       </div>}
 
+      {selectedSpatialObject && currentSnapshot && <div className="drawer-backdrop" role="presentation" onClick={() => setSelectedSpatialObjectId(null)}>
+        <aside className="evidence-drawer spatial-object-drawer" role="dialog" aria-modal="true" aria-label={selectedSpatialObject.name + ' spatial memory'} onClick={(event) => event.stopPropagation()}>
+          <button className="drawer-close" type="button" onClick={() => setSelectedSpatialObjectId(null)}>×</button>
+          <span className="eyebrow">SPATIAL MEMORY / CURRENT OBJECT</span>
+          <h2>{selectedSpatialObject.name}</h2>
+          <p>{selectedSpatialObject.description ?? 'No additional visual description was persisted for this object.'}</p>
+          <Confidence value={selectedSpatialObject.confidence} />
+          <div className="spatial-object-meta">
+            <div><span>Category</span><strong>{selectedSpatialObject.category}</strong></div>
+            <div><span>Visible state</span><strong>{selectedSpatialObject.state ?? 'Unknown'}</strong></div>
+            <div><span>Location</span><strong>{selectedSpatialObject.position?.description ?? 'No grounded position yet'}</strong></div>
+            <div><span>Last observed</span><strong>{formatStateTimestamp(selectedSpatialObject.lastSeenAt)}</strong></div>
+            <div><span>Evidence</span><strong>{selectedSpatialObject.evidenceIds.length} record{selectedSpatialObject.evidenceIds.length === 1 ? '' : 's'}</strong></div>
+            <div><span>History</span><strong>{selectedSpatialHistoryCount} state{selectedSpatialHistoryCount === 1 ? '' : 's'}</strong></div>
+          </div>
+          {selectedSpatialRelations.length > 0 && <div className="spatial-drawer-section">
+            <span className="eyebrow">RELATIONSHIPS</span>
+            {selectedSpatialRelations.map((item) => <div className="spatial-relation-row" key={item.id}><strong>{item.label}</strong><small>{Math.round(item.confidence * 100)}% grounded</small></div>)}
+          </div>}
+          {selectedSpatialConditions.length > 0 && <div className="spatial-drawer-section">
+            <span className="eyebrow">CONDITIONS</span>
+            {selectedSpatialConditions.map((item) => <div className="spatial-condition-row" key={item.id}><strong>{item.title}</strong><small>{item.basis} · {item.kind} · {Math.round(item.confidence * 100)}%</small><p>{item.description}</p></div>)}
+          </div>}
+          {selectedSpatialIssues.length > 0 && <div className="spatial-drawer-section">
+            <span className="eyebrow">OPERATIONS</span>
+            {selectedSpatialIssues.map((item) => <div className="spatial-condition-row issue" key={item.id}><strong>{item.title}</strong><small>{item.severity} · {item.status}</small><p>{item.description}</p></div>)}
+          </div>}
+          <button className="spatial-ask-button" type="button" onClick={() => {
+            setQuestion('What do you know about ' + selectedSpatialObject.name + ', where is it, and does it need attention?')
+            setSelectedSpatialObjectId(null)
+            setAskStatus('Question prepared from spatial memory.')
+          }}>Ask about this object ↗</button>
+        </aside>
+      </div>}
+
       {observation && <div className="drawer-backdrop" role="presentation" onClick={() => setSelectedObservation(null)}><aside className="evidence-drawer" role="dialog" aria-modal="true" aria-label={`${observation.label} evidence`} onClick={(event) => event.stopPropagation()}><button className="drawer-close" type="button" onClick={() => setSelectedObservation(null)}>×</button><span className="eyebrow">OBSERVED / EVIDENCE-BACKED</span><h2>{observation.label}</h2><p>{observation.description}</p><Confidence value={observation.confidence} /><div className="evidence-rule" /><div className="evidence-note"><span>What this means</span><strong>SENTINEL stores this as an observation, not a professional diagnosis.</strong><p>Interpretation and recommended action remain separate from what the visual evidence directly supports.</p></div></aside></div>}
 
       {showEnvironmentDialog && <div className="drawer-backdrop location-backdrop" role="presentation" onClick={() => setShowEnvironmentDialog(false)}><form className="location-dialog" onSubmit={addEnvironment} onClick={(event) => event.stopPropagation()}><button className="drawer-close" type="button" onClick={() => setShowEnvironmentDialog(false)}>×</button><span className="eyebrow">NEW PHYSICAL MEMORY</span><h2>Add another location.</h2><p>Each location gets its own environment ID, scans, state history, Reality Diffs and questions. Scanning a new location will not overwrite {activeEnvironment.name}.</p><label><span>Location name</span><input autoFocus value={newEnvironmentName} onChange={(event) => setNewEnvironmentName(event.target.value)} placeholder="e.g. Head Office, Warehouse A" maxLength={80} /></label><label><span>Space type</span><select value={newEnvironmentType} onChange={(event) => setNewEnvironmentType(event.target.value as EnvironmentType)}>{ENVIRONMENT_TYPES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label><div className="location-actions"><button type="button" onClick={() => setShowEnvironmentDialog(false)}>Cancel</button><button className="location-create" type="submit" disabled={!newEnvironmentName.trim()}>Create location</button></div></form></div>}
