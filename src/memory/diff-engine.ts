@@ -686,10 +686,14 @@ function isExplicitlyReobservedInCurrentDescriptions(previous: SpatialObject, cu
 
 function isLowSalienceInventoryNoise(item: SpatialObject): boolean {
   const name = normalize(item.name)
-  // These small fixture/decor/desk-inventory items are useful to remember, but
-  // a single missed still-photo detection is not enough to claim a physical
-  // addition/removal in a facility-operations diff.
-  return /^(?:cup|mug|pen holder|pencil holder|light switch|switch plate)$/.test(name)
+  // These surfaces, decor items, and shelf/desk contents are useful context in
+  // memory but are too detection-sensitive to become facility-operation
+  // add/remove cards from one ordinary observation alone. Operational
+  // conditions about them (damage, spill, obstruction, etc.) still remain.
+  if (/^(?:(?:white|painted|brick|concrete|interior|exterior) )?wall$/.test(name)) return true
+  if (/^(?:(?:wooden|wood|tile|tiled|concrete|vinyl|laminate|hardwood|carpeted) )?floor$/.test(name)) return true
+  if (/^(?:(?:white|painted|drop|suspended) )?ceiling$/.test(name)) return true
+  return /^(?:cup|mug|pen holder|pencil holder|light switch|switch plate|picture frame|wall art|books|book|globe|wicker basket|basket|potted plant|plant|rug|area rug|carpet)$/.test(name)
 }
 
 function explicitlyRemoved(item: SpatialObject): boolean {
@@ -733,7 +737,15 @@ function parseRelativePosition(value: string): { relation: string; anchor: strin
   const normalized = value.replace(/\bthe\b/g, ' ').replace(/\s+/g, ' ').trim()
   const match = normalized.match(/^(left of|right of|above|below|in front of|behind|beside|near|on|inside)\s+(.+)$/)
   if (!match) return undefined
-  return { relation: match[1], anchor: match[2] }
+  return { relation: match[1], anchor: canonicalLocationAnchor(match[2]) }
+}
+
+function canonicalLocationAnchor(value: string): string {
+  return value
+    .replace(/\b(?:bookcase|bookshelf|shelving|shelf unit)\b/g, 'shelf')
+    .replace(/\b(?:work desk|workstation desk)\b/g, 'desk')
+    .replace(/\s+/g, ' ')
+    .trim()
 }
 
 function semanticPositionDescription(value: string | undefined): string | undefined {
