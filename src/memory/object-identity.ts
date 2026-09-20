@@ -50,6 +50,30 @@ export function sameScanObjectsCanConsolidate(a: SpatialObject, b: SpatialObject
   return positionsCompatible(a, b)
 }
 
+
+/**
+ * Single still photos need a stricter anti-duplication rule than walkthroughs.
+ * When one frame repeats the exact same surface identity without any grounded
+ * instance distinction, SENTINEL keeps one conservative representative rather
+ * than treating provider repetition as many physical objects.
+ *
+ * Distinct semantic positions or non-overlapping bounding boxes keep objects
+ * separate. Walkthrough/video scans do not use this rule.
+ */
+export function sameFrameStillObjectsCanConsolidate(a: SpatialObject, b: SpatialObject): boolean {
+  if (normalize(a.name) !== normalize(b.name) || a.category !== b.category) return false
+  if (!a.evidenceIds.some((id) => b.evidenceIds.includes(id))) return false
+
+  if (a.boundingBox && b.boundingBox) return boundingBoxesOverlap(a.boundingBox, b.boundingBox)
+
+  const positionA = semanticPositionDescription(a.position?.description)
+  const positionB = semanticPositionDescription(b.position?.description)
+  if (positionA && positionB) return semanticLocationsEquivalent(positionA, positionB)
+  if (positionA || positionB) return false
+
+  return true
+}
+
 /**
  * Produces one-to-one matches only when both sides have a unique compatible
  * candidate. Repeated generic objects therefore stay unmatched instead of one
@@ -158,6 +182,38 @@ function positionsCompatible(a: SpatialObject, b: SpatialObject): boolean {
   if (descriptionA && descriptionB && descriptionA !== descriptionB) return false
 
   return true
+}
+
+function semanticLocationsEquivalent(a: string, b: string): boolean {
+  if (a === b) return true
+  const tokensA = locationTokens(a)
+  const tokensB = locationTokens(b)
+  if (tokensA.size === 0 || tokensB.size === 0) return false
+  const intersection = [...tokensA].filter((token) => tokensB.has(token)).length
+  const smaller = Math.min(tokensA.size, tokensB.size)
+  return intersection / smaller >= 0.8
+}
+
+function locationTokens(value: string): Set<string> {
+  return new Set(
+    value
+      .split(' ')
+      .filter((token) => token && !new Set(['the', 'a', 'an', 'of', 'room', 'area', 'corner', 'side']).has(token)),
+  )
+}
+
+function boundingBoxesOverlap(
+  a: NonNullable<SpatialObject['boundingBox']>,
+  b: NonNullable<SpatialObject['boundingBox']>,
+): boolean {
+  const left = Math.max(a.x, b.x)
+  const top = Math.max(a.y, b.y)
+  const right = Math.min(a.x + a.width, b.x + b.width)
+  const bottom = Math.min(a.y + a.height, b.y + b.height)
+  if (right <= left || bottom <= top) return false
+  const intersection = (right - left) * (bottom - top)
+  const smallerArea = Math.min(a.width * a.height, b.width * b.height)
+  return smallerArea > 0 && intersection / smallerArea >= 0.7
 }
 
 function semanticPositionDescription(value: string | undefined): string | undefined {

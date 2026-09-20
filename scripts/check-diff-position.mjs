@@ -51,17 +51,26 @@ try {
     throw new Error('generic-to-specific anchor wording must not produce false movement')
   }
 
+  const wordingDrift = engine.compare(
+    snapshot('state_word_a', object('right of door')),
+    snapshot('state_word_b', object('right side of room')),
+  )
+  if (wordingDrift.changes.some((change) => change.type === 'moved')) {
+    throw new Error('non-comparable provider wording drift must not produce movement')
+  }
+
   const semanticMovement = engine.compare(
-    snapshot('state_c', object('Wall A')),
-    snapshot('state_d', object('Wall B')),
+    snapshot('state_c', object('left of desk')),
+    snapshot('state_d', object('right of desk')),
   )
   if (!semanticMovement.changes.some((change) => change.type === 'moved')) {
-    throw new Error('semantic physical anchor change should still produce a moved change')
+    throw new Error('grounded relative-position change should still produce a moved change')
   }
 
   console.log('PASS  coordinate-like position descriptions do not create false movement')
   console.log('PASS  generic-to-specific semantic anchor wording does not create false movement')
-  console.log('PASS  semantic physical anchor changes still create movement')
+  console.log('PASS  non-comparable provider wording drift does not create false movement')
+  console.log('PASS  grounded relative-position changes still create movement')
   console.log('SENTINEL REALITY DIFF POSITION GATE VERIFIED')
 } finally {
   await vite.close()

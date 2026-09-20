@@ -7,7 +7,7 @@ const vite = await createServer({
 })
 
 try {
-  const { matchObjectsConservatively, objectsSemanticallyMatch, sameScanObjectsCanConsolidate } = await vite.ssrLoadModule('/src/memory/object-identity.ts')
+  const { matchObjectsConservatively, objectsSemanticallyMatch, sameFrameStillObjectsCanConsolidate, sameScanObjectsCanConsolidate } = await vite.ssrLoadModule('/src/memory/object-identity.ts')
   const { EnvironmentalDiffEngine } = await vite.ssrLoadModule('/src/memory/diff-engine.ts')
   const { EnvironmentalMemoryStore } = await vite.ssrLoadModule('/src/memory/store.ts')
 
@@ -94,6 +94,16 @@ try {
     throw new Error('same-pass exact duplicates must remain separate to protect repeated physical instances')
   }
 
+  const photoPlantA = object('plant-photo-a', 'furniture', 'potted plant', 'potted plant', { evidenceIds: ['photo_frame'], position: { description: 'on shelf' } })
+  const photoPlantB = object('plant-photo-b', 'furniture', 'potted plant', 'potted plant', { evidenceIds: ['photo_frame'], position: { description: 'on shelf' } })
+  const photoPlantDesk = object('plant-photo-desk', 'furniture', 'potted plant', 'potted plant', { evidenceIds: ['photo_frame'], position: { description: 'on desk' } })
+  if (!sameFrameStillObjectsCanConsolidate(photoPlantA, photoPlantB)) {
+    throw new Error('still-photo exact duplicate objects with identical grounding should consolidate')
+  }
+  if (sameFrameStillObjectsCanConsolidate(photoPlantA, photoPlantDesk)) {
+    throw new Error('still-photo objects with distinct grounded locations must remain separate')
+  }
+
   const repeatedPrevious = [
     object('boxes-left', 'other', 'cardboard boxes'),
     object('boxes-right', 'other', 'brown boxes'),
@@ -163,6 +173,18 @@ try {
   const comparisonShelfId = comparisonSnapshot.objects.find((item) => /shel/.test(item.name))?.id
   if (!baselineShelfId || baselineShelfId !== comparisonShelfId) {
     throw new Error('same-scan shelf aliases must still reuse the baseline durable shelf id')
+  }
+
+  const photoNoiseState = store.ingestScan(
+    environmentId,
+    source('photo-noise'),
+    perception('photo-noise', [
+      ...Array.from({ length: 20 }, (_, index) => object(`plant-shelf-${index}`, 'furniture', 'potted plant', 'potted plant', { evidenceIds: ['e_photo_noise'], position: { description: 'on shelf' } })),
+      object('plant-desk', 'furniture', 'potted plant', 'potted plant', { evidenceIds: ['e_photo_noise'], position: { description: 'on desk' } }),
+    ]),
+  )
+  if (new Set(photoNoiseState.objectIds).size !== 2) {
+    throw new Error(`still-photo duplicate burst should collapse to shelf plant + desk plant, got ${photoNoiseState.objectIds.length}`)
   }
 
   const repeatedState = store.ingestScan(
@@ -240,6 +262,7 @@ try {
   console.log('PASS  color-anchored door aliases match while unanchored generic doors remain excluded')
   console.log('PASS  secondary description mentions do not redefine object identity')
   console.log('PASS  grounded cross-pass exact duplicates across audit/identity/geometry and semantic aliases consolidate conservatively')
+  console.log('PASS  still-photo exact duplicate bursts collapse conservatively while distinct positions remain separate')
   console.log('PASS  repeated ambiguous objects are not collapsed into one match')
   console.log('PASS  memory reuses durable shelf/door identities across provider naming drift')
   console.log('PASS  warehouse alias drift collapses to one real added pallet jack')

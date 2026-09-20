@@ -155,6 +155,11 @@ export class ScanPipeline {
       `Previously remembered object naming context (NOT evidence): ${priorNamingContext}.`,
       'Reuse a remembered name only when the same physical object is directly visible now. Never infer presence from memory and never use prior memory as evidence.',
       'Perform a grounded scene inventory: direct observations, visible objects, supported environmental conditions, and spatial relationships.',
+      ...(input.media.kind === 'image' ? [
+        'This source is ONE still photo. Emit each visually distinguishable physical object once. Never repeat the same object many times just because it is salient.',
+        'If multiple objects share the same name, keep separate entries only when the image gives a distinct visible position, bounding box, or relationship for each instance. If instance multiplicity is not visually distinguishable, prefer one conservative representative.',
+        'For doors, cabinets, drawers, gates, and similar openable objects: when open versus closed is directly visually obvious, set object.state explicitly to "open" or "closed". Omit state only when it is genuinely unclear.',
+      ] : []),
       'Treat all supplied frames as one walkthrough of the same environment. Repeated sightings of the same physical entity across frames should resolve to one object, not one object per frame.',
       'Do not emit the overall scene/environment itself (for example "warehouse" or "office") as a SpatialObject. A room/area object requires a distinct bounded physical-space identity.',
       'For every durable physical item named in a direct observation, emit a corresponding object entry when the item is visually identifiable.',

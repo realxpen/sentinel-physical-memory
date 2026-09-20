@@ -674,7 +674,6 @@ function normalizedObjectState(value: string | undefined): string | undefined {
 
 function hasUnresolvedFamilyCounterpart(item: SpatialObject, candidates: SpatialObject[]): boolean {
   const key = semanticObjectIdentityKey(item)
-  if (!key.startsWith('family:')) return false
   return candidates.some((candidate) => semanticObjectIdentityKey(candidate) === key)
 }
 
@@ -683,7 +682,9 @@ function semanticPositionChanged(previous: string, current: string): boolean {
 
   const a = parseRelativePosition(previous)
   const b = parseRelativePosition(current)
-  if (!a || !b) return true
+  // Free-form/viewpoint wording is too unstable to prove movement. A moved
+  // claim requires comparable grounded relative-position semantics.
+  if (!a || !b) return false
   if (a.relation !== b.relation) return true
   if (a.anchor === b.anchor) return false
 

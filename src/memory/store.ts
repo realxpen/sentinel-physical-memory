@@ -1,7 +1,7 @@
 import type { EnvironmentalCondition, EnvironmentalDiff, EnvironmentalMemory, EnvironmentalState, EnvironmentalStateSnapshot, Environment, EnvironmentRelation, Evidence, Issue, ScanSource, SpatialObject, PerceptionResult } from '../domain/sentinel.js'
 import { assessCondition } from '../perception/condition-model.js'
 import { EnvironmentalDiffEngine, type DiffEngine } from './diff-engine.js'
-import { matchObjectsConservatively, sameScanObjectsCanConsolidate } from './object-identity.js'
+import { matchObjectsConservatively, sameFrameStillObjectsCanConsolidate, sameScanObjectsCanConsolidate } from './object-identity.js'
 
 export interface MemoryIds { state: () => string; object: () => string; issue: () => string; relation: () => string; evidence: () => string; diff: () => string }
 export interface MemoryStoreDependencies { now?: () => Date; ids?: Partial<MemoryIds>; diffEngine?: DiffEngine }
@@ -95,7 +95,7 @@ export class EnvironmentalMemoryStore {
     this.upsertEvidence(memory, evidence)
 
     const normalizedObjects = perception.objects.map((item) => ({ ...item, evidenceIds: remapEvidenceIds(item.evidenceIds) }))
-    const canonicalObjectsByInput = this.upsertObjects(memory, normalizedObjects, capturedAt)
+    const canonicalObjectsByInput = this.upsertObjects(memory, normalizedObjects, capturedAt, source.modality === 'image')
     const objectIdMap = new Map(perception.objects.map((item, index) => [item.id, canonicalObjectsByInput[index].id]))
     const objects = uniqueById(canonicalObjectsByInput)
 
@@ -160,9 +160,9 @@ export class EnvironmentalMemoryStore {
     return this.clone(diff)
   }
 
-  private upsertObjects(memory: EnvironmentalMemory, incoming: SpatialObject[], capturedAt: string): SpatialObject[] {
+  private upsertObjects(memory: EnvironmentalMemory, incoming: SpatialObject[], capturedAt: string, singleStillFrame = false): SpatialObject[] {
     const existing = [...memory.objects]
-    const groups = groupSameScanObjectAliases(incoming)
+    const groups = groupSameScanObjectAliases(incoming, singleStillFrame)
     const representatives = groups.map((group) => incoming[group[0]])
     const matches = matchObjectsConservatively(existing, representatives)
     const canonicalByGroup: SpatialObject[] = []
@@ -248,12 +248,15 @@ export class EnvironmentalMemoryStore {
   private clone<T>(value: T): T { return structuredClone(value) }
 }
 
-function groupSameScanObjectAliases(incoming: SpatialObject[]): number[][] {
+function groupSameScanObjectAliases(incoming: SpatialObject[], singleStillFrame = false): number[][] {
   const groups: number[][] = []
 
   for (let index = 0; index < incoming.length; index += 1) {
     const compatibleGroups = groups.filter((group) =>
-      group.every((memberIndex) => sameScanObjectsCanConsolidate(incoming[memberIndex], incoming[index])),
+      group.every((memberIndex) =>
+        sameScanObjectsCanConsolidate(incoming[memberIndex], incoming[index]) ||
+        (singleStillFrame && sameFrameStillObjectsCanConsolidate(incoming[memberIndex], incoming[index])),
+      ),
     )
 
     if (compatibleGroups.length === 1) compatibleGroups[0].push(index)
