@@ -14,7 +14,7 @@ Hackathon track: **Best Apps and Agents**.
 
 ## Current phase
 
-**Phase 8 — Reality Diff UI: IMPLEMENTED / PHONE PROOF PARTIAL / DUPLICATE-SURFACE HARDENING IN CI; PHASE 7 REAL THREE-CHANGE PROOF STILL PENDING**
+**Phase 8 — Reality Diff UI: IMPLEMENTED / PHONE PROOF PARTIAL / DUPLICATE-SURFACE HARDENING CI PASS; PHASE 7 REAL THREE-CHANGE PROOF STILL PENDING**
 
 ## Phase 3 — COMPLETE
 
@@ -850,6 +850,8 @@ Current hardening preserves historical immutability while:
 
 The corrected presentation for that result is three changes: one green-bag addition plus two verification items (closet door and white wall). A fresh deployed phone run must still verify the correction before Phase 8 closes.
 
+Sentinel CI run `35509707873` passed the complete repository suite and production build on hardening commit `ec91d73a9438048188b644f854951bc3ed9c36e7`.
+
 Canonical Phase 8 record:
 
 `Knowledge/UX/phase-8-reality-diff-ui.md`
@@ -931,7 +933,7 @@ Canonical Phase 8 record:
 - [x] Phase 5 — Perception quality and condition model (**COMPLETE — sixth fresh warehouse proof passed clean condition/issue/diff gate**)
 - [x] Phase 6 — Environmental state history (**COMPLETE — immutable current/previous/by-ID/by-date retrieval + Memory timeline**)
 - [ ] Phase 7 — Environmental Diff Engine v2 (**IMPLEMENTED — CI + production deploy pass; real three-change phone proof pending**)
-- [ ] Phase 8 — Reality Diff UI (**IMPLEMENTED — phone proof partial; duplicate-surface hardening awaiting deployed confirmation**)
+- [ ] Phase 8 — Reality Diff UI (**IMPLEMENTED — phone proof partial; duplicate-surface hardening CI pass; deployed confirmation pending**)
 - [ ] Phase 9 — Spatial Memory experience (**NEXT AFTER PHASE 7/8 PHONE GATES**)
 - [ ] Phase 10 — Ask the Building product layer
 - [ ] Phase 11 — Action Planner
@@ -996,6 +998,8 @@ Phase 7 exact production deployment contract: **PASS (`35435260980`)**.
 Phase 7 real three-change phone proof: **PENDING**.
 
 Phase 8 facility-operations Reality Diff UI: **CI PASS (`35454475031`, commit `937ce9c0`)**.
+
+Phase 8 duplicate-surface hardening: **CI PASS (`35509707873`, commit `ec91d73a`)**.
 
 Phase 8 phone visual validation: **PARTIAL — mobile grouping and uncertainty semantics passed; duplicate white-wall card diagnosed and hardened; fresh deployed confirmation pending**.
 

@@ -2,7 +2,7 @@
 
 Date: 2026-09-20
 
-Status: **IMPLEMENTED — PHONE PROOF PARTIAL / DUPLICATE-SURFACE HARDENING IN CI**
+Status: **IMPLEMENTED — PHONE PROOF PARTIAL / DUPLICATE-SURFACE HARDENING CI PASS**
 
 ## Product framing
 
@@ -76,6 +76,12 @@ Implementation commit: `937ce9c02ab5a1ee496540d2ce3ad830511e7399`
 Sentinel CI: `35454475031` — PASS
 
 The complete Phase 4/5/6/7 regression suite and production TypeScript/Vite build remained green.
+
+Duplicate-surface hardening commit: `ec91d73a9438048188b644f854951bc3ed9c36e7`
+
+Sentinel CI: `35509707873` — PASS
+
+The added Phase 8 presentation regression, complete existing regression suite, and production build all passed on Node 22.
 
 ## Exit condition — PARTIAL PHONE VISUAL PROOF
 
