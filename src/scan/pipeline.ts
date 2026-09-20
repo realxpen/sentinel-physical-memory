@@ -577,6 +577,7 @@ function isGenericNegativeFinding(label: string, description: string): boolean {
 
 function isOpenableObject(item: SpatialObject): boolean {
   const text = normalizeSemanticText(`${item.name} ${item.description ?? ''}`)
+  if (/\b(?:handle|hinge|frame|threshold|sill|hardware|panel|knob|latch)\b/.test(text)) return false
   return item.category === 'door' || /\b(?:door|cabinet|drawer|gate|cupboard|closet)\b/.test(text)
 }
 
