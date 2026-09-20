@@ -121,7 +121,7 @@ export class ScanPipeline {
     if (previous) {
       this.emit(scanId, 'comparing', 94, `Comparing state v${previous.version} with v${state.version}`)
       diff = memory.compare(input.environmentId, previous.id, state.id)
-      if (verifiedTemporalChanges.length > 0) {
+      if (input.media.kind === 'image') {
         diff = memory.applyVerifiedTemporalChanges(
           input.environmentId,
           previous.id,
@@ -171,26 +171,37 @@ export class ScanPipeline {
     const candidateByKey = new Map<string, { previous: SpatialObject; current: SpatialObject }>()
     const pairedCurrent = new Set<number>()
 
-    // Temporal verification deliberately does NOT require stable position wording:
-    // movement is one of the things this pass exists to verify. Unique exact names
-    // are safe candidates even when the independent scene descriptions disagree.
+    const addCandidate = (previous: SpatialObject, current: SpatialObject) => {
+      if (!temporalCandidateAllowed(current)) return
+      const key = `candidate_${candidates.length}`
+      candidates.push({
+        key,
+        previousObjectName: previous.name,
+        currentObjectName: current.name,
+        category: current.category,
+        previousPosition: previous.position?.description,
+        currentPosition: current.position?.description,
+        previousDescription: previous.description,
+        currentDescription: current.description,
+      })
+      candidateByKey.set(key, { previous, current })
+    }
+
+    // Exact unique-name identity is preferred and does not depend on position
+    // wording, because movement is one of the things this pass exists to test.
     for (const [currentIndex, current] of perception.objects.entries()) {
       if (!temporalCandidateAllowed(current)) continue
       const nameKey = normalizeTemporalName(current.name)
       if ((currentNameCounts.get(nameKey) ?? 0) !== 1 || (previousNameCounts.get(nameKey) ?? 0) !== 1) continue
-      const previousIndex = priorSnapshot.objects.findIndex((item) => normalizeTemporalName(item.name) === nameKey)
-      if (previousIndex < 0) continue
-      const previous = priorSnapshot.objects[previousIndex]
-      const key = `candidate_${candidates.length}`
-      candidates.push({ key, previousObjectName: previous.name, currentObjectName: current.name, category: current.category })
-      candidateByKey.set(key, { previous, current })
+      const previous = priorSnapshot.objects.find((item) => normalizeTemporalName(item.name) === nameKey)
+      if (!previous) continue
+      addCandidate(previous, current)
       pairedCurrent.add(currentIndex)
-      if (candidates.length >= 16) break
+      if (candidates.length >= 8) break
     }
 
-    // Conservative semantic matching can add alias pairs such as a stable named
-    // door variant, but it never overrides the unique exact-name candidates.
-    if (candidates.length < 16) {
+    // Conservative semantic matching can add a small number of stable aliases.
+    if (candidates.length < 8) {
       const matches = matchObjectsConservatively(priorSnapshot.objects, perception.objects)
       for (const [currentIndex, previousIndex] of matches.entries()) {
         if (pairedCurrent.has(currentIndex)) continue
@@ -199,10 +210,8 @@ export class ScanPipeline {
         if (!temporalCandidateAllowed(current)) continue
         if ((previousNameCounts.get(normalizeTemporalName(previous.name)) ?? 0) !== 1) continue
         if ((currentNameCounts.get(normalizeTemporalName(current.name)) ?? 0) !== 1) continue
-        const key = `candidate_${candidates.length}`
-        candidates.push({ key, previousObjectName: previous.name, currentObjectName: current.name, category: current.category })
-        candidateByKey.set(key, { previous, current })
-        if (candidates.length >= 16) break
+        addCandidate(previous, current)
+        if (candidates.length >= 8) break
       }
     }
 
@@ -216,69 +225,82 @@ export class ScanPipeline {
       uri: priorSource.uri,
     }
 
-    try {
-      const result = await this.model.verifyTemporal({
+    // Verify each candidate independently. This prevents a nearby open door
+    // from being incorrectly transferred to a closet/cabinet candidate.
+    const settled = await Promise.allSettled(candidates.map(async (candidate) => {
+      const result = await this.model!.verifyTemporal!({
         environmentId: input.environmentId,
         previousSourceId: priorSource.id,
         currentSourceId: input.source.id,
         artifacts: [previousArtifact, currentFrame],
-        candidates,
+        candidates: [candidate],
       })
+      return { candidate, result }
+    }))
 
-      const verified = result.changes.flatMap((change): VerifiedTemporalChange[] => {
-        if (change.confidence < 0.9) return []
-        const pair = candidateByKey.get(change.candidateKey)
-        if (!pair) return []
+    const verified: VerifiedTemporalChange[] = []
+    for (const outcome of settled) {
+      if (outcome.status === 'rejected') {
+        console.warn('SENTINEL_TEMPORAL_CANDIDATE_SKIPPED', {
+          scanId,
+          message: outcome.reason instanceof Error ? outcome.reason.message : 'Unknown candidate verification failure',
+        })
+        continue
+      }
+
+      const { candidate, result } = outcome.value
+      const pair = candidateByKey.get(candidate.key)
+      if (!pair) continue
+
+      for (const change of result.changes) {
+        if (change.candidateKey !== candidate.key || change.confidence < 0.9) continue
 
         if (change.kind === 'state_change') {
-          if (!change.previousState || !change.currentState || change.previousState === change.currentState) return []
-          return [{
+          if (!temporalStateCandidateAllowed(pair.current)) continue
+          if (!change.previousState || !change.currentState || change.previousState === change.currentState) continue
+          if (isCompositeOpenable(pair.current) && !hasIndependentOpenClosedCue(pair.previous, pair.current)) continue
+
+          verified.push({
             kind: 'state_change',
             previousObjectName: pair.previous.name,
             currentObjectName: pair.current.name,
             previousState: change.previousState,
             currentState: change.currentState,
             confidence: change.confidence,
-          }]
+          })
+          continue
         }
 
-        return [{
-          kind: 'moved',
-          previousObjectName: pair.previous.name,
-          currentObjectName: pair.current.name,
-          confidence: change.confidence,
-        }]
-      })
-
-      if (verified.length === 0) return { perception, verified: [] }
-
-      const stateUpdates = new Map(
-        verified
-          .filter((change) => change.kind === 'state_change' && change.currentState)
-          .map((change) => [normalizeTemporalName(change.currentObjectName), change.currentState!]),
-      )
-      const refined = {
-        ...perception,
-        objects: perception.objects.map((item) => {
-          const state = stateUpdates.get(normalizeTemporalName(item.name))
-          return state ? { ...item, state } : item
-        }),
+        if (change.kind === 'moved' && temporalMovementCandidateAllowed(pair.current)) {
+          verified.push({
+            kind: 'moved',
+            previousObjectName: pair.previous.name,
+            currentObjectName: pair.current.name,
+            confidence: change.confidence,
+          })
+        }
       }
-
-      console.warn('SENTINEL_TEMPORAL_VERIFICATION_COMPLETED', {
-        scanId,
-        candidates: candidates.length,
-        verified,
-      })
-      return { perception: refined, verified }
-    } catch (error) {
-      console.warn('SENTINEL_TEMPORAL_VERIFICATION_SKIPPED', {
-        scanId,
-        code: errorCode(error),
-        message: error instanceof Error ? error.message : 'Unknown temporal verification failure',
-      })
-      return { perception, verified: [] }
     }
+
+    const stateUpdates = new Map(
+      verified
+        .filter((change) => change.kind === 'state_change' && change.currentState)
+        .map((change) => [normalizeTemporalName(change.currentObjectName), change.currentState!]),
+    )
+    const refined = {
+      ...perception,
+      objects: perception.objects.map((item) => {
+        const state = stateUpdates.get(normalizeTemporalName(item.name))
+        return state ? { ...item, state } : item
+      }),
+    }
+
+    console.warn('SENTINEL_TEMPORAL_VERIFICATION_COMPLETED', {
+      scanId,
+      candidates: candidates.length,
+      verified,
+    })
+    return { perception: refined, verified }
   }
 
   private ensureEnvironment(memory: EnvironmentalMemoryStore, input: ScanInput) {
@@ -732,10 +754,30 @@ function countObjectNames(objects: SpatialObject[]): Map<string, number> {
 }
 
 function temporalCandidateAllowed(item: SpatialObject): boolean {
-  if (isOpenableObject(item)) return true
-  if (!new Set(['furniture', 'equipment', 'obstruction']).has(item.category)) return false
+  return temporalStateCandidateAllowed(item) || temporalMovementCandidateAllowed(item)
+}
+
+function temporalStateCandidateAllowed(item: SpatialObject): boolean {
+  return isOpenableObject(item)
+}
+
+function temporalMovementCandidateAllowed(item: SpatialObject): boolean {
   const name = normalizeTemporalName(item.name)
-  return !/^(?:desk|bookshelf|shelf|rug|carpet|lamp|table lamp|picture|picture frame|books|globe|plant|potted plant|wicker basket|basket|cup|mouse|computer mouse|laptop)$/.test(name)
+  return /\b(?:chair|stool|bench|cart|trolley|pallet jack|hand truck|dolly|wheelchair|ladder|box|crate|bin|barrier|cone|toolbox|bag|suitcase|equipment case)\b/.test(name)
+}
+
+function isCompositeOpenable(item: SpatialObject): boolean {
+  const name = normalizeTemporalName(item.name)
+  return /\b(?:closet|cabinet|cupboard|drawer)\b/.test(name) && item.category !== 'door'
+}
+
+function hasIndependentOpenClosedCue(previous: SpatialObject, current: SpatialObject): boolean {
+  if (hasExplicitOpenClosedState(previous) || hasExplicitOpenClosedState(current)) return true
+  const text = normalizeSemanticText([
+    previous.description ?? '',
+    current.description ?? '',
+  ].join(' '))
+  return /\b(?:open|opened|closed|ajar)\b/.test(text)
 }
 
 function isOpenableObject(item: SpatialObject): boolean {
