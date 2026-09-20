@@ -55,6 +55,7 @@ function Confidence({ value }: { value: number }) {
 
 function App() {
   const inputRef = useRef<HTMLInputElement>(null)
+  const libraryInputRef = useRef<HTMLInputElement>(null)
   const videoInputRef = useRef<HTMLInputElement>(null)
   const [environments, setEnvironments] = useState<EnvironmentProfile[]>(loadEnvironmentDirectory)
   const [activeEnvironmentId, setActiveEnvironmentId] = useState(() => loadActiveEnvironmentId(environments))
@@ -425,7 +426,7 @@ function App() {
       </section>}
 
       {view === 'observe' && <section className="observe-view">
-        <div className="observe-camera"><div className="camera-noise" /><div className="scan-line" /><div className="camera-topline"><SentinelMark active /><span>{isWorking ? status : `${activeEnvironment.name.toUpperCase()} / OBSERVATION MODE`}</span></div><div className="focus-frame focus-one"><span>Workspace</span></div><div className="focus-frame focus-two"><span>Evidence region</span></div><div className="observe-message"><span className="eyebrow">PHONE-FIRST OBSERVATION</span><h2>{isWorking ? status : memory ? `Photograph what changed in ${activeEnvironment.name}.` : `Create the first memory for ${activeEnvironment.name}.`}</h2><p>Take one clear photo that shows the relevant area. SENTINEL grounds visible evidence and updates only this location's persistent environmental state. Walkthrough video remains optional for larger spaces.</p></div><div className="observe-capture-actions"><button className="capture-button" type="button" onClick={() => inputRef.current?.click()} aria-label="Take a photo"><span><i /></span><strong>{isWorking ? 'Observing' : memory ? 'Take update photo' : 'Take first photo'}</strong></button><button className="walkthrough-option" type="button" onClick={() => videoInputRef.current?.click()} disabled={isWorking}>Use walkthrough video instead</button></div></div>
+        <div className="observe-camera"><div className="camera-noise" /><div className="scan-line" /><div className="camera-topline"><SentinelMark active /><span>{isWorking ? status : `${activeEnvironment.name.toUpperCase()} / OBSERVATION MODE`}</span></div><div className="focus-frame focus-one"><span>Workspace</span></div><div className="focus-frame focus-two"><span>Evidence region</span></div><div className="observe-message"><span className="eyebrow">PHONE-FIRST OBSERVATION</span><h2>{isWorking ? status : memory ? `Photograph what changed in ${activeEnvironment.name}.` : `Create the first memory for ${activeEnvironment.name}.`}</h2><p>Take one clear photo or choose one from Photos. SENTINEL grounds visible evidence and updates only this location's persistent environmental state. Video remains optional for larger spaces.</p></div><div className="observe-capture-actions"><button className="capture-button" type="button" onClick={() => inputRef.current?.click()} aria-label="Take a photo"><span><i /></span><strong>{isWorking ? 'Observing' : memory ? 'Take update photo' : 'Take first photo'}</strong></button><div className="observe-secondary-actions"><button className="walkthrough-option" type="button" onClick={() => libraryInputRef.current?.click()} disabled={isWorking}>Choose from Photos</button><button className="walkthrough-option" type="button" onClick={() => videoInputRef.current?.click()} disabled={isWorking}>Choose video</button></div></div></div>
         {error && <div className="error" role="alert"><strong>Observation interrupted</strong><span>{error}</span></div>}
       </section>}
 
@@ -579,6 +580,7 @@ function App() {
       <nav className="mobile-nav" aria-label="Primary navigation"><button className={view === 'memory' ? 'active' : ''} type="button" onClick={() => setView('memory')}><span>◎</span><small>Memory</small></button><button className={view === 'observe' ? 'active observe-nav' : 'observe-nav'} type="button" onClick={() => setView('observe')}><span>◉</span><small>Observe</small></button><button className={view === 'changes' ? 'active' : ''} type="button" onClick={() => setView('changes')}><span>↺</span><small>Changes</small></button></nav>
 
       <input ref={inputRef} hidden type="file" accept="image/*" capture="environment" onChange={(event) => { const file = event.target.files?.[0]; if (file) void handleImage(file); event.target.value = '' }} />
+      <input ref={libraryInputRef} hidden type="file" accept="image/*" onChange={(event) => { const file = event.target.files?.[0]; if (file) void handleImage(file); event.target.value = '' }} />
       <input ref={videoInputRef} hidden type="file" accept="video/*" onChange={(event) => { const file = event.target.files?.[0]; if (file) void handleVideo(file); event.target.value = '' }} />
     </main>
   )
