@@ -44,6 +44,7 @@ export class ScanPipeline {
 
     const memory = await this.loadMemoryStore(input.environmentId)
     this.ensureEnvironment(memory, input)
+    const expectedCurrentStateId = memory.get(input.environmentId)?.environment.currentStateId
 
     const frames = this.sample(input)
     this.emit(scanId, 'sampling', 35, `${frames.length} key frame(s) selected`)
@@ -106,7 +107,12 @@ export class ScanPipeline {
 
     const updatedMemory = memory.get(input.environmentId)
     if (!updatedMemory) throw new Error('Environmental memory was not created')
-    await this.memoryRepository.save(updatedMemory)
+    if (this.memoryRepository.saveIfCurrent) {
+      const saved = await this.memoryRepository.saveIfCurrent(updatedMemory, expectedCurrentStateId)
+      if (!saved) throw new Error('Environmental memory changed while this observation was processing. No stale state was written; retry the observation against the latest memory.')
+    } else {
+      await this.memoryRepository.save(updatedMemory)
+    }
 
     this.emit(scanId, 'complete', 100, diff ? `Scan complete: ${diff.changes.length} change(s) detected` : 'Scan pipeline complete')
     return { scanId, environmentId: input.environmentId, source: input.source, frames, artifacts, observations, conditions, state, diff, completedAt: this.now().toISOString() }
@@ -158,7 +164,8 @@ export class ScanPipeline {
       ...(input.media.kind === 'image' ? [
         'This source is ONE still photo. Emit each visually distinguishable physical object once. Never repeat the same object many times just because it is salient.',
         'If multiple objects share the same name, keep separate entries only when the image gives a distinct visible position, bounding box, or relationship for each instance. If instance multiplicity is not visually distinguishable, prefer one conservative representative.',
-        'For doors, cabinets, drawers, gates, and similar openable objects: when open versus closed is directly visually obvious, set object.state explicitly to "open" or "closed". Omit state only when it is genuinely unclear.',
+        'For EVERY visible door, cabinet door, drawer, gate, and similar openable object, inspect its geometry specifically for open versus closed. When directly visually obvious, object.state MUST be exactly "open" or "closed". An angled door leaf, visible doorway/interior beyond the leaf, or visibly separated door plane supports "open"; a leaf flush in its frame supports "closed". Omit state only when genuinely occluded or ambiguous.',
+        'Use stable object nouns. Treat "plant pot" and "potted plant" as the same physical-object concept when they describe the same grounded plant at the same location; do not emit both aliases for one plant.',
       ] : []),
       'Treat all supplied frames as one walkthrough of the same environment. Repeated sightings of the same physical entity across frames should resolve to one object, not one object per frame.',
       'Do not emit the overall scene/environment itself (for example "warehouse" or "office") as a SpatialObject. A room/area object requires a distinct bounded physical-space identity.',
