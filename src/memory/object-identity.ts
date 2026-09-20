@@ -1,7 +1,7 @@
 import type { SpatialObject } from '../domain/sentinel.js'
 
 type DoorColor = 'green' | 'red' | 'blue' | 'orange' | 'yellow' | 'white' | 'black' | 'brown' | 'gray'
-type ObjectFamily = 'shelving' | 'box' | 'floor' | 'ceiling' | 'fire-extinguisher' | 'exit-sign' | `door:${DoorColor}`
+type ObjectFamily = 'shelving' | 'box' | 'floor' | 'ceiling' | 'fire-extinguisher' | 'exit-sign' | 'potted-plant' | `door:${DoorColor}`
 
 /**
  * Conservative semantic identity for recurring provider naming variance.
@@ -61,7 +61,10 @@ export function sameScanObjectsCanConsolidate(a: SpatialObject, b: SpatialObject
  * separate. Walkthrough/video scans do not use this rule.
  */
 export function sameFrameStillObjectsCanConsolidate(a: SpatialObject, b: SpatialObject): boolean {
-  if (normalize(a.name) !== normalize(b.name) || a.category !== b.category) return false
+  const exactIdentity = normalize(a.name) === normalize(b.name) && a.category === b.category
+  const familyA = semanticFamily(a)
+  const familyB = semanticFamily(b)
+  if (!exactIdentity && !(familyA && familyB && familyA === familyB)) return false
   if (!a.evidenceIds.some((id) => b.evidenceIds.includes(id))) return false
 
   if (a.boundingBox && b.boundingBox) return boundingBoxesOverlap(a.boundingBox, b.boundingBox)
@@ -128,6 +131,7 @@ function semanticFamily(item: SpatialObject): ObjectFamily | undefined {
   if (/\b(?:emergency )?exit\b/.test(name) && /\bsign\b|\bsymbol\b/.test(name)) return 'exit-sign'
   if (item.category === 'signage' && /\b(?:emergency )?exit\b/.test(description) && /\bsign\b|\bsymbol\b/.test(description)) return 'exit-sign'
   if (/\b(?:shelf|shelves|shelving|rack|racks|racking)\b/.test(name)) return 'shelving'
+  if (/\b(?:potted plant|plant pot|plant in (?:a )?pot|pot plant)\b/.test(name)) return 'potted-plant'
   if (/\b(?:box|boxes|carton|cartons|boxed items|boxed goods)\b/.test(name)) return 'box'
   if (/\b(?:concrete |warehouse )?floor\b/.test(name)) return 'floor'
   if (/\b(?:white |warehouse |high )?ceiling\b/.test(name)) return 'ceiling'
