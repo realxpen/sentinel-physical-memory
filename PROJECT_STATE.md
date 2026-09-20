@@ -914,6 +914,21 @@ Sentinel CI run `35519260105` passed the complete repository suite and productio
 
 A fresh post-fix two-photo proof is still required before closing Phases 7/8.
 
+### Office Proof 5 first-scan interruption — response handling + inference budget hardening
+
+The first Office Proof 5 photo did not persist any environment/state in Neon. The browser surfaced `Unexpected token 'A' ... is not valid JSON` because Vercel returned a non-JSON platform/server error and the client called `response.json()` unconditionally.
+
+Current main hardening:
+- all frontend API calls now parse response bodies defensively and surface plain-text/HTML platform failures as readable errors instead of JSON parse exceptions;
+- `/api/scan` maps provider failures to actionable 502/504 JSON responses when the handler is able to respond;
+- openable-state verification is now single-pass only; SENTINEL no longer spends a second inference call trying to force an open/closed answer;
+- if that one evidence-only state audit cannot defend `open` or `closed`, state remains unknown;
+- state-audit output still cannot append inventory or door-hardware objects to the durable scene.
+
+Production Phase 4 Observation Contract run `35520616379` detected exact deployed commit `cac0dd50e8989a12f7c3faa3edb9a5430a736526` and successfully completed a real production scan with Neon persistence.
+
+Because the failed Office Proof 5 attempt created no Neon state, the same local location may be reused for the next proof.
+
 ## Verified implementation baseline
 
 ### Frontend
