@@ -121,7 +121,7 @@ function App() {
     async function restoreEnvironmentalMemory() {
       try {
         const response = await fetch(`/api/memory?environmentId=${encodeURIComponent(activeEnvironment.id)}`, { headers: { Accept: 'application/json' } })
-        const payload = await response.json() as MemoryResponse
+        const payload = await readApiResponse<MemoryResponse>(response, 'Unable to restore environmental memory')
         if (!response.ok) throw new Error(payload.message ?? 'Unable to restore environmental memory')
         if (cancelled) return
         if (payload.memory) {
@@ -153,7 +153,7 @@ function App() {
     async function restoreStateHistory() {
       try {
         const response = await fetch(`/api/states?environmentId=${encodeURIComponent(memory!.environment.id)}`, { headers: { Accept: 'application/json' } })
-        const payload = await response.json() as StateHistoryResponse
+        const payload = await readApiResponse<StateHistoryResponse>(response, 'Unable to restore environmental state history')
         if (!response.ok) throw new Error(payload.message ?? 'Unable to restore environmental state history')
         if (cancelled) return
         setHistory(payload.states)
@@ -226,7 +226,7 @@ function App() {
       })
 
       setStatus('Remembering · grounding observations')
-      const payload = await response.json() as ScanResponse & { error?: string; message?: string }
+      const payload = await readApiResponse<ScanResponse & { error?: string; message?: string }>(response, 'Observation request failed')
       if (!response.ok) throw new Error(payload.message ?? payload.error ?? `Scan request failed (${response.status})`)
       setResult(payload)
       setMemory(payload.memory)
@@ -269,7 +269,7 @@ function App() {
       })
 
       setStatus('Remembering · grounding observations')
-      const payload = await response.json() as ScanResponse & { error?: string; message?: string }
+      const payload = await readApiResponse<ScanResponse & { error?: string; message?: string }>(response, 'Observation request failed')
       if (!response.ok) throw new Error(payload.message ?? payload.error ?? `Scan request failed (${response.status})`)
       setResult(payload)
       setMemory(payload.memory)
@@ -292,7 +292,7 @@ function App() {
       if (query.at) params.set('at', query.at)
 
       const response = await fetch(`/api/states?${params.toString()}`, { headers: { Accept: 'application/json' } })
-      const payload = await response.json() as StateHistoryResponse
+      const payload = await readApiResponse<StateHistoryResponse>(response, 'Unable to inspect historical state')
       if (!response.ok || !payload.selection) throw new Error(payload.message ?? 'Historical state was not found')
       setHistory(payload.states)
       setHistorySelection(payload.selection)
@@ -329,7 +329,7 @@ function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ environmentId: memory.environment.id, question: trimmed, stateId: memory.environment.currentStateId }),
       })
-      const payload = await response.json() as AskBuildingResponse & { message?: string }
+      const payload = await readApiResponse<AskBuildingResponse & { message?: string }>(response, 'Ask request failed')
       if (!response.ok) throw new Error(payload.message ?? 'Ask request failed')
       setAnswer(payload)
       setAskStatus('')
@@ -672,6 +672,38 @@ function stateLabel(memory: EnvironmentalMemory | null, stateId: string): string
 
 function shortStateId(value: string): string {
   return value.length > 22 ? `${value.slice(0, 18)}…` : value
+}
+
+async function readApiResponse<T>(response: Response, fallback: string): Promise<T> {
+  const text = await response.text()
+  if (!text.trim()) {
+    throw new Error(response.ok ? `${fallback}: server returned an empty response` : `${fallback} (${response.status})`)
+  }
+
+  const contentType = response.headers.get('content-type')?.toLowerCase() ?? ''
+  const looksJson = contentType.includes('application/json') || /^[\s]*[\[{]/.test(text)
+
+  if (looksJson) {
+    try {
+      return JSON.parse(text) as T
+    } catch {
+      throw new Error(`${fallback}: server returned malformed JSON`)
+    }
+  }
+
+  const cleaned = text
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 220)
+
+  const statusHint = response.status === 504
+    ? 'The observation timed out before inference completed.'
+    : response.status >= 500
+      ? 'The observation service returned a server error.'
+      : fallback
+
+  throw new Error(cleaned ? `${statusHint} ${cleaned}` : `${statusHint} (${response.status})`)
 }
 
 function isDisplayableObservation(item: Observation): boolean {
