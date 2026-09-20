@@ -1,7 +1,7 @@
 import type { SpatialObject } from '../domain/sentinel.js'
 
 type DoorColor = 'green' | 'red' | 'blue' | 'orange' | 'yellow' | 'white' | 'black' | 'brown' | 'gray'
-type ObjectFamily = 'shelving' | 'box' | 'wall' | 'floor' | 'ceiling' | 'fire-extinguisher' | 'exit-sign' | 'potted-plant' | 'duffel-bag' | 'cabinet-door' | `door:${DoorColor}`
+type ObjectFamily = 'shelving' | 'box' | 'wall' | 'floor' | 'ceiling' | 'fire-extinguisher' | 'exit-sign' | 'potted-plant' | 'duffel-bag' | 'cabinet-door' | 'rug' | 'wall-art' | 'basket' | 'lamp' | `door:${DoorColor}`
 
 /**
  * Conservative semantic identity for recurring provider naming variance.
@@ -20,6 +20,7 @@ export function objectsSemanticallyMatch(a: SpatialObject, b: SpatialObject): bo
   const nameA = normalize(a.name)
   const nameB = normalize(b.name)
   if (nameA === nameB && categoriesCompatibleForExactName(a, b)) return true
+  if (a.category === 'door' && b.category === 'door' && (nameA === 'door' || nameB === 'door')) return true
 
   const familyA = semanticFamily(a)
   const familyB = semanticFamily(b)
@@ -66,6 +67,11 @@ export function sameFrameStillObjectsCanConsolidate(a: SpatialObject, b: Spatial
   const familyB = semanticFamily(b)
   if (!exactIdentity && !(familyA && familyB && familyA === familyB)) return false
   if (!a.evidenceIds.some((id) => b.evidenceIds.includes(id))) return false
+
+  if (exactIdentity) {
+    if (a.boundingBox && b.boundingBox) return boundingBoxesOverlap(a.boundingBox, b.boundingBox)
+    return !distinctStillInstanceEvidence(a, b)
+  }
 
   // A provider may segment one continuous structural surface into several
   // non-overlapping image boxes. Image geometry is not physical instance
@@ -151,6 +157,38 @@ export function matchObjectsConservatively(
     usedPrevious.add(previousIndex)
   }
 
+  // Repeated semantic families (for example two plants) can be matched when
+  // current and previous scans provide a unique, compatible grounded location.
+  let positionMatched = true
+  while (positionMatched) {
+    positionMatched = false
+    for (let currentIndex = 0; currentIndex < current.length; currentIndex += 1) {
+      if (currentToPrevious.has(currentIndex)) continue
+      const previousCandidates = previous
+        .map((candidate, index) => ({ candidate, index }))
+        .filter(({ candidate, index }) =>
+          !usedPrevious.has(index) &&
+          objectsSemanticallyMatch(candidate, current[currentIndex]) &&
+          groundedLocationsMatch(candidate, current[currentIndex]),
+        )
+      if (previousCandidates.length !== 1) continue
+
+      const [{ index: previousIndex }] = previousCandidates
+      const reciprocal = current
+        .map((candidate, index) => ({ candidate, index }))
+        .filter(({ candidate, index }) =>
+          !currentToPrevious.has(index) &&
+          objectsSemanticallyMatch(previous[previousIndex], candidate) &&
+          groundedLocationsMatch(previous[previousIndex], candidate),
+        )
+      if (reciprocal.length !== 1) continue
+
+      currentToPrevious.set(currentIndex, previousIndex)
+      usedPrevious.add(previousIndex)
+      positionMatched = true
+    }
+  }
+
   let matched = true
   while (matched) {
     matched = false
@@ -183,8 +221,12 @@ function semanticFamily(item: SpatialObject): ObjectFamily | undefined {
   if (/\bfire extinguisher\b/.test(name)) return 'fire-extinguisher'
   if (/\b(?:emergency )?exit\b/.test(name) && /\bsign\b|\bsymbol\b/.test(name)) return 'exit-sign'
   if (item.category === 'signage' && /\b(?:emergency )?exit\b/.test(description) && /\bsign\b|\bsymbol\b/.test(description)) return 'exit-sign'
-  if (/\b(?:shelf|shelves|shelving|rack|racks|racking)\b/.test(name)) return 'shelving'
-  if (/\b(?:potted plant|plant pot|plant in (?:a )?pot|pot plant)\b/.test(name)) return 'potted-plant'
+  if (/\b(?:shelf|shelves|shelving|bookshelf|bookshelves|bookcase|bookcases|rack|racks|racking)\b/.test(name)) return 'shelving'
+  if (/\b(?:potted plants?|plant pots?|plant in (?:a )?pot|pot plants?|plants?)\b/.test(name)) return 'potted-plant'
+  if (/\b(?:area rug|rug|carpet)\b/.test(name)) return 'rug'
+  if (/\b(?:wall art|picture|picture frame|framed art)\b/.test(name)) return 'wall-art'
+  if (/\b(?:wicker basket|basket)\b/.test(name)) return 'basket'
+  if (/\b(?:desk lamp|table lamp)\b/.test(name)) return 'lamp'
   if (/\b(?:duffel|duffle)(?: bag)?\b|\bgym bag\b/.test(name)) return 'duffel-bag'
   if (/\bcabinet door\b/.test(name)) return 'cabinet-door'
   if (/\b(?:box|boxes|carton|cartons|boxed items|boxed goods)\b/.test(name)) return 'box'
@@ -244,13 +286,12 @@ function doorColor(value: string): DoorColor | undefined {
 function categoriesCompatibleForExactName(a: SpatialObject, b: SpatialObject): boolean {
   if (a.category === b.category) return true
 
-  const name = normalize(a.name)
-  if (name === 'fire extinguisher') {
-    return new Set([a.category, b.category]).size <= 2 &&
-      [a.category, b.category].every((category) => category === 'equipment' || category === 'safety')
-  }
-
-  return false
+  // Provider category taxonomy is less stable than visible object identity.
+  // Exact names may survive a furniture/other/equipment category drift, but
+  // people and rooms are never allowed to collapse into ordinary objects.
+  const protectedCategories = new Set(['person', 'room'])
+  if (protectedCategories.has(a.category) || protectedCategories.has(b.category)) return false
+  return true
 }
 
 function isCrossPassAlias(a: SpatialObject, b: SpatialObject): boolean {
@@ -275,9 +316,56 @@ function positionsCompatible(a: SpatialObject, b: SpatialObject): boolean {
 
   const descriptionA = semanticPositionDescription(positionA.description)
   const descriptionB = semanticPositionDescription(positionB.description)
-  if (descriptionA && descriptionB && descriptionA !== descriptionB) return false
+  if (descriptionA && descriptionB && !semanticLocationsEquivalent(descriptionA, descriptionB)) return false
 
   return true
+}
+
+function groundedLocationsMatch(a: SpatialObject, b: SpatialObject): boolean {
+  if (a.position?.roomId && b.position?.roomId && a.position.roomId !== b.position.roomId) return false
+  const left = semanticPositionDescription(a.position?.description)
+  const right = semanticPositionDescription(b.position?.description)
+  if (!left || !right) return false
+  return semanticLocationsEquivalent(left, right)
+}
+
+function distinctStillInstanceEvidence(a: SpatialObject, b: SpatialObject): boolean {
+  if (a.position?.roomId && b.position?.roomId && a.position.roomId !== b.position.roomId) return true
+  const left = semanticPositionDescription(a.position?.description)
+  const right = semanticPositionDescription(b.position?.description)
+  if (!left || !right) return false
+  if (semanticLocationsEquivalent(left, right)) return false
+
+  const leftDirection = coarseDirection(left)
+  const rightDirection = coarseDirection(right)
+  if (leftDirection && rightDirection && oppositeDirection(leftDirection, rightDirection)) return true
+
+  const leftAnchors = physicalAnchorTokens(left)
+  const rightAnchors = physicalAnchorTokens(right)
+  if (leftAnchors.size > 0 && rightAnchors.size > 0) {
+    const overlap = [...leftAnchors].some((token) => rightAnchors.has(token))
+    if (!overlap) return true
+  }
+  return false
+}
+
+function coarseDirection(value: string): string | undefined {
+  return value.match(/\b(left|right|front|back|top|bottom)\b/)?.[1]
+}
+
+function oppositeDirection(a: string, b: string): boolean {
+  return new Set([`${a}:${b}`, `${b}:${a}`]).has('left:right') ||
+    new Set([`${a}:${b}`, `${b}:${a}`]).has('front:back') ||
+    new Set([`${a}:${b}`, `${b}:${a}`]).has('top:bottom')
+}
+
+function physicalAnchorTokens(value: string): Set<string> {
+  const ignored = new Set([
+    'the','a','an','of','in','on','at','to','from','near','beside','behind','front',
+    'left','right','top','bottom','center','middle','side','far','image','room','area',
+    'floor','wall','back',
+  ])
+  return new Set(value.split(' ').filter((token) => token && !ignored.has(token)))
 }
 
 function semanticLocationsEquivalent(a: string, b: string): boolean {
