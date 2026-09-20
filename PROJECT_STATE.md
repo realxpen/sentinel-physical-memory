@@ -896,6 +896,24 @@ Sentinel CI run `35517279472` passed the full repository suite on commit `dbcefa
 
 One final brand-new two-photo production proof remains for the door-state transition. Historical office states/diffs remain immutable.
 
+### Office Final Proof — FAILED due state-audit object leakage / FIXED IN MAIN
+
+Fresh environment `env_office-final-proof_55e6ec5e` exposed a regression introduced by the bounded openable-state confirmation pass. The state-audit model returned unrelated inventory and door hardware such as desk, laptop, globe, books, door handle, hinge, frame, threshold, sill, and duplicated furniture labels. `sanitizeStateAudit` removed observations/conditions/relations but still allowed those audit objects to merge into the scene, producing a noisy persisted diff with 26 added, 1 moved, and 6 uncertain changes.
+
+Historical Office Final Proof v1/v2 and its persisted diff remain immutable.
+
+Current main fix:
+- state-audit passes can no longer append objects to the scene;
+- audit output may only update `state` on an already-visible openable scene object;
+- matching rejects door hardware/parts such as handle, hinge, frame, leaf, threshold, sill, panel, knob, and latch;
+- conflicting audit states are ignored rather than guessed;
+- accepted state evidence is merged onto the original scene object only;
+- regression now deliberately injects door hardware and desk inventory into both state-audit passes and proves none reaches durable memory.
+
+Sentinel CI run `35519260105` passed the complete repository suite and production build on commit `d54a33f82b69c2a5f9f38c78ffe2247cb477d83e`.
+
+A fresh post-fix two-photo proof is still required before closing Phases 7/8.
+
 ## Verified implementation baseline
 
 ### Frontend
