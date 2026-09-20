@@ -1,4 +1,4 @@
-import type { AskBuildingRequest, AskBuildingResponse, PerceptionResult } from '../domain/sentinel'
+import type { AskBuildingRequest, AskBuildingResponse, PerceptionResult, TemporalChangeKind } from '../domain/sentinel'
 import type { ScanArtifact } from '../scan/types'
 
 export type ModelRole = 'perception' | 'reasoning' | 'verification'
@@ -14,11 +14,39 @@ export interface ReasoningInferenceRequest {
   request: AskBuildingRequest
   context: string
 }
+export interface TemporalVerificationCandidate {
+  key: string
+  previousObjectName: string
+  currentObjectName: string
+  category: string
+}
+
+export interface TemporalVerificationRequest {
+  environmentId: string
+  previousSourceId: string
+  currentSourceId: string
+  artifacts: ScanArtifact[]
+  candidates: TemporalVerificationCandidate[]
+}
+
+export interface TemporalVerificationChange {
+  candidateKey: string
+  kind: TemporalChangeKind
+  previousState?: 'open' | 'closed'
+  currentState?: 'open' | 'closed'
+  confidence: number
+}
+
+export interface TemporalVerificationResult {
+  changes: TemporalVerificationChange[]
+}
+
 
 export interface ModelAdapter {
   readonly provider: string
   readonly model: string
   infer(request: ModelInferenceRequest): Promise<PerceptionResult>
+  verifyTemporal?(request: TemporalVerificationRequest): Promise<TemporalVerificationResult>
 }
 
 export interface ReasoningModelAdapter {
