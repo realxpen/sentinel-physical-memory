@@ -6,6 +6,7 @@ import './environment.css'
 import './history.css'
 import type { AskBuildingResponse, Change, EnvironmentalCondition, EnvironmentalDiff, EnvironmentalMemory, EnvironmentalState, EnvironmentType, Observation } from './domain/sentinel'
 import type { EnvironmentalStateHistoryEntry, EnvironmentalStateHistoryRecord } from './memory/history'
+import { changesForPresentation, presentedChangeSummary } from './memory/change-presentation'
 import { createEnvironmentProfile, DEFAULT_ENVIRONMENT, ENVIRONMENT_TYPES, loadActiveEnvironmentId, loadEnvironmentDirectory, saveActiveEnvironmentId, saveEnvironmentDirectory, type EnvironmentProfile } from './environment/directory'
 import { ingestImageFile } from './scan/image-ingestion'
 import { ingestVideoFile } from './scan/video-ingestion'
@@ -80,11 +81,12 @@ function App() {
   const activeEnvironment = environments.find((item) => item.id === activeEnvironmentId) ?? environments[0] ?? DEFAULT_ENVIRONMENT
   const isWorking = status.startsWith('Observing') || status.startsWith('Understanding') || status.startsWith('Remembering')
   const latestDiff = result?.diff ?? memory?.diffs.at(-1)
-  const selectedChange = selectedChangeId ? latestDiff?.changes.find((change) => change.id === selectedChangeId) ?? null : null
-  const attentionChanges = latestDiff?.changes.filter((change) => changeBucket(change) === 'attention') ?? []
-  const physicalChanges = latestDiff?.changes.filter((change) => changeBucket(change) === 'physical') ?? []
-  const resolvedChanges = latestDiff?.changes.filter((change) => changeBucket(change) === 'resolved') ?? []
-  const verificationChanges = latestDiff?.changes.filter((change) => changeBucket(change) === 'verification') ?? []
+  const presentedChanges = latestDiff ? changesForPresentation(latestDiff.changes) : []
+  const selectedChange = selectedChangeId ? presentedChanges.find((change) => change.id === selectedChangeId) ?? null : null
+  const attentionChanges = presentedChanges.filter((change) => changeBucket(change) === 'attention')
+  const physicalChanges = presentedChanges.filter((change) => changeBucket(change) === 'physical')
+  const resolvedChanges = presentedChanges.filter((change) => changeBucket(change) === 'resolved')
+  const verificationChanges = presentedChanges.filter((change) => changeBucket(change) === 'verification')
 
   useEffect(() => {
     saveEnvironmentDirectory(environments)
@@ -434,7 +436,7 @@ function App() {
         <div className="hero-copy compact operations-diff-hero">
           <div className="eyebrow">FACILITY OPERATIONS / REALITY DIFF / {activeEnvironment.name.toUpperCase()}</div>
           <h1>{latestDiff ? 'Operations update.' : 'What changed.'}</h1>
-          <p>{latestDiff ? `SENTINEL compared the previous remembered state with the current one and found ${latestDiff.changes.length} supported change${latestDiff.changes.length === 1 ? '' : 's'}. Review what needs attention, what physically changed, and what has been resolved.` : memory ? `Observe ${activeEnvironment.name} again. SENTINEL will compare the new grounded state with the one it remembers for this location.` : `${activeEnvironment.name} needs a first observation before Reality Diff can begin.`}</p>
+          <p>{latestDiff ? `SENTINEL compared the previous remembered state with the current one and found ${presentedChanges.length} supported change${presentedChanges.length === 1 ? '' : 's'}. Review what needs attention, what physically changed, and what has been resolved.` : memory ? `Observe ${activeEnvironment.name} again. SENTINEL will compare the new grounded state with the one it remembers for this location.` : `${activeEnvironment.name} needs a first observation before Reality Diff can begin.`}</p>
         </div>
 
         {latestDiff && <div className="operations-summary" aria-label="Facility operations change summary">
@@ -465,10 +467,10 @@ function App() {
           <div className="diff-divider"><i /></div>
           <div className="diff-half current"><span>{latestDiff ? 'CURRENT MEMORY' : 'NEXT OBSERVATION'}</span><strong>{latestDiff ? stateLabel(memory, latestDiff.toStateId) : 'Awaiting rescan'}</strong>{latestDiff && <small>{shortStateId(latestDiff.toStateId)}</small>}</div>
           <div className="diff-label">BEFORE <b>↔</b> AFTER</div>
-          {latestDiff && <div className="diff-operation-caption"><span>BUILDING MEMORY UPDATED</span><strong>{latestDiff.summary}</strong></div>}
+          {latestDiff && <div className="diff-operation-caption"><span>BUILDING MEMORY UPDATED</span><strong>{presentedChangeSummary(presentedChanges)}</strong></div>}
         </div>
 
-        {latestDiff ? latestDiff.changes.length === 0 ? <div className="empty-diff operations-empty"><strong>No material change detected.</strong><span>The building state is materially consistent with the previous observation.</span></div> : <div className="operations-change-groups">
+        {latestDiff ? presentedChanges.length === 0 ? <div className="empty-diff operations-empty"><strong>No material change detected.</strong><span>The building state is materially consistent with the previous observation.</span></div> : <div className="operations-change-groups">
           {attentionChanges.length > 0 && <ChangeGroup title="Needs attention" subtitle="Operational conditions or issues that deserve review." changes={attentionChanges} onSelect={setSelectedChangeId} />}
           {physicalChanges.length > 0 && <ChangeGroup title="Physical changes" subtitle="Grounded changes to objects or their visible state/location." changes={physicalChanges} onSelect={setSelectedChangeId} />}
           {resolvedChanges.length > 0 && <ChangeGroup title="Resolved" subtitle="Changes explicitly supported as resolved." changes={resolvedChanges} onSelect={setSelectedChangeId} />}

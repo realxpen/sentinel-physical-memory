@@ -7,7 +7,7 @@ const vite = await createServer({
 })
 
 try {
-  const { matchObjectsConservatively, objectsSemanticallyMatch, sameFrameStillObjectsCanConsolidate, sameScanObjectsCanConsolidate } = await vite.ssrLoadModule('/src/memory/object-identity.ts')
+  const { collapseGroundedStructuralSurfaceDuplicates, matchObjectsConservatively, objectsSemanticallyMatch, sameFrameStillObjectsCanConsolidate, sameScanObjectsCanConsolidate } = await vite.ssrLoadModule('/src/memory/object-identity.ts')
   const { EnvironmentalDiffEngine } = await vite.ssrLoadModule('/src/memory/diff-engine.ts')
   const { EnvironmentalMemoryStore } = await vite.ssrLoadModule('/src/memory/store.ts')
 
@@ -106,6 +106,19 @@ try {
     throw new Error('still-photo objects with distinct grounded locations must remain separate')
   }
 
+  const photoWallLeftBox = object('wall-photo-a', 'other', 'white wall', 'white wall', { evidenceIds: ['photo_frame'], boundingBox: { x: 0, y: 0, width: 0.45, height: 1 } })
+  const photoWallRightBox = object('wall-photo-b', 'other', 'white wall', 'white wall', { evidenceIds: ['photo_frame'], boundingBox: { x: 0.55, y: 0, width: 0.45, height: 1 } })
+  if (!sameFrameStillObjectsCanConsolidate(photoWallLeftBox, photoWallRightBox)) {
+    throw new Error('one unanchored wall split into non-overlapping image boxes should consolidate')
+  }
+  const leftWall = object('wall-left', 'other', 'white wall', 'left wall', { evidenceIds: ['photo_frame'], position: { description: 'left wall' } })
+  const rightWall = object('wall-right', 'other', 'white wall', 'right wall', { evidenceIds: ['photo_frame'], position: { description: 'right wall' } })
+  if (sameFrameStillObjectsCanConsolidate(leftWall, rightWall)) {
+    throw new Error('distinct grounded wall directions must remain separate')
+  }
+  const collapsedWalls = collapseGroundedStructuralSurfaceDuplicates([photoWallLeftBox, photoWallRightBox])
+  if (collapsedWalls.length !== 1) throw new Error(`expected one comparison-time wall surface, got ${collapsedWalls.length}`)
+
   const repeatedPrevious = [
     object('boxes-left', 'other', 'cardboard boxes'),
     object('boxes-right', 'other', 'brown boxes'),
@@ -184,10 +197,12 @@ try {
       ...Array.from({ length: 20 }, (_, index) => object(`plant-shelf-${index}`, 'furniture', 'potted plant', 'potted plant', { evidenceIds: ['e_photo_noise'], position: { description: 'on shelf' } })),
       object('plant-shelf-alias', 'furniture', 'plant pot', 'plant pot', { evidenceIds: ['e_photo_noise'], position: { description: 'on shelf' } }),
       object('plant-desk', 'furniture', 'potted plant', 'potted plant', { evidenceIds: ['e_photo_noise'], position: { description: 'on desk' } }),
+      object('wall-segment-a', 'other', 'white wall', 'white wall', { evidenceIds: ['e_photo_noise'], boundingBox: { x: 0, y: 0, width: 0.45, height: 1 } }),
+      object('wall-segment-b', 'other', 'white wall', 'white wall', { evidenceIds: ['e_photo_noise'], boundingBox: { x: 0.55, y: 0, width: 0.45, height: 1 } }),
     ]),
   )
-  if (new Set(photoNoiseState.objectIds).size !== 2) {
-    throw new Error(`still-photo duplicate burst should collapse to shelf plant + desk plant, got ${photoNoiseState.objectIds.length}`)
+  if (new Set(photoNoiseState.objectIds).size !== 3) {
+    throw new Error(`still-photo duplicate burst should collapse to shelf plant + desk plant + one wall, got ${photoNoiseState.objectIds.length}`)
   }
 
   const repeatedState = store.ingestScan(
@@ -266,6 +281,7 @@ try {
   console.log('PASS  secondary description mentions do not redefine object identity')
   console.log('PASS  grounded cross-pass exact duplicates across audit/identity/geometry and semantic aliases consolidate conservatively')
   console.log('PASS  still-photo exact duplicate bursts collapse conservatively while distinct positions remain separate')
+  console.log('PASS  same-frame structural surface segments collapse while directional walls remain separate')
   console.log('PASS  repeated ambiguous objects are not collapsed into one match')
   console.log('PASS  memory reuses durable shelf/door identities across provider naming drift')
   console.log('PASS  warehouse alias drift collapses to one real added pallet jack')

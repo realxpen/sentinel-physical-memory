@@ -1,7 +1,7 @@
 import type { SpatialObject } from '../domain/sentinel.js'
 
 type DoorColor = 'green' | 'red' | 'blue' | 'orange' | 'yellow' | 'white' | 'black' | 'brown' | 'gray'
-type ObjectFamily = 'shelving' | 'box' | 'floor' | 'ceiling' | 'fire-extinguisher' | 'exit-sign' | 'potted-plant' | `door:${DoorColor}`
+type ObjectFamily = 'shelving' | 'box' | 'wall' | 'floor' | 'ceiling' | 'fire-extinguisher' | 'exit-sign' | 'potted-plant' | `door:${DoorColor}`
 
 /**
  * Conservative semantic identity for recurring provider naming variance.
@@ -67,6 +67,14 @@ export function sameFrameStillObjectsCanConsolidate(a: SpatialObject, b: Spatial
   if (!exactIdentity && !(familyA && familyB && familyA === familyB)) return false
   if (!a.evidenceIds.some((id) => b.evidenceIds.includes(id))) return false
 
+  // A provider may segment one continuous structural surface into several
+  // non-overlapping image boxes. Image geometry is not physical instance
+  // identity, so compatible wall/floor/ceiling mentions from the same trusted
+  // still frame collapse unless grounded room/directional anchors conflict.
+  if (isStructuralSurfaceFamily(familyA) && familyA === familyB) {
+    return structuralSurfaceAnchorsCompatible(a, b)
+  }
+
   if (a.boundingBox && b.boundingBox) return boundingBoxesOverlap(a.boundingBox, b.boundingBox)
 
   const positionA = semanticPositionDescription(a.position?.description)
@@ -75,6 +83,41 @@ export function sameFrameStillObjectsCanConsolidate(a: SpatialObject, b: Spatial
   if (positionA || positionB) return false
 
   return true
+}
+
+/**
+ * Read-time comparison normalization for historical still-photo snapshots.
+ * The snapshot itself remains immutable; only duplicate grounded structural
+ * surface mentions are represented once while calculating a new diff.
+ */
+export function collapseGroundedStructuralSurfaceDuplicates(objects: SpatialObject[]): SpatialObject[] {
+  const collapsed: SpatialObject[] = []
+
+  for (const item of objects) {
+    const family = semanticFamily(item)
+    if (!isStructuralSurfaceFamily(family)) {
+      collapsed.push(cloneObject(item))
+      continue
+    }
+
+    const existing = collapsed.find((candidate) => {
+      const candidateFamily = semanticFamily(candidate)
+      return candidateFamily === family &&
+        candidate.evidenceIds.some((id) => item.evidenceIds.includes(id)) &&
+        structuralSurfaceAnchorsCompatible(candidate, item)
+    })
+
+    if (!existing) {
+      collapsed.push(cloneObject(item))
+      continue
+    }
+
+    existing.evidenceIds = [...new Set([...existing.evidenceIds, ...item.evidenceIds])]
+    existing.confidence = Math.max(existing.confidence, item.confidence)
+    existing.description = richerText(existing.description, item.description)
+  }
+
+  return collapsed
 }
 
 /**
@@ -133,6 +176,7 @@ function semanticFamily(item: SpatialObject): ObjectFamily | undefined {
   if (/\b(?:shelf|shelves|shelving|rack|racks|racking)\b/.test(name)) return 'shelving'
   if (/\b(?:potted plant|plant pot|plant in (?:a )?pot|pot plant)\b/.test(name)) return 'potted-plant'
   if (/\b(?:box|boxes|carton|cartons|boxed items|boxed goods)\b/.test(name)) return 'box'
+  if (/\b(?:wall|walls)\b/.test(name)) return 'wall'
   if (/\b(?:concrete |warehouse )?floor\b/.test(name)) return 'floor'
   if (/\b(?:white |warehouse |high )?ceiling\b/.test(name)) return 'ceiling'
 
@@ -142,6 +186,41 @@ function semanticFamily(item: SpatialObject): ObjectFamily | undefined {
   }
 
   return undefined
+}
+
+function isStructuralSurfaceFamily(value: ObjectFamily | undefined): value is 'wall' | 'floor' | 'ceiling' {
+  return value === 'wall' || value === 'floor' || value === 'ceiling'
+}
+
+function structuralSurfaceAnchorsCompatible(a: SpatialObject, b: SpatialObject): boolean {
+  const roomA = normalize(a.position?.roomId ?? '')
+  const roomB = normalize(b.position?.roomId ?? '')
+  if (roomA && roomB && roomA !== roomB) return false
+
+  const anchorA = structuralDirection(a)
+  const anchorB = structuralDirection(b)
+  return !(anchorA && anchorB && anchorA !== anchorB)
+}
+
+function structuralDirection(item: SpatialObject): string | undefined {
+  const text = normalize(`${item.name} ${item.description ?? ''} ${item.position?.description ?? ''}`)
+  const match = text.match(/\b(left|right|front|back|north|south|east|west)\b/)
+  return match?.[1]
+}
+
+function cloneObject(item: SpatialObject): SpatialObject {
+  return {
+    ...item,
+    evidenceIds: [...item.evidenceIds],
+    position: item.position ? { ...item.position } : undefined,
+    boundingBox: item.boundingBox ? { ...item.boundingBox } : undefined,
+  }
+}
+
+function richerText(a: string | undefined, b: string | undefined): string | undefined {
+  if (!a) return b
+  if (!b) return a
+  return b.length > a.length ? b : a
 }
 
 function doorColor(value: string): DoorColor | undefined {

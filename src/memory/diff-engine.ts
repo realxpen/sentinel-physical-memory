@@ -7,6 +7,7 @@ import type {
   SpatialObject,
 } from '../domain/sentinel'
 import {
+  collapseGroundedStructuralSurfaceDuplicates,
   matchObjectsConservatively,
   objectsSemanticallyMatch,
   semanticObjectIdentityKey,
@@ -376,7 +377,7 @@ export class EnvironmentalDiffEngine implements DiffEngine {
 function normalizeSnapshot(snapshot: EnvironmentalSnapshot): EnvironmentalSnapshot {
   return {
     ...snapshot,
-    objects: snapshot.objects ?? [],
+    objects: collapseGroundedStructuralSurfaceDuplicates(snapshot.objects ?? []),
     conditions: snapshot.conditions ?? [],
     issues: snapshot.issues ?? [],
     relations: snapshot.relations ?? [],

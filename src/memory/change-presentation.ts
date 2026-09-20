@@ -1,0 +1,66 @@
+import type { Change } from '../domain/sentinel.js'
+
+/**
+ * Historical diffs are immutable. This presentation projection prevents an
+ * already-persisted still-photo surface duplicate from rendering twice while
+ * retaining the underlying evidence and conservative verification status.
+ */
+export function changesForPresentation(changes: Change[]): Change[] {
+  const presented: Change[] = []
+  const structuralVerification = new Map<string, Change[]>()
+
+  for (const change of changes) {
+    const key = structuralVerificationKey(change)
+    if (!key) {
+      presented.push(cloneChange(change))
+      continue
+    }
+
+    const candidates = structuralVerification.get(key) ?? []
+    const existing = candidates.find((candidate) => sharesEvidence(candidate, change))
+    if (!existing) {
+      const copy = cloneChange(change)
+      candidates.push(copy)
+      structuralVerification.set(key, candidates)
+      presented.push(copy)
+      continue
+    }
+
+    existing.evidenceIds = [...new Set([...existing.evidenceIds, ...change.evidenceIds])]
+    existing.confidence = Math.max(existing.confidence, change.confidence)
+  }
+
+  return presented
+}
+
+function sharesEvidence(a: Change, b: Change): boolean {
+  return a.evidenceIds.some((id) => b.evidenceIds.includes(id))
+}
+
+export function presentedChangeSummary(changes: Change[]): string {
+  if (changes.length === 0) return 'No material environmental changes detected.'
+
+  const counts = new Map<Change['type'], number>()
+  for (const change of changes) counts.set(change.type, (counts.get(change.type) ?? 0) + 1)
+  const details = (['added', 'removed', 'moved', 'changed', 'resolved', 'uncertain'] as Change['type'][])
+    .filter((type) => counts.has(type))
+    .map((type) => `${counts.get(type)} ${type}`)
+  return `${changes.length} environmental change(s): ${details.join(', ')}.`
+}
+
+function structuralVerificationKey(change: Change): string | undefined {
+  if (change.type !== 'uncertain') return undefined
+  if (change.entityKind && change.entityKind !== 'object') return undefined
+
+  const title = normalize(change.title).replace(/^not re observed /, '')
+  if (!/\b(?:wall|walls|floor|ceiling)\b/.test(title)) return undefined
+  return `${change.type}:${change.entityKind ?? 'object'}:${title}`
+}
+
+function cloneChange(change: Change): Change {
+  return { ...change, evidenceIds: [...change.evidenceIds] }
+}
+
+function normalize(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim()
+}

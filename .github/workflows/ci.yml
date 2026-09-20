@@ -42,5 +42,7 @@ jobs:
         run: npm run check:photo-observation
       - name: Verify state concurrency guard
         run: npm run check:state-concurrency
+      - name: Verify Phase 8 change presentation
+        run: npm run check:phase8-presentation
       - name: Build
         run: npm run build
