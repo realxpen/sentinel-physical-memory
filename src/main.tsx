@@ -391,13 +391,41 @@ function App() {
           <div className="answer-meta"><span>Confidence {Math.round(answer.confidence * 100)}%</span><span>{answer.evidenceIds.length} evidence reference(s)</span><span>State {answer.stateId}</span></div>
         </section>}
 
-        <div className="environment-stage" aria-label={`${activeEnvironment.name} environmental memory canvas`}>
+        <div className="environment-stage spatial-memory-stage" aria-label={activeEnvironment.name + ' environmental memory canvas'}>
           <div className="ambient-orb orb-one" /><div className="ambient-orb orb-two" /><div className="stage-grid" />
-          <div className="space-label reception"><span>Reception</span><small>remembered area</small></div>
-          <div className="space-label workspace"><span>Workspace</span><small>{memory ? `${memory.observations.length} grounded observations` : 'awaiting first observation'}</small></div>
-          <div className="space-label server"><span>Server Room</span><small>spatial memory</small></div>
-          <div className="memory-node node-a" /><div className="memory-node node-b" /><div className="memory-node node-c" /><div className="memory-path path-a" /><div className="memory-path path-b" />
-          <div className="stage-caption"><span>{memory ? 'LIVE MEMORY' : 'MEMORY CANVAS'}</span><strong>{memory ? `${memory.evidence.length} evidence records across ${memory.states.length} state(s)` : `No state exists yet for ${activeEnvironment.name}`}</strong></div>
+          {memory && currentSnapshot ? <>
+            <div className="spatial-stage-header">
+              <div>
+                <span className="eyebrow">SPATIAL MEMORY / LIVE STATE</span>
+                <strong>{activeEnvironment.name}</strong>
+                <small>{currentSnapshot.objects.length} remembered objects · {currentSnapshot.relations.length} grounded relation{currentSnapshot.relations.length === 1 ? '' : 's'}</small>
+              </div>
+              <span>STATE v{memory.states.find((item) => item.id === currentSnapshot.stateId)?.version ?? memory.states.length}</span>
+            </div>
+            <div className="spatial-room-grid">
+              {spatialGroups.map((group) => <section className="spatial-room" key={group.id}>
+                <div className="spatial-room-heading">
+                  <div><span>{group.name}</span><small>{group.kind === 'room' ? 'remembered area' : 'observed space'}</small></div>
+                  <strong>{group.objects.length}</strong>
+                </div>
+                <div className="spatial-object-cloud">
+                  {group.objects.length === 0 ? <span className="spatial-room-empty">No grounded objects assigned to this area yet.</span> : group.objects.map((item) => {
+                    const tone = spatialObjectTone(item, currentSnapshot)
+                    return <button className={'spatial-object ' + tone} type="button" key={item.id} onClick={() => setSelectedSpatialObjectId(item.id)}>
+                      <i />
+                      <span><strong>{item.name}</strong><small>{spatialObjectSubtitle(item)}</small></span>
+                      <em>{Math.round(item.confidence * 100)}%</em>
+                    </button>
+                  })}
+                </div>
+              </section>)}
+            </div>
+          </> : <div className="spatial-empty-state">
+            <span className="eyebrow">SPATIAL MEMORY</span>
+            <strong>Nothing has been grounded here yet.</strong>
+            <p>Your first observation will turn this canvas into a live map of remembered objects, areas and relationships.</p>
+          </div>}
+          <div className="stage-caption"><span>{memory ? 'LIVE SPATIAL MEMORY' : 'MEMORY CANVAS'}</span><strong>{memory ? memory.evidence.length + ' evidence records across ' + memory.states.length + ' state(s)' : 'No state exists yet for ' + activeEnvironment.name}</strong></div>
         </div>
 
         <div className="memory-summary">
