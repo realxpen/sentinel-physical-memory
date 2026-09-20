@@ -18,26 +18,14 @@ try {
       const frameId = request.artifacts.find((artifact) => artifact.kind === 'frame')?.frameId
       if (!frameId) throw new Error('image scan should produce one trusted frame artifact')
 
-      if (request.prompt.includes('Final openable-object state confirmation')) {
-        return {
-          sourceId,
-          observations: [],
-          objects: [
-            { id: 'door-confirmation', environmentId, category: 'door', name: 'white door', position: { description: 'back wall' }, state: 'open', confidence: 0.99, firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: [frameId] },
-            { id: 'door-handle-leak', environmentId, category: 'other', name: 'door handle (door hardware)', position: { description: 'on white door' }, state: 'open', confidence: 0.99, firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: [frameId] },
-            { id: 'desk-leak', environmentId, category: 'furniture', name: 'desk (furniture)', position: { description: 'left side' }, confidence: 0.95, firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: [frameId] },
-          ],
-          conditions: [], relations: [], evidence: [],
-        }
-      }
-
       if (request.prompt.includes('Targeted openable-object state verification')) {
         return {
           sourceId,
           observations: [],
           objects: [
-            { id: 'door-audit', environmentId, category: 'door', name: 'white door', position: { description: 'back wall' }, confidence: 0.95, firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: [frameId] },
+            { id: 'door-audit', environmentId, category: 'door', name: 'white door', position: { description: 'back wall' }, state: 'open', confidence: 0.99, firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: [frameId] },
             { id: 'door-hinge-leak', environmentId, category: 'other', name: 'door hinge (door hardware)', position: { description: 'on white door' }, state: 'closed', confidence: 0.95, firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: [frameId] },
+            { id: 'desk-leak', environmentId, category: 'furniture', name: 'desk (furniture)', position: { description: 'left side' }, confidence: 0.95, firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: [frameId] },
           ],
           conditions: [], relations: [], evidence: [],
         }
@@ -79,11 +67,10 @@ try {
   if (snapshot?.objects.some((item) => /door handle|door hinge|desk \(furniture\)/i.test(item.name))) {
     throw new Error('state-audit inventory leakage must never enter durable memory')
   }
-  if (!prompts.some((prompt) => prompt.includes('Final openable-object state confirmation'))) throw new Error('missing bounded final openable-state confirmation pass')
   console.log('PASS  still photo becomes one trusted perception frame')
   console.log('PASS  repeated same-frame duplicate and plant aliases collapse by grounded location')
   console.log('PASS  explicit visible door state survives canonicalization')
-  console.log('PASS  one bounded state-confirmation retry recovers a missed open/closed classification')
+  console.log('PASS  one targeted state audit can update an existing openable object')
   console.log('PASS  state-audit hardware/inventory leakage is rejected before memory')
   console.log('PASS  still photo creates durable environmental State v1')
   console.log('PASS  image observation remains grounded through the normal perception pipeline')
