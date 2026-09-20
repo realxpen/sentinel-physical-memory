@@ -929,6 +929,30 @@ Production Phase 4 Observation Contract run `35520616379` detected exact deploye
 
 Because the failed Office Proof 5 attempt created no Neon state, the same local location may be reused for the next proof.
 
+### Office Proof 5 — state extraction PASS / final semantic cleanup applied
+
+Fresh environment `env_office-proof-5_4f3627a3` successfully persisted v1→v2 after the response/runtime hardening. The production diff contained four changes:
+
+- `Changed: white door` — baseline state was null but its direct description said `closed white door with silver handle`; current state was `open`.
+- `Changed: white closet` — baseline unknown → current `closed`; this is knowledge refinement, not proof of physical change.
+- `New: green duffel bag` — supported physical addition.
+- `Not re-observed: wicker basket` — false uncertainty because the current `metal shelf` description explicitly stated that a wicker basket was still present.
+
+Historical Office Proof 5 v1/v2 and its persisted diff remain immutable.
+
+Current main hardening now:
+- recovers `open` / `closed` from explicit direct still-photo descriptions when the provider omitted object.state (for example `closed white door` and `slightly ajar`);
+- still-photo snapshots no longer carry an old object state forward when the current scan has no current state evidence;
+- unknown→known state refinement is not presented as a physical change;
+- known→known transitions such as closed→open remain first-class physical changes;
+- an unmatched prior object is not marked `Not re-observed` when its exact object name is explicitly affirmed in a current grounded object description;
+- door/closet hardware is excluded from openable-state audit targets;
+- chair movement remains absent unless grounded position/relationship evidence actually changes.
+
+Sentinel CI run `35522347058` passed the full suite on commit `a26a6a12d14d74a267f865386e47817013632256`. Phase 4 production contract also remained green on the underlying implementation commits.
+
+One brand-new two-photo production proof remains before closing Phases 7/8.
+
 ## Verified implementation baseline
 
 ### Frontend
