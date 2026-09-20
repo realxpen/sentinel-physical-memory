@@ -1,4 +1,4 @@
-import type { EnvironmentalCondition, EnvironmentalDiff, EnvironmentalMemory, EnvironmentalState, EnvironmentalStateSnapshot, Environment, EnvironmentRelation, Evidence, Issue, ScanSource, SpatialObject, PerceptionResult } from '../domain/sentinel.js'
+import type { EnvironmentalCondition, EnvironmentalDiff, EnvironmentalMemory, EnvironmentalState, EnvironmentalStateSnapshot, Environment, EnvironmentRelation, Evidence, Issue, ScanSource, SpatialObject, PerceptionResult, VerifiedTemporalChange } from '../domain/sentinel.js'
 import { assessCondition } from '../perception/condition-model.js'
 import { EnvironmentalDiffEngine, type DiffEngine } from './diff-engine.js'
 import { matchObjectsConservatively, sameFrameStillObjectsCanConsolidate, sameScanObjectsCanConsolidate } from './object-identity.js'
@@ -161,6 +161,70 @@ export class EnvironmentalMemoryStore {
       { stateId: to.id, environmentId, objects: uniqueById(toSnapshot.objects), conditions: uniqueById(toSnapshot.conditions), issues: uniqueById(toSnapshot.issues), relations: uniqueById(toSnapshot.relations) },
     )
     memory.diffs = [...memory.diffs.filter((item) => !(item.fromStateId === from.id && item.toStateId === to.id)), diff]
+    return this.clone(diff)
+  }
+
+  applyVerifiedTemporalChanges(
+    environmentId: string,
+    fromStateId: string,
+    toStateId: string,
+    verified: VerifiedTemporalChange[],
+  ): EnvironmentalDiff {
+    const memory = this.require(environmentId)
+    const diff = memory.diffs.find((item) => item.fromStateId === fromStateId && item.toStateId === toStateId)
+    if (!diff) throw new Error('Environmental diff must exist before temporal verification is applied')
+
+    const fromSnapshot = this.snapshots.get(fromStateId)
+    const toSnapshot = this.snapshots.get(toStateId)
+    if (!fromSnapshot || !toSnapshot) throw new Error('Historical snapshot unavailable for temporal verification')
+
+    for (const candidate of verified) {
+      if (candidate.confidence < 0.9) continue
+      const previous = uniqueObjectByName(fromSnapshot.objects, candidate.previousObjectName)
+      const current = uniqueObjectByName(toSnapshot.objects, candidate.currentObjectName)
+      if (!previous || !current) continue
+
+      if (candidate.kind === 'state_change') {
+        if (!candidate.previousState || !candidate.currentState || candidate.previousState === candidate.currentState) continue
+        if (!['open', 'closed'].includes(candidate.previousState) || !['open', 'closed'].includes(candidate.currentState)) continue
+        if (diff.changes.some((item) => item.entityId === current.id && item.type === 'changed')) continue
+
+        diff.changes.push({
+          id: this.ids.diff(),
+          environmentId,
+          fromStateId,
+          toStateId,
+          type: 'changed',
+          entityId: current.id,
+          entityKind: 'object',
+          title: `Changed: ${current.name}`,
+          description: `${current.name} changed from ${candidate.previousState} to ${candidate.currentState}.`,
+          confidence: candidate.confidence,
+          evidenceIds: unique([...previous.evidenceIds, ...current.evidenceIds]),
+        })
+        continue
+      }
+
+      if (candidate.kind === 'moved') {
+        if (diff.changes.some((item) => item.entityId === current.id && item.type === 'moved')) continue
+        diff.changes.push({
+          id: this.ids.diff(),
+          environmentId,
+          fromStateId,
+          toStateId,
+          type: 'moved',
+          entityId: current.id,
+          entityKind: 'object',
+          title: `Moved: ${current.name}`,
+          description: `${current.name} was visually verified as displaced between the previous and current observations.`,
+          confidence: candidate.confidence,
+          evidenceIds: unique([...previous.evidenceIds, ...current.evidenceIds]),
+        })
+      }
+    }
+
+    diff.summary = summarizeDiffChanges(diff.changes)
+    memory.diffs = [...memory.diffs.filter((item) => !(item.fromStateId === fromStateId && item.toStateId === toStateId)), diff]
     return this.clone(diff)
   }
 
@@ -346,6 +410,22 @@ function consolidateEquivalentConditions(values: EnvironmentalCondition[]): Envi
   }
 
   return [...byMeaning.values()]
+}
+
+function uniqueObjectByName(objects: SpatialObject[], name: string): SpatialObject | undefined {
+  const normalized = normalizeConditionText(name)
+  const matches = objects.filter((item) => normalizeConditionText(item.name) === normalized)
+  return matches.length === 1 ? matches[0] : undefined
+}
+
+function summarizeDiffChanges(changes: EnvironmentalDiff['changes']): string {
+  if (changes.length === 0) return 'No supported environmental changes detected.'
+  const counts = new Map<string, number>()
+  for (const change of changes) counts.set(change.type, (counts.get(change.type) ?? 0) + 1)
+  const parts = ['added', 'removed', 'moved', 'changed', 'resolved', 'uncertain']
+    .filter((type) => (counts.get(type) ?? 0) > 0)
+    .map((type) => `${counts.get(type)} ${type}`)
+  return `${changes.length} environmental change(s): ${parts.join(', ')}.`
 }
 
 function normalizeConditionText(value: string): string {
