@@ -40,5 +40,7 @@ jobs:
         run: npm run check:phase7-diff
       - name: Verify phone photo observation
         run: npm run check:photo-observation
+      - name: Verify state concurrency guard
+        run: npm run check:state-concurrency
       - name: Build
         run: npm run build
