@@ -21,7 +21,9 @@ try {
         objects: [
           { id: `chair_${calls}`, environmentId, category: 'furniture', name: 'chair', description: 'chair beside desk', position: { description: 'beside desk' }, confidence: 0.95, firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: [frameId] },
           ...Array.from({ length: 12 }, (_, index) => ({ id: `plant_${calls}_${index}`, environmentId, category: 'furniture', name: 'potted plant', position: { description: 'on shelf' }, confidence: 0.95, firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: [frameId] })),
+          { id: `plant_alias_${calls}`, environmentId, category: 'furniture', name: 'plant pot', position: { description: 'on shelf' }, confidence: 0.95, firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: [frameId] },
           { id: `plant_desk_${calls}`, environmentId, category: 'furniture', name: 'potted plant', position: { description: 'on desk' }, confidence: 0.95, firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: [frameId] },
+          { id: `door_${calls}`, environmentId, category: 'door', name: 'white door', position: { description: 'back wall' }, state: 'open', confidence: 0.95, firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: [frameId] },
         ],
         conditions: [], relations: [], evidence: [],
       }
@@ -39,9 +41,12 @@ try {
   const memory = await pipeline.getMemory(environmentId)
   const snapshot = memory?.snapshots.find((item) => item.stateId === result.state.id)
   const plants = snapshot?.objects.filter((item) => item.name === 'potted plant') ?? []
-  if (plants.length !== 2) throw new Error(`expected duplicate still-photo plants to collapse to 2 grounded locations, got ${plants.length}`)
+  if (plants.length !== 2) throw new Error(`expected duplicate/alias still-photo plants to collapse to 2 grounded locations, got ${plants.length}`)
+  const door = snapshot?.objects.find((item) => item.name === 'white door')
+  if (door?.state !== 'open') throw new Error(`expected explicit visible door state to persist, got ${door?.state ?? 'missing'}`)
   console.log('PASS  still photo becomes one trusted perception frame')
-  console.log('PASS  repeated same-frame duplicate objects collapse by grounded location')
+  console.log('PASS  repeated same-frame duplicate and plant aliases collapse by grounded location')
+  console.log('PASS  explicit visible door state survives canonicalization')
   console.log('PASS  still photo creates durable environmental State v1')
   console.log('PASS  image observation remains grounded through the normal perception pipeline')
   console.log('SENTINEL PHOTO OBSERVATION VERIFIED')
