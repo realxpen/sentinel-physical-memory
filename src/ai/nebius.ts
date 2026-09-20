@@ -59,7 +59,13 @@ export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapte
 
   async verifyTemporal(request: TemporalVerificationRequest): Promise<TemporalVerificationResult> {
     const candidateLines = request.candidates.map((candidate) =>
-      `${candidate.key}: previous="${candidate.previousObjectName}" current="${candidate.currentObjectName}" category=${candidate.category}`,
+      [
+        `${candidate.key}: previous="${candidate.previousObjectName}" current="${candidate.currentObjectName}" category=${candidate.category}`,
+        `previous_position="${candidate.previousPosition ?? 'unspecified'}"`,
+        `current_position="${candidate.currentPosition ?? 'unspecified'}"`,
+        `previous_description="${candidate.previousDescription ?? 'none'}"`,
+        `current_description="${candidate.currentDescription ?? 'none'}"`,
+      ].join(' | '),
     )
 
     const prompt = [
@@ -67,13 +73,16 @@ export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapte
       `Previous source: ${request.previousSourceId}. Current source: ${request.currentSourceId}.`,
       'The FIRST supplied image is the PREVIOUS state. The SECOND supplied image is the CURRENT state.',
       'You are a temporal verification pass, not a scene inventory. Only evaluate the listed matched object candidates.',
+      'Each candidate line identifies one physical object. Its name and position/description are identity hints. Never transfer a change from a nearby door, closet, cabinet, chair, shelf, or other object to the candidate.',
+      'For an openable object, visually track the SAME leaf/panel/door in both images. A nearby open doorway does not prove that a closet or cabinet changed.',
+      'For movement, compare the candidate itself, not the camera framing or nearby objects. Perspective change alone is not movement.',
       'Allowed candidate keys:',
       ...candidateLines,
       'Return ONLY JSON with shape {"changes":[{"candidateKey":"candidate_0","kind":"state_change|moved","previousState":"open|closed","currentState":"open|closed","confidence":0.0}]}',
       'For kind="state_change", previousState and currentState are required and must be visually defensible in the two images. Only open/closed transitions are allowed.',
       'For kind="moved", report only when the same physical object is clearly displaced between the two images. Do not call viewpoint wording drift or uncertain perspective a move.',
       'Do not report additions, removals, hazards, conditions, issues, recommendations, object parts, or any candidate not listed.',
-      'If a change is not directly visible with high confidence, omit it. An empty changes array is valid.',
+      'Prefer precision over recall. If there is any identity ambiguity, conflicting cue, or uncertainty about whether the same object changed, omit it. An empty changes array is valid.',
     ].join('\n')
 
     const content = await this.buildContent(prompt, request.artifacts)
