@@ -40,13 +40,14 @@ button:disabled { cursor: default; }
 .profile-button { justify-self: end; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line); background: rgba(255,255,255,.05); color: inherit; font-size: 11px; font-weight: 800; }
 .view-memory .profile-button { border-color: rgba(17,21,16,.12); background: rgba(17,21,16,.04); }
 
-.desktop-rail { position: fixed; z-index: 25; left: 18px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 8px; padding: 8px; border: 1px solid var(--line); border-radius: 999px; background: rgba(10,12,11,.55); backdrop-filter: blur(20px); }
-.view-memory .desktop-rail { background: rgba(244,244,239,.72); border-color: rgba(17,21,16,.1); }
-.desktop-rail button { width: 40px; height: 40px; position: relative; display: grid; place-items: center; border: 0; border-radius: 50%; background: transparent; color: #7f8881; }
+.desktop-rail { position: sticky; z-index: 32; top: 12px; width: max-content; margin: 10px auto 0; display: flex; flex-direction: row; gap: 6px; padding: 6px; border: 1px solid var(--line); border-radius: 999px; background: rgba(10,12,11,.84); backdrop-filter: blur(20px); box-shadow: 0 12px 38px rgba(0,0,0,.18); }
+.view-memory .desktop-rail { background: rgba(244,244,239,.9); border-color: rgba(17,21,16,.1); }
+.desktop-rail button { min-width: 104px; height: 38px; position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 0 16px; border: 0; border-radius: 999px; background: transparent; color: #7f8881; }
 .desktop-rail button.active { background: var(--green); color: #051007; }
-.desktop-rail button span { font-size: 17px; }
-.desktop-rail em { position: absolute; left: 52px; padding: 6px 9px; border-radius: 8px; background: #111510; color: white; font-size: 10px; font-style: normal; opacity: 0; pointer-events: none; transform: translateX(-4px); transition: .18s ease; }
-.desktop-rail button:hover em { opacity: 1; transform: translateX(0); }
+.desktop-rail button span { font-size: 13px; }
+.desktop-rail em { position: static; padding: 0; background: transparent; color: currentColor; font-size: 10px; font-style: normal; font-weight: 800; opacity: 1; transform: none; letter-spacing: .02em; pointer-events: none; }
+.desktop-rail button:hover:not(.active) { background: rgba(255,255,255,.05); color: #c9d0cb; }
+.view-memory .desktop-rail button:hover:not(.active) { background: rgba(17,21,16,.05); color: #111510; }
 
 .memory-view, .changes-view { width: min(1280px, calc(100% - 112px)); margin: 0 auto; }
 .hero-copy { padding: 88px 0 46px; max-width: 920px; }
@@ -507,18 +508,7 @@ h1 { margin: 18px 0 22px; font-size: clamp(58px, 8.4vw, 128px); line-height: .88
   background: rgba(9,14,11,.62);
 }
 .operations-next-step .wide-observe { padding-inline: 4px; }
-@media (min-width: 1000px) {
-  .view-changes .desktop-rail {
-    top: 24px;
-    left: 50%;
-    transform: translateX(-50%);
-    flex-direction: row;
-    padding: 5px;
-  }
-  .view-changes .desktop-rail button { width: auto; min-width: 92px; height: 34px; padding: 0 14px; border-radius: 999px; gap: 7px; }
-  .view-changes .desktop-rail em { position: static; padding: 0; background: transparent; color: currentColor; font-size: 9px; opacity: 1; transform: none; }
-  .view-changes .desktop-rail button span { font-size: 12px; }
-}
+
 @media (max-width: 760px) {
   .view-changes .changes-view { width: calc(100% - 28px); }
   .operations-diff-hero { padding: 44px 0 24px; text-align: left; }
