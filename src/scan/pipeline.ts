@@ -165,28 +165,45 @@ export class ScanPipeline {
   ): Promise<{ perception: PerceptionResult; verified: VerifiedTemporalChange[] }> {
     if (!this.model?.verifyTemporal) return { perception, verified: [] }
 
-    const matches = matchObjectsConservatively(priorSnapshot.objects, perception.objects)
     const previousNameCounts = countObjectNames(priorSnapshot.objects)
     const currentNameCounts = countObjectNames(perception.objects)
     const candidates: TemporalVerificationCandidate[] = []
     const candidateByKey = new Map<string, { previous: SpatialObject; current: SpatialObject }>()
+    const pairedCurrent = new Set<number>()
 
-    for (const [currentIndex, previousIndex] of matches.entries()) {
-      const previous = priorSnapshot.objects[previousIndex]
-      const current = perception.objects[currentIndex]
+    // Temporal verification deliberately does NOT require stable position wording:
+    // movement is one of the things this pass exists to verify. Unique exact names
+    // are safe candidates even when the independent scene descriptions disagree.
+    for (const [currentIndex, current] of perception.objects.entries()) {
       if (!temporalCandidateAllowed(current)) continue
-      if ((previousNameCounts.get(normalizeTemporalName(previous.name)) ?? 0) !== 1) continue
-      if ((currentNameCounts.get(normalizeTemporalName(current.name)) ?? 0) !== 1) continue
-
+      const nameKey = normalizeTemporalName(current.name)
+      if ((currentNameCounts.get(nameKey) ?? 0) !== 1 || (previousNameCounts.get(nameKey) ?? 0) !== 1) continue
+      const previousIndex = priorSnapshot.objects.findIndex((item) => normalizeTemporalName(item.name) === nameKey)
+      if (previousIndex < 0) continue
+      const previous = priorSnapshot.objects[previousIndex]
       const key = `candidate_${candidates.length}`
-      candidates.push({
-        key,
-        previousObjectName: previous.name,
-        currentObjectName: current.name,
-        category: current.category,
-      })
+      candidates.push({ key, previousObjectName: previous.name, currentObjectName: current.name, category: current.category })
       candidateByKey.set(key, { previous, current })
+      pairedCurrent.add(currentIndex)
       if (candidates.length >= 16) break
+    }
+
+    // Conservative semantic matching can add alias pairs such as a stable named
+    // door variant, but it never overrides the unique exact-name candidates.
+    if (candidates.length < 16) {
+      const matches = matchObjectsConservatively(priorSnapshot.objects, perception.objects)
+      for (const [currentIndex, previousIndex] of matches.entries()) {
+        if (pairedCurrent.has(currentIndex)) continue
+        const previous = priorSnapshot.objects[previousIndex]
+        const current = perception.objects[currentIndex]
+        if (!temporalCandidateAllowed(current)) continue
+        if ((previousNameCounts.get(normalizeTemporalName(previous.name)) ?? 0) !== 1) continue
+        if ((currentNameCounts.get(normalizeTemporalName(current.name)) ?? 0) !== 1) continue
+        const key = `candidate_${candidates.length}`
+        candidates.push({ key, previousObjectName: previous.name, currentObjectName: current.name, category: current.category })
+        candidateByKey.set(key, { previous, current })
+        if (candidates.length >= 16) break
+      }
     }
 
     const currentFrame = currentArtifacts.find((artifact) => artifact.kind === 'frame')
