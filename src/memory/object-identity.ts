@@ -78,7 +78,11 @@ export function sameFrameStillObjectsCanConsolidate(a: SpatialObject, b: Spatial
   // Still-photo providers often emit one movable item or cabinet door more than once.
   // Collapse only when the semantic family matches and grounded position does not conflict.
   if (familyA && familyA === familyB && (familyA === 'duffel-bag' || familyA === 'cabinet-door')) {
-    return positionsCompatible(a, b)
+    if (a.position?.roomId && b.position?.roomId && a.position.roomId !== b.position.roomId) return false
+    const positionA = semanticPositionDescription(a.position?.description)
+    const positionB = semanticPositionDescription(b.position?.description)
+    if (positionA && positionB) return semanticLocationsEquivalent(positionA, positionB)
+    return true
   }
 
   if (a.boundingBox && b.boundingBox) return boundingBoxesOverlap(a.boundingBox, b.boundingBox)
