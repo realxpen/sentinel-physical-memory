@@ -748,8 +748,11 @@ function temporalCandidateAllowed(item: SpatialObject): boolean {
 }
 
 function isOpenableObject(item: SpatialObject): boolean {
+  const name = normalizeSemanticText(item.name)
   const text = normalizeSemanticText(`${item.name} ${item.description ?? ''}`)
-  if (/\b(?:handle|hinge|frame|threshold|sill|hardware|panel|knob|latch)\b/.test(text)) return false
+  // Reject hardware only when the OBJECT itself is a part. A real door may
+  // naturally mention its handle/hinges in the description.
+  if (/\b(?:handle|hinge|frame|threshold|sill|hardware|panel|knob|latch)\b/.test(name)) return false
   return item.category === 'door' || /\b(?:door|cabinet|drawer|gate|cupboard|closet)\b/.test(text)
 }
 
