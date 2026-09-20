@@ -125,19 +125,24 @@ jobs:
           titles = [item.get('title') for item in changes]
           print('Production temporal titles:', titles)
 
-          assert 'New: duffle bag' in titles or 'New: duffel bag' in titles, titles
-          assert 'Changed: white door' in titles, titles
+          normalized_titles = [
+              ('New: duffel bag' if title == 'New: duffle bag' else title)
+              for title in titles
+          ]
+          expected_titles = {'New: duffel bag', 'Moved: office chair', 'Changed: white door'}
+          assert set(normalized_titles) == expected_titles and len(normalized_titles) == 3, {
+              'message': 'Production Reality Diff must contain exactly the three defensible changes.',
+              'expected': sorted(expected_titles),
+              'actual': normalized_titles,
+          }
+
           door = next(item for item in changes if item.get('title') == 'Changed: white door')
           assert 'closed' in (door.get('description') or '').lower() and 'open' in (door.get('description') or '').lower(), door
+          assert float(door.get('confidence') or 0) >= 0.9, door
 
-          forbidden = [
-              title for title in titles
-              if title and any(token in title.lower() for token in [
-                  'door handle', 'door hinge', 'door frame', 'threshold',
-                  'not re-observed: wicker basket', 'changed: white closet',
-              ])
-          ]
-          assert not forbidden, forbidden
+          chair = next(item for item in changes if item.get('title') == 'Moved: office chair')
+          assert float(chair.get('confidence') or 0) >= 0.9, chair
+          assert not [item for item in changes if item.get('type') == 'uncertain'], changes
 
           print('PHASE 8 TEMPORAL PHOTO PRODUCTION CONTRACT VERIFIED')
           print(json.dumps({
