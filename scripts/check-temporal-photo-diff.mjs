@@ -47,10 +47,11 @@ try {
         return { sourceId, observations: [], objects: [], conditions: [], relations: [], evidence: [] }
       }
 
-      const object = (id, category, name, position, description) => ({
+      const object = (id, category, name, position, description, state) => ({
         id, environmentId, category, name,
         ...(position ? { position: { description: position } } : {}),
         ...(description ? { description } : {}),
+        ...(state ? { state } : {}),
         confidence: 0.95,
         firstSeenAt: capturedAt,
         lastSeenAt: capturedAt,
@@ -61,8 +62,8 @@ try {
         sourceId,
         observations: [],
         objects: [
-          object('door-scene', 'door', 'white door', current ? 'center back of room' : 'center of back wall', 'white door with silver handle'),
-          object('closet-scene', 'furniture', 'closet', 'right of bookshelf', 'white closet with two doors'),
+          object('door-scene', 'door', 'white door', current ? 'center back of room' : 'center of back wall', 'white door with silver handle', current ? 'closed' : undefined),
+          object('closet-scene', 'furniture', 'closet', 'right of bookshelf', 'white closet with two doors', current ? 'open' : undefined),
           object('chair-scene', 'furniture', 'office chair', current ? 'center of room' : 'in front of desk', 'black mesh office chair with wheels'),
           object('globe-scene', 'other', 'globe', current ? 'on bookshelf' : 'on shelf', 'small globe'),
           object('books-scene', 'document', 'books', current ? 'on bookshelf' : 'on shelf', 'books'),
@@ -159,8 +160,8 @@ try {
   const currentSnapshot = memory?.snapshots.find((snapshot) => snapshot.stateId === second.state.id)
   const currentDoor = currentSnapshot?.objects.find((item) => item.name === 'white door')
   const currentCloset = currentSnapshot?.objects.find((item) => item.name === 'closet')
-  if (currentDoor?.state !== 'open') throw new Error(`verified door state should be open, got ${currentDoor?.state ?? 'unknown'}`)
-  if (currentCloset?.state !== undefined) throw new Error(`false composite-openable verification must not mutate closet state, got ${currentCloset?.state}`)
+  if (currentDoor?.state !== 'open') throw new Error(`paired verification must override wrong single-photo door state, got ${currentDoor?.state ?? 'unknown'}`)
+  if (currentCloset?.state !== undefined) throw new Error(`unverified single-photo closet state must be discarded, got ${currentCloset?.state}`)
 
   const previousSnapshot = memory?.snapshots.find((snapshot) => snapshot.stateId === first.state.id)
   const previousDoor = previousSnapshot?.objects.find((item) => item.name === 'white door')
@@ -168,6 +169,7 @@ try {
 
   console.log('PASS  each temporal candidate is verified against previous + current images independently')
   console.log('PASS  false nearby-door→closet state transfer is rejected')
+  console.log('PASS  unverified single-photo openable states are discarded')
   console.log('PASS  free-form photo movement requires paired verification')
   console.log('PASS  structural surfaces and low-salience decor do not become operational diff cards')
   console.log('PASS  exact output is white door changed + office chair moved + duffle bag added')
