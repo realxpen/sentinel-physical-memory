@@ -290,8 +290,10 @@ export class ScanPipeline {
     const refined = {
       ...perception,
       objects: perception.objects.map((item) => {
-        const state = stateUpdates.get(normalizeTemporalName(item.name))
-        return state ? { ...item, state } : item
+        const verifiedState = stateUpdates.get(normalizeTemporalName(item.name))
+        if (verifiedState) return { ...item, state: verifiedState }
+        if (isOpenableObject(item)) return { ...item, state: undefined }
+        return item
       }),
     }
 
