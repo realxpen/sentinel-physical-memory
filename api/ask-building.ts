@@ -1,4 +1,5 @@
 import { createNebiusNemotronAdapter } from '../src/ai/nebius.js'
+import { ModelAdapterError } from '../src/ai/model.js'
 import { AskBuildingService } from '../src/memory/ask-building.js'
 import { getMemoryPersistenceMode, getRuntimeEnvironmentalMemoryRepository } from '../server/memory-repository.js'
 
@@ -37,7 +38,16 @@ export default async function handler(req: Request, res: Response) {
     return res.status(200).json({ ...answer, persistence: getMemoryPersistenceMode() })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown ask error'
-    return res.status(400).json({ error: 'ASK_FAILED', message })
+    if (error instanceof ModelAdapterError) {
+      const timedOut = /timeout/i.test(error.code) || /timed out/i.test(error.message)
+      console.error('SENTINEL_ASK_PROVIDER_FAILED', { code: error.code, message: error.message, status: error.status })
+      return res.status(timedOut ? 504 : 502).json({
+        error: timedOut ? 'REASONING_TIMEOUT' : 'REASONING_PROVIDER_FAILED',
+        message: timedOut ? 'SENTINEL reasoning timed out. Please try again.' : message,
+      })
+    }
+    console.error('SENTINEL_ASK_FAILED', { message })
+    return res.status(500).json({ error: 'ASK_FAILED', message })
   }
 }
 
