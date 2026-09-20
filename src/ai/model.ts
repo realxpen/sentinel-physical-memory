@@ -19,6 +19,10 @@ export interface TemporalVerificationCandidate {
   previousObjectName: string
   currentObjectName: string
   category: string
+  previousPosition?: string
+  currentPosition?: string
+  previousDescription?: string
+  currentDescription?: string
 }
 
 export interface TemporalVerificationRequest {
