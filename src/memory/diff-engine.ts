@@ -693,7 +693,7 @@ function isLowSalienceInventoryNoise(item: SpatialObject): boolean {
   if (/^(?:(?:white|painted|brick|concrete|interior|exterior) )?wall$/.test(name)) return true
   if (/^(?:(?:wooden|wood|tile|tiled|concrete|vinyl|laminate|hardwood|carpeted) )?floor$/.test(name)) return true
   if (/^(?:(?:white|painted|drop|suspended) )?ceiling$/.test(name)) return true
-  return /^(?:cup|mug|pen holder|pencil holder|light switch|switch plate|picture frame|wall art|books|book|globe|wicker basket|basket|potted plant|plant|rug|area rug|carpet)$/.test(name)
+  return /^(?:cup|mug|pen holder|pencil holder|light switch|switch plate|picture|picture frame|wall picture|framed picture|wall art|books|book|globe|wicker basket|basket|potted plant|plant|rug|area rug|carpet)$/.test(name)
 }
 
 function explicitlyRemoved(item: SpatialObject): boolean {
