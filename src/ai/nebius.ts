@@ -76,13 +76,15 @@ export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapte
       'Each candidate line identifies one physical object. Its name and position/description are identity hints. Never transfer a change from a nearby door, closet, cabinet, chair, shelf, or other object to the candidate.',
       'For an openable object, visually track the SAME leaf/panel/door in both images. A nearby open doorway does not prove that a closet or cabinet changed.',
       'For movement, compare the candidate itself, not the camera framing or nearby objects. Perspective change alone is not movement.',
-      'Allowed candidate keys:',
+      'Candidate to assess:',
       ...candidateLines,
-      'Return ONLY JSON with shape {"changes":[{"candidateKey":"candidate_0","kind":"state_change|moved","previousState":"open|closed","currentState":"open|closed","confidence":0.0}]}',
-      'For kind="state_change", previousState and currentState are required and must be visually defensible in the two images. Only open/closed transitions are allowed.',
-      'For kind="moved", report only when the same physical object is clearly displaced between the two images. Do not call viewpoint wording drift or uncertain perspective a move.',
-      'Do not report additions, removals, hazards, conditions, issues, recommendations, object parts, or any candidate not listed.',
-      'Prefer precision over recall. If there is any identity ambiguity, conflicting cue, or uncertainty about whether the same object changed, omit it. An empty changes array is valid.',
+      'Return ONLY one JSON object with shape {"candidateKey":"candidate_0","sameObject":true,"previousState":"open|closed|unknown","currentState":"open|closed|unknown","moved":"yes|no|unknown","confidence":0.0}.',
+      'sameObject=true only when you can confidently track the listed candidate as the same physical object in both images.',
+      'For an openable object, classify previousState and currentState from the candidate itself. Use unknown when the candidate geometry is not clear enough. Do not copy the state of a nearby opening.',
+      'For a non-openable object, previousState and currentState should be unknown.',
+      'moved=yes only when the candidate itself is clearly displaced between the images; moved=no when its physical placement is materially the same; use unknown if perspective prevents a reliable judgment.',
+      'Do not report additions, removals, hazards, conditions, issues, recommendations, or other objects.',
+      'Use a high confidence only when identity and the reported temporal fact are visually clear. Prefer unknown over guessing.',
     ].join('\n')
 
     const content = await this.buildContent(prompt, request.artifacts)
@@ -219,33 +221,51 @@ export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapte
       })
     }
 
-    if (!isRecord(value) || !Array.isArray(value.changes)) {
+    const allowed = new Set(request.candidates.map((candidate) => candidate.key))
+    const changes: TemporalVerificationResult['changes'] = []
+
+    // Backward-compatible parser for older provider-shaped responses.
+    if (isRecord(value) && Array.isArray(value.changes)) {
+      for (const raw of value.changes) {
+        if (!isRecord(raw)) continue
+        const candidateKey = typeof raw.candidateKey === 'string' ? raw.candidateKey : ''
+        const kind = raw.kind === 'state_change' || raw.kind === 'moved' ? raw.kind : undefined
+        const confidence = typeof raw.confidence === 'number' ? raw.confidence : Number(raw.confidence)
+        if (!allowed.has(candidateKey) || !kind || !Number.isFinite(confidence)) continue
+
+        if (kind === 'state_change') {
+          const previousState = raw.previousState === 'open' || raw.previousState === 'closed' ? raw.previousState : undefined
+          const currentState = raw.currentState === 'open' || raw.currentState === 'closed' ? raw.currentState : undefined
+          if (!previousState || !currentState || previousState === currentState) continue
+          changes.push({ candidateKey, kind, previousState, currentState, confidence: Math.max(0, Math.min(1, confidence)) })
+          continue
+        }
+        changes.push({ candidateKey, kind, confidence: Math.max(0, Math.min(1, confidence)) })
+      }
+      return { changes }
+    }
+
+    if (!isRecord(value)) {
       throw new ModelAdapterError({
         code: 'INVALID_TEMPORAL_RESULT',
-        message: 'Temporal verification result must contain a changes array',
+        message: 'Temporal verification result must be a JSON object',
         retryable: false,
       })
     }
 
-    const allowed = new Set(request.candidates.map((candidate) => candidate.key))
-    const changes: TemporalVerificationResult['changes'] = []
+    const candidateKey = typeof value.candidateKey === 'string' ? value.candidateKey : ''
+    const confidence = typeof value.confidence === 'number' ? value.confidence : Number(value.confidence)
+    if (!allowed.has(candidateKey) || value.sameObject !== true || !Number.isFinite(confidence)) return { changes }
 
-    for (const raw of value.changes) {
-      if (!isRecord(raw)) continue
-      const candidateKey = typeof raw.candidateKey === 'string' ? raw.candidateKey : ''
-      const kind = raw.kind === 'state_change' || raw.kind === 'moved' ? raw.kind : undefined
-      const confidence = typeof raw.confidence === 'number' ? raw.confidence : Number(raw.confidence)
-      if (!allowed.has(candidateKey) || !kind || !Number.isFinite(confidence)) continue
+    const boundedConfidence = Math.max(0, Math.min(1, confidence))
+    const previousState = value.previousState === 'open' || value.previousState === 'closed' ? value.previousState : undefined
+    const currentState = value.currentState === 'open' || value.currentState === 'closed' ? value.currentState : undefined
+    if (previousState && currentState && previousState !== currentState) {
+      changes.push({ candidateKey, kind: 'state_change', previousState, currentState, confidence: boundedConfidence })
+    }
 
-      if (kind === 'state_change') {
-        const previousState = raw.previousState === 'open' || raw.previousState === 'closed' ? raw.previousState : undefined
-        const currentState = raw.currentState === 'open' || raw.currentState === 'closed' ? raw.currentState : undefined
-        if (!previousState || !currentState || previousState === currentState) continue
-        changes.push({ candidateKey, kind, previousState, currentState, confidence: Math.max(0, Math.min(1, confidence)) })
-        continue
-      }
-
-      changes.push({ candidateKey, kind, confidence: Math.max(0, Math.min(1, confidence)) })
+    if (value.moved === 'yes' || value.moved === true) {
+      changes.push({ candidateKey, kind: 'moved', confidence: boundedConfidence })
     }
 
     return { changes }
