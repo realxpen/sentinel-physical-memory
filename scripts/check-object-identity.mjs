@@ -27,6 +27,10 @@ try {
     [object('a5', 'equipment', 'fire extinguisher'), object('b5', 'safety', 'fire extinguisher')],
     [object('a6', 'signage', 'white sign', 'White sign with a green exit symbol above the door.'), object('b6', 'signage', 'emergency exit sign')],
     [object('a7', 'door', 'green emergency exit door'), object('b7', 'door', 'green door')],
+    [object('a8', 'other', 'area rug'), object('b8', 'furniture', 'carpet')],
+    [object('a9', 'signage', 'wall art'), object('b9', 'signage', 'picture')],
+    [object('a10', 'other', 'wicker basket'), object('b10', 'furniture', 'basket')],
+    [object('a11', 'electrical', 'table lamp'), object('b11', 'furniture', 'desk lamp')],
   ]
 
   for (const [left, right] of aliases) {
@@ -44,6 +48,13 @@ try {
     object('box-singular', 'equipment', 'cardboard box'),
   )) {
     throw new Error('cardboard boxes -> cardboard box should preserve the durable box family')
+  }
+
+  if (!objectsSemanticallyMatch(
+    object('books-old', 'other', 'books'),
+    object('books-new', 'furniture', 'books'),
+  )) {
+    throw new Error('exact object name should survive provider category drift')
   }
 
   if (objectsSemanticallyMatch(object('chair1', 'furniture', 'chair'), object('chair2', 'furniture', 'desk'))) {
@@ -126,6 +137,17 @@ try {
   }
   const collapsedWalls = collapseGroundedStructuralSurfaceDuplicates([photoWallLeftBox, photoWallRightBox])
   if (collapsedWalls.length !== 1) throw new Error(`expected one comparison-time wall surface, got ${collapsedWalls.length}`)
+
+  const previousPlants = [
+    object('plant-old-desk', 'other', 'potted plant', 'desk plant', { position: { description: 'on desk' } }),
+    object('plant-old-shelf', 'other', 'plant pots', 'shelf plant', { position: { description: 'on shelf' } }),
+  ]
+  const currentPlants = [
+    object('plant-new-shelf', 'furniture', 'plant', 'shelf plant', { position: { description: 'on shelf' } }),
+    object('plant-new-desk', 'other', 'potted plant', 'desk plant', { position: { description: 'on the desk' } }),
+  ]
+  const plantMatches = matchObjectsConservatively(previousPlants, currentPlants)
+  if (plantMatches.size !== 2) throw new Error(`grounded repeated plants should match by location, got ${plantMatches.size}`)
 
   const repeatedPrevious = [
     object('boxes-left', 'other', 'cardboard boxes'),
@@ -289,6 +311,8 @@ try {
   console.log('PASS  secondary description mentions do not redefine object identity')
   console.log('PASS  grounded cross-pass exact duplicates across audit/identity/geometry and semantic aliases consolidate conservatively')
   console.log('PASS  still-photo exact duplicate bursts collapse conservatively while distinct positions remain separate')
+  console.log('PASS  office aliases and category drift preserve durable identity')
+  console.log('PASS  repeated plant instances match by grounded location')
   console.log('PASS  same-frame structural surface segments collapse while directional walls remain separate')
   console.log('PASS  repeated ambiguous objects are not collapsed into one match')
   console.log('PASS  memory reuses durable shelf/door identities across provider naming drift')
