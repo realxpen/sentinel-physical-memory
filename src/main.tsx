@@ -205,25 +205,22 @@ function App() {
       const ingestion = await ingestImageFile(file, { maxWidth: 1280, jpegQuality: 0.78, maxBytes: 900_000 })
       setStatus('Understanding · 1 grounded photo')
 
-      const response = await fetch('/api/scan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const scanPayload = {
+        environmentId: activeEnvironment.id,
+        source: {
+          id: id('source'),
           environmentId: activeEnvironment.id,
-          source: {
-            id: id('source'),
-            environmentId: activeEnvironment.id,
-            capturedAt: new Date().toISOString(),
-            metadata: { name: activeEnvironment.name, environmentType: activeEnvironment.type, captureMode: 'photo' },
-          },
-          media: {
-            kind: 'image',
-            uri: ingestion.uri,
-            mimeType: 'image/jpeg',
-            sizeBytes: ingestion.sizeBytes,
-          },
-        }),
-      })
+          capturedAt: new Date().toISOString(),
+          metadata: { name: activeEnvironment.name, environmentType: activeEnvironment.type, captureMode: 'photo' },
+        },
+        media: {
+          kind: 'image',
+          uri: ingestion.uri,
+          mimeType: 'image/jpeg',
+          sizeBytes: ingestion.sizeBytes,
+        },
+      }
+      const response = await postScanWithRetry(scanPayload, () => setStatus('Reconnecting · retrying observation safely'))
 
       setStatus('Remembering · grounding observations')
       const payload = await readApiResponse<ScanResponse & { error?: string; message?: string }>(response, 'Observation request failed')
@@ -252,21 +249,18 @@ function App() {
       const ingestion = await ingestVideoFile(file, id, { maxFrames: 12, maxWidth: 960, jpegQuality: 0.68 })
       setStatus(`Understanding · ${ingestion.frames.length} evidence frames`)
 
-      const response = await fetch('/api/scan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const scanPayload = {
+        environmentId: activeEnvironment.id,
+        source: {
+          id: id('source'),
           environmentId: activeEnvironment.id,
-          source: {
-            id: id('source'),
-            environmentId: activeEnvironment.id,
-            capturedAt: new Date().toISOString(),
-            metadata: { name: activeEnvironment.name, environmentType: activeEnvironment.type },
-          },
-          media: { kind: 'video', uri: `https://local.sentinel/media/${encodeURIComponent(file.name)}`, mimeType: file.type, durationMs: ingestion.durationMs, sizeBytes: file.size },
-          extractedFrames: ingestion.frames,
-        }),
-      })
+          capturedAt: new Date().toISOString(),
+          metadata: { name: activeEnvironment.name, environmentType: activeEnvironment.type },
+        },
+        media: { kind: 'video', uri: `https://local.sentinel/media/${encodeURIComponent(file.name)}`, mimeType: file.type, durationMs: ingestion.durationMs, sizeBytes: file.size },
+        extractedFrames: ingestion.frames,
+      }
+      const response = await postScanWithRetry(scanPayload, () => setStatus('Reconnecting · retrying observation safely'))
 
       setStatus('Remembering · grounding observations')
       const payload = await readApiResponse<ScanResponse & { error?: string; message?: string }>(response, 'Observation request failed')
@@ -672,6 +666,41 @@ function stateLabel(memory: EnvironmentalMemory | null, stateId: string): string
 
 function shortStateId(value: string): string {
   return value.length > 22 ? `${value.slice(0, 18)}…` : value
+}
+
+async function postScanWithRetry(payload: unknown, onRetry?: () => void): Promise<Response> {
+  const body = JSON.stringify(payload)
+  let lastError: unknown
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const response = await fetch('/api/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body,
+      })
+
+      if (attempt === 0 && [502, 503, 504].includes(response.status)) {
+        onRetry?.()
+        await delay(900)
+        continue
+      }
+      return response
+    } catch (error) {
+      lastError = error
+      if (attempt === 1) break
+      onRetry?.()
+      await delay(900)
+    }
+  }
+
+  throw lastError instanceof Error
+    ? new Error(`Network connection to SENTINEL was interrupted. Automatic retry also failed: ${lastError.message}`)
+    : new Error('Network connection to SENTINEL was interrupted and the automatic retry failed.')
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms))
 }
 
 async function readApiResponse<T>(response: Response, fallback: string): Promise<T> {
