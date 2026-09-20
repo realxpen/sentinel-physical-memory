@@ -877,6 +877,25 @@ Sentinel CI run `35514901462` passed the complete repository suite and productio
 
 Phase 7 and Phase 8 remain open until one brand-new two-photo environment proves the post-hardening diff on deployed production.
 
+### Fresh office proof — identity/diff noise PASS, door-state proof pending
+
+Fresh environment `env_cozy-office2_182a74e3` produced a clean persisted Reality Diff with exactly two supported changes:
+
+- `Moved: office chair` at 0.95 confidence;
+- `New: duffle bag` at 1.0 confidence;
+- 0 uncertain changes;
+- 0 operational issues.
+
+The previous false additions / not-reobserved noise did not recur. This validates the office identity/diff hardening and the redesigned before/after Operations view.
+
+The intended white-door closed→open transition was still absent because both v1 and v2 persisted `white door.state = null`. Current main therefore adds one bounded final openable-state confirmation pass after the first targeted state audit. The retry is evidence-only and still fails closed: if visible geometry cannot defend `open` or `closed`, SENTINEL persists unknown rather than guessing.
+
+Regression `npm run check:photo-observation` now explicitly simulates a first missed door-state audit and verifies that the bounded confirmation recovers and persists the directly visible state.
+
+Sentinel CI run `35517279472` passed the full repository suite on commit `dbcefa2c11e9b732945ca0351976626cb53f896a`.
+
+One final brand-new two-photo production proof remains for the door-state transition. Historical office states/diffs remain immutable.
+
 ## Verified implementation baseline
 
 ### Frontend
