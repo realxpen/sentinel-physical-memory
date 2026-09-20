@@ -87,6 +87,10 @@ function App() {
   const physicalChanges = presentedChanges.filter((change) => changeBucket(change) === 'physical')
   const resolvedChanges = presentedChanges.filter((change) => changeBucket(change) === 'resolved')
   const verificationChanges = presentedChanges.filter((change) => changeBucket(change) === 'verification')
+  const previousDiffState = latestDiff ? memory?.states.find((state) => state.id === latestDiff.fromStateId) : undefined
+  const currentDiffState = latestDiff ? memory?.states.find((state) => state.id === latestDiff.toStateId) : undefined
+  const previousDiffImage = previousDiffState ? memory?.sources.find((source) => previousDiffState.sourceIds.includes(source.id) && source.modality === 'image')?.uri : undefined
+  const currentDiffImage = currentDiffState ? memory?.sources.find((source) => currentDiffState.sourceIds.includes(source.id) && source.modality === 'image')?.uri : undefined
 
   useEffect(() => {
     saveEnvironmentDirectory(environments)
@@ -462,12 +466,22 @@ function App() {
           </div>
         </div>}
 
-        <div className="diff-stage operations-diff-stage">
-          <div className="diff-half previous"><span>PREVIOUS MEMORY</span><strong>{latestDiff ? stateLabel(memory, latestDiff.fromStateId) : memory?.environment.currentStateId ? stateLabel(memory, memory.environment.currentStateId) : 'No state'}</strong>{latestDiff && <small>{shortStateId(latestDiff.fromStateId)}</small>}</div>
-          <div className="diff-divider"><i /></div>
-          <div className="diff-half current"><span>{latestDiff ? 'CURRENT MEMORY' : 'NEXT OBSERVATION'}</span><strong>{latestDiff ? stateLabel(memory, latestDiff.toStateId) : 'Awaiting rescan'}</strong>{latestDiff && <small>{shortStateId(latestDiff.toStateId)}</small>}</div>
-          <div className="diff-label">BEFORE <b>↔</b> AFTER</div>
-          {latestDiff && <div className="diff-operation-caption"><span>BUILDING MEMORY UPDATED</span><strong>{presentedChangeSummary(presentedChanges)}</strong></div>}
+        <div className="reality-compare" aria-label="Before and after physical memory">
+          <article className="reality-frame">
+            <div className="reality-frame-head"><strong>{latestDiff ? stateLabel(memory, latestDiff.fromStateId) : 'Previous state'}</strong><span>BEFORE</span></div>
+            <div className="reality-media previous">
+              {previousDiffImage ? <img src={previousDiffImage} alt="Previous environmental observation" /> : <div className="reality-placeholder"><i /><span>Previous physical memory</span></div>}
+            </div>
+            {latestDiff && <code>{shortStateId(latestDiff.fromStateId)}</code>}
+          </article>
+          <article className="reality-frame">
+            <div className="reality-frame-head"><strong>{latestDiff ? stateLabel(memory, latestDiff.toStateId) : 'Next state'}</strong><span>AFTER</span></div>
+            <div className="reality-media current">
+              {currentDiffImage ? <img src={currentDiffImage} alt="Current environmental observation" /> : <div className="reality-placeholder"><i /><span>Current physical memory</span></div>}
+            </div>
+            {latestDiff && <code>{shortStateId(latestDiff.toStateId)}</code>}
+          </article>
+          {latestDiff && <div className="reality-compare-caption"><span>PHYSICAL MEMORY UPDATED</span><strong>{presentedChangeSummary(presentedChanges)}</strong></div>}
         </div>
 
         {latestDiff ? presentedChanges.length === 0 ? <div className="empty-diff operations-empty"><strong>No material change detected.</strong><span>The building state is materially consistent with the previous observation.</span></div> : <div className="operations-change-groups">
