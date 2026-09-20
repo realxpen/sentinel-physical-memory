@@ -377,6 +377,7 @@ export class ScanPipeline {
     }
 
     if (hasOperationalConditionCandidate(scene)) return scene
+    if (input.media.kind === 'image' && !shouldRunStillImageConditionAudit(scene)) return scene
 
     const sceneObjectSummary = scene.objects.length
       ? scene.objects.map((item) => `${item.name} (${item.category})`).join(', ')
@@ -753,6 +754,16 @@ function hasExplicitOpenClosedState(item: SpatialObject): boolean {
 
 function shouldRunOpenableStateAudit(result: PerceptionResult): boolean {
   return result.objects.some((item) => isOpenableObject(item) && !hasExplicitOpenClosedState(item))
+}
+
+function shouldRunStillImageConditionAudit(result: PerceptionResult): boolean {
+  const text = normalizeSemanticText([
+    ...result.observations.flatMap((item) => [item.label, item.description]),
+    ...result.objects.flatMap((item) => [item.name, item.description ?? '', item.position?.description ?? '']),
+    ...result.conditions.flatMap((item) => [item.title, item.description]),
+  ].join(' '))
+
+  return /\b(?:emergency exit|exit sign|blocked|blocking|obstruction|obstructed|walkway|access route|spill|leak|smoke|fire|broken|cracked|damaged|damage|loose cable|exposed wire|unstable|fallen|pallet jack|trolley|cart in front|box in doorway|across walkway)\b/.test(text)
 }
 
 function hasOperationalConditionCandidate(result: PerceptionResult): boolean {
