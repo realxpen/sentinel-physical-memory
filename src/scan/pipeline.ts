@@ -178,7 +178,44 @@ export class ScanPipeline {
       'Return the SENTINEL PerceptionResult JSON schema exactly.',
     ].join('\n')
 
-    const scene = await this.inferPerceptionPass('scene', scenePrompt, artifacts, frames, input)
+    let scene = await this.inferPerceptionPass('scene', scenePrompt, artifacts, frames, input)
+
+    // Still-photo state audit: open/closed is operationally important but the broad
+    // scene pass can omit it. Re-inspect only visible openable objects whose state
+    // is missing; this pass may confirm state but must not invent unseen objects.
+    if (input.media.kind === 'image' && shouldRunOpenableStateAudit(scene)) {
+      const candidates = scene.objects
+        .filter(isOpenableObject)
+        .filter((item) => !hasExplicitOpenClosedState(item))
+        .map((item) => `${item.name} (${item.category})`)
+        .join(', ')
+      const statePrompt = [
+        `Targeted openable-object state verification for scan ${scanId} in environment ${input.environmentId}.`,
+        `The scan source id is ${input.source.id}.`,
+        `Visible openable candidates with missing state: ${candidates}.`,
+        'Inspect the supplied still image only. For each named candidate that is directly visible, determine whether it is open or closed from visible geometry.',
+        'Use object.state exactly "open" or "closed" only when visually defensible. An angled leaf, visible opening/interior, or separated door plane supports open; a leaf flush in its frame supports closed.',
+        'Do not infer from prior memory, filenames, metadata, expected room layout, or the earlier model wording. If ambiguous or occluded, omit state.',
+        'Do not split one cabinet/door into numbered, left/right, top/bottom, panel, handle, or hinge pseudo-objects. Return the whole visible openable object using the stable scene name.',
+        'Do not create conditions, issues, or recommendations in this audit. Reference only exact supplied FRAME_ID values in evidenceIds.',
+        'Return the full SENTINEL PerceptionResult JSON schema.',
+      ].join('\n')
+      try {
+        const stateAudit = await this.inferPerceptionPass('state-audit', statePrompt, artifacts, frames, input)
+        scene = mergePerceptionPasses(scene, stateAudit, 'state_')
+        console.warn('SENTINEL_OPENABLE_STATE_AUDIT_COMPLETED', {
+          scanId,
+          objects: stateAudit.objects.map((item) => ({ name: item.name, state: item.state, confidence: item.confidence })),
+        })
+      } catch (error) {
+        console.warn('SENTINEL_OPENABLE_STATE_AUDIT_SKIPPED', {
+          scanId,
+          code: errorCode(error),
+          message: error instanceof Error ? error.message : 'Unknown openable-state audit failure',
+        })
+      }
+    }
+
     if (hasOperationalConditionCandidate(scene)) return scene
 
     const sceneObjectSummary = scene.objects.length
@@ -325,7 +362,7 @@ export class ScanPipeline {
   }
 
   private async inferPerceptionPass(
-    pass: 'scene' | 'condition-audit' | 'identity-audit' | 'access-geometry-audit',
+    pass: 'scene' | 'state-audit' | 'condition-audit' | 'identity-audit' | 'access-geometry-audit',
     prompt: string,
     artifacts: ScanArtifact[],
     frames: ScanFrame[],
@@ -433,6 +470,20 @@ export class ScanPipeline {
   private error(code: string, message: string): ScanError {
     return Object.assign(new Error(message), { code, recoverable: false })
   }
+}
+
+function isOpenableObject(item: SpatialObject): boolean {
+  const text = normalizeSemanticText(`${item.name} ${item.description ?? ''}`)
+  return item.category === 'door' || /\b(?:door|cabinet|drawer|gate|cupboard|closet)\b/.test(text)
+}
+
+function hasExplicitOpenClosedState(item: SpatialObject): boolean {
+  const state = normalizeSemanticText(item.state ?? '')
+  return state === 'open' || state === 'closed'
+}
+
+function shouldRunOpenableStateAudit(result: PerceptionResult): boolean {
+  return result.objects.some((item) => isOpenableObject(item) && !hasExplicitOpenClosedState(item))
 }
 
 function hasOperationalConditionCandidate(result: PerceptionResult): boolean {
