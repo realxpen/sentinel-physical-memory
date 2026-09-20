@@ -95,6 +95,7 @@ export class EnvironmentalDiffEngine implements DiffEngine {
 
       if (!previous) {
         if (hasUnresolvedFamilyCounterpart(current, normalizedFrom.objects)) continue
+        if (isLowSalienceInventoryNoise(current)) continue
         changes.push(this.change(
           normalizedFrom,
           normalizedTo,
@@ -167,6 +168,7 @@ export class EnvironmentalDiffEngine implements DiffEngine {
     for (const [previousIndex, previous] of normalizedFrom.objects.entries()) {
       if (matchedPrevious.has(previousIndex)) continue
       if (hasUnresolvedFamilyCounterpart(previous, normalizedTo.objects)) continue
+      if (isLowSalienceInventoryNoise(previous)) continue
       changes.push(this.change(
         normalizedFrom,
         normalizedTo,
@@ -661,6 +663,14 @@ function sameIssue(a: Issue, b: Issue): boolean {
       normalizedConditionTitle(a.title) === normalizedConditionTitle(b.title) &&
       (a.roomId ?? '') === (b.roomId ?? '')
     )
+}
+
+function isLowSalienceInventoryNoise(item: SpatialObject): boolean {
+  const name = normalize(item.name)
+  // These small fixture/decor/desk-inventory items are useful to remember, but
+  // a single missed still-photo detection is not enough to claim a physical
+  // addition/removal in a facility-operations diff.
+  return /^(?:cup|mug|pen holder|pencil holder|light switch|switch plate)$/.test(name)
 }
 
 function explicitlyRemoved(item: SpatialObject): boolean {
