@@ -68,17 +68,17 @@ export function sameFrameStillObjectsCanConsolidate(a: SpatialObject, b: Spatial
   if (!exactIdentity && !(familyA && familyB && familyA === familyB)) return false
   if (!a.evidenceIds.some((id) => b.evidenceIds.includes(id))) return false
 
-  if (exactIdentity) {
-    if (a.boundingBox && b.boundingBox) return boundingBoxesOverlap(a.boundingBox, b.boundingBox)
-    return !distinctStillInstanceEvidence(a, b)
-  }
-
   // A provider may segment one continuous structural surface into several
   // non-overlapping image boxes. Image geometry is not physical instance
   // identity, so compatible wall/floor/ceiling mentions from the same trusted
   // still frame collapse unless grounded room/directional anchors conflict.
   if (isStructuralSurfaceFamily(familyA) && familyA === familyB) {
     return structuralSurfaceAnchorsCompatible(a, b)
+  }
+
+  if (exactIdentity) {
+    if (a.boundingBox && b.boundingBox) return boundingBoxesOverlap(a.boundingBox, b.boundingBox)
+    return !distinctStillInstanceEvidence(a, b)
   }
 
   // Still-photo providers often emit one movable item or cabinet door more than once.
