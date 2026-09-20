@@ -204,35 +204,16 @@ export class ScanPipeline {
       ].join('\n')
       try {
         const stateAudit = sanitizeStateAudit(await this.inferPerceptionPass('state-audit', statePrompt, artifacts, frames, input))
-        const firstStateUpdate = applyOpenableStateAudit(scene, stateAudit)
-        scene = firstStateUpdate.scene
-
-        const unresolvedOpenables = scene.objects
-          .filter(isOpenableObject)
-          .filter((item) => !hasExplicitOpenClosedState(item))
-
-        let confirmationObjects: SpatialObject[] = []
-        if (unresolvedOpenables.length > 0) {
-          const confirmationPrompt = [
-            `Final openable-object state confirmation for scan ${scanId} in environment ${input.environmentId}.`,
-            `The scan source id is ${input.source.id}.`,
-            `These directly visible openable objects still have no confirmed state: ${unresolvedOpenables.map((item) => `${item.name} (${item.category}) at ${item.position?.description ?? 'unspecified visible position'}`).join(', ')}.`,
-            'Inspect only those named objects in the supplied still image. This is a final bounded verification pass, not a new scene inventory.',
-            'If visible geometry clearly supports open or closed, return that same object with object.state exactly "open" or "closed". If the geometry is genuinely ambiguous or occluded, omit state rather than guessing.',
-            'Open cues include an angled/separated door leaf, visible doorway/interior beyond the leaf, or a visibly displaced panel. Closed cues include a leaf/panel flush within its frame with no visible opening.',
-            'Do not create new objects, object parts, conditions, issues, recommendations, or negative findings. Preserve the stable scene object name and category.',
-            'Reference only exact supplied FRAME_ID values in evidenceIds. Return the full SENTINEL PerceptionResult JSON schema.',
-          ].join('\n')
-
-          const confirmation = sanitizeStateAudit(await this.inferPerceptionPass('state-audit', confirmationPrompt, artifacts, frames, input))
-          const confirmationUpdate = applyOpenableStateAudit(scene, confirmation)
-          confirmationObjects = confirmationUpdate.accepted
-          scene = confirmationUpdate.scene
-        }
+        const stateUpdate = applyOpenableStateAudit(scene, stateAudit)
+        scene = stateUpdate.scene
 
         console.warn('SENTINEL_OPENABLE_STATE_AUDIT_COMPLETED', {
           scanId,
-          objects: [...firstStateUpdate.accepted, ...confirmationObjects].map((item) => ({ name: item.name, state: item.state, confidence: item.confidence })),
+          objects: stateUpdate.accepted.map((item) => ({ name: item.name, state: item.state, confidence: item.confidence })),
+          unresolved: scene.objects
+            .filter(isOpenableObject)
+            .filter((item) => !hasExplicitOpenClosedState(item))
+            .map((item) => item.name),
         })
       } catch (error) {
         console.warn('SENTINEL_OPENABLE_STATE_AUDIT_SKIPPED', {
