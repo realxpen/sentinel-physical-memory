@@ -196,6 +196,46 @@ try {
     throw new Error('unsupported disappearance should remain uncertain')
   }
 
+  const officePhotoNoise = engine.compare(
+    {
+      stateId: 'state_office_1',
+      environmentId,
+      objects: [
+        object('rug_old', 'area rug', 'other'),
+        object('art_old', 'wall art', 'signage'),
+        object('basket_old', 'wicker basket', 'other'),
+        object('lamp_old', 'table lamp', 'electrical'),
+        object('books_old', 'books', 'other'),
+      ],
+      conditions: [],
+      issues: [],
+      relations: [],
+    },
+    {
+      stateId: 'state_office_2',
+      environmentId,
+      objects: [
+        object('rug_new', 'carpet', 'furniture'),
+        object('art_new', 'picture', 'signage'),
+        object('basket_new', 'basket', 'furniture'),
+        object('lamp_new', 'desk lamp', 'furniture'),
+        object('books_new', 'books', 'furniture'),
+        object('cup_new', 'cup', 'furniture'),
+        object('switch_new', 'light switch', 'electrical'),
+        object('bag_new', 'green duffel bag', 'other'),
+      ],
+      conditions: [],
+      issues: [],
+      relations: [],
+    },
+  )
+  if (officePhotoNoise.changes.some((change) => /rug|carpet|wall art|picture|basket|lamp|books|cup|light switch/i.test(change.title))) {
+    throw new Error(`office alias/micro-inventory noise should be suppressed: ${officePhotoNoise.changes.map((item) => item.title).join(', ')}`)
+  }
+  if (!officePhotoNoise.changes.some((change) => change.title === 'New: green duffel bag')) {
+    throw new Error('real salient bag addition must remain visible')
+  }
+
   // Relationship context must not manufacture identity when two repeated
   // instances remain indistinguishable.
   const ambiguous = engine.compare(
