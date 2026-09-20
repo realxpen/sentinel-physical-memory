@@ -100,6 +100,26 @@ export class NeonEnvironmentalMemoryRepository implements EnvironmentalMemoryRep
     throw lastError
   }
 
+  async saveIfCurrent(memory: EnvironmentalMemory, expectedCurrentStateId?: string): Promise<boolean> {
+    const transports = this.transportOrder()
+    let lastError: unknown
+    for (let index = 0; index < transports.length; index += 1) {
+      const transport = transports[index]
+      try {
+        const saved = await this.withTransientNetworkRetry('save', transport, () =>
+          this.saveIfCurrentViaTransport(transport, memory, expectedCurrentStateId),
+        )
+        this.lastSuccessfulTransport = transport
+        return saved
+      } catch (error) {
+        lastError = error
+        if (!isTransientNetworkError(error) || index === transports.length - 1) throw error
+        await this.resetClient(transport)
+      }
+    }
+    throw lastError
+  }
+
   getLastSuccessfulTransport(): ConcreteNeonTransport | undefined {
     return this.lastSuccessfulTransport
   }
@@ -159,6 +179,29 @@ export class NeonEnvironmentalMemoryRepository implements EnvironmentalMemoryRep
     return sql`
       select sentinel_private.sentinel_get_environmental_memory(${environmentId}) as memory
     `
+  }
+
+  private async saveIfCurrentViaTransport(
+    transport: ConcreteNeonTransport,
+    memory: EnvironmentalMemory,
+    expectedCurrentStateId?: string,
+  ): Promise<boolean> {
+    if (transport === 'websocket') {
+      const pool = await this.getPool()
+      const result = await pool.query(
+        'select sentinel_private.sentinel_save_environmental_memory_if_current($1::jsonb, $2::text) as saved',
+        [JSON.stringify(memory), expectedCurrentStateId ?? null],
+      )
+      return result.rows?.[0]?.saved === true
+    }
+    const sql = await this.getSql()
+    const rows = await sql`
+      select sentinel_private.sentinel_save_environmental_memory_if_current(
+        ${JSON.stringify(memory)}::jsonb,
+        ${expectedCurrentStateId ?? null}::text
+      ) as saved
+    `
+    return (rows[0] as { saved?: boolean } | undefined)?.saved === true
   }
 
   private async saveViaTransport(transport: ConcreteNeonTransport, memory: EnvironmentalMemory): Promise<void> {
