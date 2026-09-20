@@ -94,7 +94,11 @@ export class EnvironmentalMemoryStore {
     }))
     this.upsertEvidence(memory, evidence)
 
-    const normalizedObjects = perception.objects.map((item) => ({ ...item, evidenceIds: remapEvidenceIds(item.evidenceIds) }))
+    const normalizedObjects = perception.objects.map((item) => ({
+      ...item,
+      state: source.modality === 'image' ? (item.state ?? inferExplicitOpenClosedState(item)) : item.state,
+      evidenceIds: remapEvidenceIds(item.evidenceIds),
+    }))
     const canonicalObjectsByInput = this.upsertObjects(memory, normalizedObjects, capturedAt, source.modality === 'image')
     const objectIdMap = new Map(perception.objects.map((item, index) => [item.id, canonicalObjectsByInput[index].id]))
     const objects = uniqueById(canonicalObjectsByInput)
@@ -189,7 +193,7 @@ export class EnvironmentalMemoryStore {
       for (const memberIndex of group.slice(1)) {
         mergeAliasEvidence(canonical, incoming[memberIndex], capturedAt)
       }
-      if (singleStillFrame) canonical.state = strongestExplicitState(group.map((memberIndex) => incoming[memberIndex].state)) ?? canonical.state
+      if (singleStillFrame) canonical.state = strongestExplicitState(group.map((memberIndex) => incoming[memberIndex].state))
       canonicalByGroup[groupIndex] = canonical
     })
 
@@ -275,6 +279,24 @@ function applyCurrentObservation(target: SpatialObject, incoming: SpatialObject,
   target.confidence = incoming.confidence
   target.lastSeenAt = capturedAt
   target.evidenceIds = unique([...target.evidenceIds, ...incoming.evidenceIds])
+}
+
+function inferExplicitOpenClosedState(item: SpatialObject): string | undefined {
+  const existing = item.state?.trim().toLowerCase()
+  if (existing === 'open' || existing === 'closed') return existing
+
+  const text = normalizeConditionText(`${item.name} ${item.description ?? ''}`)
+  if (!/\b(?:door|doors|closet|cabinet|cupboard|drawer|gate)\b/.test(text)) return undefined
+
+  const open = /\bajar\b/.test(text) ||
+    /\b(?:door|doors|closet|cabinet|cupboard|drawer|gate)\b.{0,48}\bopen(?:ed)?\b/.test(text) ||
+    /\bopen(?:ed)?\b.{0,48}\b(?:door|doors|closet|cabinet|cupboard|drawer|gate)\b/.test(text)
+  const closed =
+    /\b(?:door|doors|closet|cabinet|cupboard|drawer|gate)\b.{0,48}\bclosed\b/.test(text) ||
+    /\bclosed\b.{0,48}\b(?:door|doors|closet|cabinet|cupboard|drawer|gate)\b/.test(text)
+
+  if (open === closed) return undefined
+  return open ? 'open' : 'closed'
 }
 
 function strongestExplicitState(states: Array<string | undefined>): string | undefined {
