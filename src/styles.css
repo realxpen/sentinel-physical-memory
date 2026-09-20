@@ -79,6 +79,48 @@ h1 { margin: 18px 0 22px; font-size: clamp(58px, 8.4vw, 128px); line-height: .88
 .stage-caption span { color: var(--green); font-size: 9px; font-weight: 800; letter-spacing: .16em; }
 .stage-caption strong { max-width: 420px; text-align: right; font-size: 14px; font-weight: 500; color: #d9e3db; }
 
+.spatial-memory-stage { min-height: 620px; padding: 34px 34px 92px; }
+.spatial-stage-header { position: relative; z-index: 5; display: flex; justify-content: space-between; gap: 28px; align-items: flex-start; margin-bottom: 28px; }
+.spatial-stage-header > div { display: grid; gap: 6px; }
+.spatial-stage-header > div > strong { font-size: clamp(28px, 3.2vw, 46px); letter-spacing: -.05em; }
+.spatial-stage-header > div > small { color: #849087; font-size: 11px; }
+.spatial-stage-header > span { padding: 8px 11px; border: 1px solid rgba(91,255,138,.2); border-radius: 999px; color: var(--green); font-size: 9px; font-weight: 800; letter-spacing: .13em; }
+.spatial-room-grid { position: relative; z-index: 5; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(360px, 100%), 1fr)); gap: 18px; }
+.spatial-room { min-height: 190px; padding: 18px; border: 1px solid rgba(255,255,255,.09); border-radius: 20px; background: rgba(8,12,9,.58); backdrop-filter: blur(18px); box-shadow: inset 0 1px rgba(255,255,255,.04); }
+.spatial-room-heading { display: flex; justify-content: space-between; gap: 16px; align-items: center; padding-bottom: 14px; border-bottom: 1px solid rgba(255,255,255,.07); }
+.spatial-room-heading div span, .spatial-room-heading div small { display: block; }
+.spatial-room-heading div span { font-size: 16px; font-weight: 750; letter-spacing: -.03em; }
+.spatial-room-heading div small { margin-top: 5px; color: #6f7a72; font-size: 8px; text-transform: uppercase; letter-spacing: .13em; }
+.spatial-room-heading > strong { display: grid; place-items: center; min-width: 28px; height: 28px; border-radius: 50%; background: rgba(91,255,138,.08); color: var(--green); font-size: 10px; }
+.spatial-object-cloud { display: grid; gap: 8px; padding-top: 12px; }
+.spatial-object { width: 100%; display: grid; grid-template-columns: 8px 1fr auto; gap: 11px; align-items: center; padding: 11px 12px; border: 1px solid rgba(255,255,255,.06); border-radius: 13px; background: rgba(255,255,255,.025); color: #e6ece7; text-align: left; transition: .18s ease; }
+.spatial-object:hover { transform: translateY(-1px); border-color: rgba(91,255,138,.28); background: rgba(91,255,138,.055); }
+.spatial-object > i { width: 7px; height: 7px; border-radius: 50%; background: #718079; box-shadow: 0 0 0 3px rgba(113,128,121,.08); }
+.spatial-object.condition > i { background: #d9b95f; box-shadow: 0 0 0 3px rgba(217,185,95,.12); }
+.spatial-object.attention > i { background: #ff7474; box-shadow: 0 0 0 3px rgba(255,116,116,.12); }
+.spatial-object span strong, .spatial-object span small { display: block; }
+.spatial-object span strong { font-size: 12px; letter-spacing: -.02em; }
+.spatial-object span small { margin-top: 4px; max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #748078; font-size: 8px; text-transform: uppercase; letter-spacing: .06em; }
+.spatial-object > em { color: #728078; font-size: 9px; font-style: normal; }
+.spatial-room-empty { padding: 20px 4px; color: #6c766f; font-size: 11px; }
+.spatial-empty-state { position: relative; z-index: 5; max-width: 560px; padding: 120px 30px 80px; }
+.spatial-empty-state > strong { display: block; margin-top: 15px; font-size: clamp(34px, 4vw, 56px); line-height: .98; letter-spacing: -.055em; }
+.spatial-empty-state > p { margin-top: 16px; color: #869087; line-height: 1.55; }
+
+.spatial-object-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 34px; }
+.spatial-object-meta > div { min-height: 84px; padding: 13px; border: 1px solid rgba(255,255,255,.08); border-radius: 14px; background: rgba(255,255,255,.025); }
+.spatial-object-meta span, .spatial-object-meta strong { display: block; }
+.spatial-object-meta span { color: #718078; font-size: 8px; text-transform: uppercase; letter-spacing: .12em; }
+.spatial-object-meta strong { margin-top: 8px; font-size: 12px; line-height: 1.35; }
+.spatial-drawer-section { display: grid; gap: 8px; margin-top: 32px; padding-top: 26px; border-top: 1px solid rgba(255,255,255,.09); }
+.spatial-relation-row, .spatial-condition-row { padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,.06); }
+.spatial-relation-row strong, .spatial-relation-row small, .spatial-condition-row strong, .spatial-condition-row small { display: block; }
+.spatial-relation-row strong, .spatial-condition-row strong { font-size: 13px; }
+.spatial-relation-row small, .spatial-condition-row small { margin-top: 5px; color: #77837a; font-size: 9px; }
+.spatial-condition-row p { margin: 8px 0 0; color: #98a49b; font-size: 11px; line-height: 1.45; }
+.spatial-condition-row.issue strong { color: #ff9b9b; }
+.spatial-ask-button { width: 100%; min-height: 48px; margin-top: 30px; border: 0; border-radius: 999px; background: var(--green); color: #071009; font: inherit; font-size: 10px; font-weight: 850; letter-spacing: .04em; }
+
 .memory-summary { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 30px; padding: 32px 0 92px; }
 .memory-summary > div span { display: block; color: #78817a; font-size: 11px; text-transform: uppercase; letter-spacing: .12em; }
 .memory-summary > div strong { display: block; margin-top: 8px; font-size: 21px; letter-spacing: -.04em; }
@@ -268,6 +310,9 @@ h1 { margin: 18px 0 22px; font-size: clamp(58px, 8.4vw, 128px); line-height: .88
   .memory-view, .changes-view { width: min(100% - 36px, 1280px); }
   .hero-copy { padding-top: 62px; }
   .environment-stage { min-height: 500px; }
+  .spatial-memory-stage { padding: 24px 20px 88px; }
+  .spatial-stage-header { flex-direction: column; }
+  .spatial-room-grid { grid-template-columns: 1fr; }
   .memory-summary { grid-template-columns: 1fr; }
   .operations-summary { grid-template-columns: 1fr 1fr; }
   .operations-stat { min-height: 108px; }
@@ -300,6 +345,9 @@ h1 { margin: 18px 0 22px; font-size: clamp(58px, 8.4vw, 128px); line-height: .88
   h1 { font-size: clamp(54px, 18vw, 82px); }
   .hero-copy > p { font-size: 16px; }
   .environment-stage { min-height: 540px; border-radius: 22px; }
+  .spatial-memory-stage { min-height: 520px; padding: 20px 14px 82px; }
+  .spatial-object-meta { grid-template-columns: 1fr; }
+  .spatial-object span small { max-width: 180px; }
   .space-label { min-width: 145px; padding: 13px; }
   .space-label.reception { left: 6%; top: 17%; }
   .space-label.workspace { left: 20%; top: 47%; }
