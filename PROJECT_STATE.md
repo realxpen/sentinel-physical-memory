@@ -1,6 +1,6 @@
 # SENTINEL Project State
 
-Last updated: 2026-09-18
+Last updated: 2026-09-20
 
 ## North star
 
@@ -14,7 +14,7 @@ Hackathon track: **Best Apps and Agents**.
 
 ## Current phase
 
-**Phase 8 — Reality Diff UI: IMPLEMENTED / FACILITY-OPERATIONS FRAMING / CI PASS / PHONE VISUAL VALIDATION NEXT; PHASE 7 REAL THREE-CHANGE PROOF STILL PENDING**
+**Phase 8 — Reality Diff UI: IMPLEMENTED / PHONE PROOF PARTIAL / DUPLICATE-SURFACE HARDENING IN CI; PHASE 7 REAL THREE-CHANGE PROOF STILL PENDING**
 
 ## Phase 3 — COMPLETE
 
@@ -829,6 +829,31 @@ Canonical Phase 7 technical record:
 
 `Knowledge/Technical/phase-7-diff-engine-v2.md`
 
+## Phase 8 — IMPLEMENTED / PHONE PROOF PARTIAL
+
+A real office phone comparison confirmed that the facility-operations Changes view:
+
+- rendered a real **New: green bag** event under Physical changes;
+- kept a non-reobserved closet door and wall under Needs verification;
+- did not mislabel absence as removal or resolution;
+- remained usable on the mobile viewport.
+
+The run also exposed one bounded defect: two provider segments of the same grounded white wall survived as two historical objects, so the persisted diff rendered the same **Not re-observed: white wall** card twice.
+
+Current hardening preserves historical immutability while:
+
+- consolidating compatible same-frame wall/floor/ceiling segments for future memory and comparisons;
+- preserving structural surfaces with conflicting room or directional anchors;
+- collapsing already-persisted duplicate structural verification cards only when title and trusted evidence agree;
+- unioning evidence and preserving the conservative uncertainty status;
+- keeping independently grounded same-named surfaces separate.
+
+The corrected presentation for that result is three changes: one green-bag addition plus two verification items (closet door and white wall). A fresh deployed phone run must still verify the correction before Phase 8 closes.
+
+Canonical Phase 8 record:
+
+`Knowledge/UX/phase-8-reality-diff-ui.md`
+
 ## Verified implementation baseline
 
 ### Frontend
@@ -869,7 +894,7 @@ Canonical Phase 7 technical record:
 ## Highest-priority gaps
 
 1. **Phase 7 real phone proof — intentionally create three supported changes and verify Diff v2 in production.**
-2. **Phase 8 phone visual validation — confirm the new facility-operations Reality Diff is understandable on mobile.**
+2. **Phase 8 phone visual validation — verify the duplicate-surface correction on a fresh deployed comparison and complete the remaining drawer/action checks.**
 3. Phase 9 — Spatial Memory experience through the facility-operations lens.
 4. Action + verification closed loop — Phases 11/12.
 5. Reliability, automated tests, security, and least-privilege database-role hardening.
@@ -906,7 +931,7 @@ Canonical Phase 7 technical record:
 - [x] Phase 5 — Perception quality and condition model (**COMPLETE — sixth fresh warehouse proof passed clean condition/issue/diff gate**)
 - [x] Phase 6 — Environmental state history (**COMPLETE — immutable current/previous/by-ID/by-date retrieval + Memory timeline**)
 - [ ] Phase 7 — Environmental Diff Engine v2 (**IMPLEMENTED — CI + production deploy pass; real three-change phone proof pending**)
-- [ ] Phase 8 — Reality Diff UI (**IMPLEMENTED — facility-operations framing; phone visual validation pending**)
+- [ ] Phase 8 — Reality Diff UI (**IMPLEMENTED — phone proof partial; duplicate-surface hardening awaiting deployed confirmation**)
 - [ ] Phase 9 — Spatial Memory experience (**NEXT AFTER PHASE 7/8 PHONE GATES**)
 - [ ] Phase 10 — Ask the Building product layer
 - [ ] Phase 11 — Action Planner
@@ -972,6 +997,6 @@ Phase 7 real three-change phone proof: **PENDING**.
 
 Phase 8 facility-operations Reality Diff UI: **CI PASS (`35454475031`, commit `937ce9c0`)**.
 
-Phase 8 phone visual validation: **PENDING**.
+Phase 8 phone visual validation: **PARTIAL — mobile grouping and uncertainty semantics passed; duplicate white-wall card diagnosed and hardened; fresh deployed confirmation pending**.
 
-**Next gate: use the production app on phone for one controlled three-change Reality Diff test, then validate that the new Changes screen clearly separates Needs attention / Physical changes / Resolved / Needs verification before closing Phases 7 and 8.**
+**Next gate: deploy the duplicate-surface hardening, confirm the corrected three-card office result on phone, then run the controlled Phase 7 three-change proof before closing Phases 7 and 8.**
