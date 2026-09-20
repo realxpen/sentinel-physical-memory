@@ -203,7 +203,7 @@ export class ScanPipeline {
         'Return the full SENTINEL PerceptionResult JSON schema.',
       ].join('\n')
       try {
-        const stateAudit = await this.inferPerceptionPass('state-audit', statePrompt, artifacts, frames, input)
+        const stateAudit = sanitizeStateAudit(await this.inferPerceptionPass('state-audit', statePrompt, artifacts, frames, input))
         scene = mergePerceptionPasses(scene, stateAudit, 'state_')
         console.warn('SENTINEL_OPENABLE_STATE_AUDIT_COMPLETED', {
           scanId,
@@ -253,7 +253,7 @@ export class ScanPipeline {
         reason: scene.conditions.length === 0 ? 'scene_pass_returned_zero_conditions' : 'scene_pass_has_only_benign_conditions',
         sceneConditions: scene.conditions.map((item) => ({ kind: item.kind, title: item.title })),
       })
-      const audit = await this.inferPerceptionPass('condition-audit', auditPrompt, artifacts, frames, input)
+      const audit = pruneNegativeAuditObservations(await this.inferPerceptionPass('condition-audit', auditPrompt, artifacts, frames, input))
       let merged = mergePerceptionPasses(scene, audit, 'audit_')
       console.warn('SENTINEL_CONDITION_AUDIT_COMPLETED', {
         scanId,
@@ -472,6 +472,32 @@ export class ScanPipeline {
   private error(code: string, message: string): ScanError {
     return Object.assign(new Error(message), { code, recoverable: false })
   }
+}
+
+function sanitizeStateAudit(result: PerceptionResult): PerceptionResult {
+  return {
+    ...result,
+    observations: [],
+    conditions: [],
+    relations: [],
+  }
+}
+
+function pruneNegativeAuditObservations(result: PerceptionResult): PerceptionResult {
+  return {
+    ...result,
+    observations: result.observations.filter((item) => !isGenericNegativeFinding(item.label, item.description)),
+  }
+}
+
+function isGenericNegativeFinding(label: string, description: string): boolean {
+  const text = normalizeSemanticText(`${label} ${description}`)
+  return /^(?:no|none)\b/.test(text) ||
+    /\bno visible\b/.test(text) ||
+    /\bno signs? of\b/.test(text) ||
+    /\bno evidence of\b/.test(text) ||
+    /\bclear of (?:obstruction|hazard|damage)/.test(text) ||
+    /\bunobstructed\b/.test(text)
 }
 
 function isOpenableObject(item: SpatialObject): boolean {
