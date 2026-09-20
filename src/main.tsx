@@ -4,7 +4,7 @@ import './styles.css'
 import './integration.css'
 import './environment.css'
 import './history.css'
-import type { AskBuildingResponse, Change, EnvironmentalCondition, EnvironmentalDiff, EnvironmentalMemory, EnvironmentalState, EnvironmentType, Observation } from './domain/sentinel'
+import type { AskBuildingResponse, Change, EnvironmentalCondition, EnvironmentalDiff, EnvironmentalMemory, EnvironmentalState, EnvironmentalStateSnapshot, EnvironmentRelation, EnvironmentType, Observation, SpatialObject } from './domain/sentinel'
 import type { EnvironmentalStateHistoryEntry, EnvironmentalStateHistoryRecord } from './memory/history'
 import { changesForPresentation, presentedChangeSummary } from './memory/change-presentation'
 import { createEnvironmentProfile, DEFAULT_ENVIRONMENT, ENVIRONMENT_TYPES, loadActiveEnvironmentId, loadEnvironmentDirectory, saveActiveEnvironmentId, saveEnvironmentDirectory, type EnvironmentProfile } from './environment/directory'
@@ -77,6 +77,7 @@ function App() {
   const [historyStatus, setHistoryStatus] = useState('')
   const [historyAt, setHistoryAt] = useState('')
   const [selectedChangeId, setSelectedChangeId] = useState<string | null>(null)
+  const [selectedSpatialObjectId, setSelectedSpatialObjectId] = useState<string | null>(null)
   const [showAllObservations, setShowAllObservations] = useState(false)
 
   const activeEnvironment = environments.find((item) => item.id === activeEnvironmentId) ?? environments[0] ?? DEFAULT_ENVIRONMENT
@@ -94,6 +95,25 @@ function App() {
   const currentDiffState = latestDiff ? memory?.states.find((state) => state.id === latestDiff.toStateId) : undefined
   const previousDiffImage = previousDiffState ? memory?.sources.find((source) => previousDiffState.sourceIds.includes(source.id) && source.modality === 'image')?.uri : undefined
   const currentDiffImage = currentDiffState ? memory?.sources.find((source) => currentDiffState.sourceIds.includes(source.id) && source.modality === 'image')?.uri : undefined
+  const currentSnapshot = memory?.environment.currentStateId
+    ? memory.snapshots.find((snapshot) => snapshot.stateId === memory.environment.currentStateId)
+    : undefined
+  const spatialGroups = currentSnapshot ? buildSpatialGroups(currentSnapshot, activeEnvironment.name) : []
+  const selectedSpatialObject = selectedSpatialObjectId && currentSnapshot
+    ? currentSnapshot.objects.find((item) => item.id === selectedSpatialObjectId) ?? null
+    : null
+  const selectedSpatialConditions = selectedSpatialObject && currentSnapshot
+    ? currentSnapshot.conditions.filter((item) => item.objectIds.includes(selectedSpatialObject.id))
+    : []
+  const selectedSpatialIssues = selectedSpatialObject && currentSnapshot
+    ? currentSnapshot.issues.filter((item) => item.objectIds.includes(selectedSpatialObject.id))
+    : []
+  const selectedSpatialRelations = selectedSpatialObject && currentSnapshot
+    ? describeSpatialRelations(selectedSpatialObject, currentSnapshot)
+    : []
+  const selectedSpatialHistoryCount = selectedSpatialObject && memory
+    ? memory.snapshots.filter((snapshot) => snapshot.objects.some((item) => item.id === selectedSpatialObject.id)).length
+    : 0
 
   useEffect(() => {
     saveEnvironmentDirectory(environments)
@@ -114,6 +134,7 @@ function App() {
     setHistoryStatus('')
     setHistoryAt('')
     setSelectedChangeId(null)
+    setSelectedSpatialObjectId(null)
     setShowAllObservations(false)
     setError('')
     setStatus(`Loading ${activeEnvironment.name} memory`)
