@@ -189,6 +189,7 @@ export class EnvironmentalMemoryStore {
       for (const memberIndex of group.slice(1)) {
         mergeAliasEvidence(canonical, incoming[memberIndex], capturedAt)
       }
+      if (singleStillFrame) canonical.state = strongestExplicitState(group.map((memberIndex) => incoming[memberIndex].state)) ?? canonical.state
       canonicalByGroup[groupIndex] = canonical
     })
 
@@ -274,6 +275,13 @@ function applyCurrentObservation(target: SpatialObject, incoming: SpatialObject,
   target.confidence = incoming.confidence
   target.lastSeenAt = capturedAt
   target.evidenceIds = unique([...target.evidenceIds, ...incoming.evidenceIds])
+}
+
+function strongestExplicitState(states: Array<string | undefined>): string | undefined {
+  const normalized = states.map((state) => state?.trim().toLowerCase()).filter((state): state is string => Boolean(state))
+  if (normalized.includes('open')) return 'open'
+  if (normalized.includes('closed')) return 'closed'
+  return normalized[0]
 }
 
 function mergeAliasEvidence(target: SpatialObject, alias: SpatialObject, capturedAt: string): void {
