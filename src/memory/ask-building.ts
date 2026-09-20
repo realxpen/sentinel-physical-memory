@@ -1,7 +1,7 @@
-import type { AskBuildingRequest, AskBuildingResponse, EnvironmentalCondition, EnvironmentalMemory, Evidence, Issue, SpatialObject } from '../domain/sentinel'
-import type { ReasoningModelAdapter } from '../ai/model'
-import { conditionTrustLabel } from '../perception/condition-model'
-import type { EnvironmentalMemoryReader } from './repository'
+import type { AskBuildingRequest, AskBuildingResponse, EnvironmentalCondition, EnvironmentalMemory, Evidence, Issue, SpatialObject } from '../domain/sentinel.js'
+import type { ReasoningModelAdapter } from '../ai/model.js'
+import { conditionTrustLabel } from '../perception/condition-model.js'
+import type { EnvironmentalMemoryReader } from './repository.js'
 
 export class AskBuildingService {
   constructor(private readonly memory: EnvironmentalMemoryReader, private readonly model: ReasoningModelAdapter) {}
