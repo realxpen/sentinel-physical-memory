@@ -11,6 +11,7 @@ on:
       - 'src/scan/pipeline.ts'
       - 'src/memory/store.ts'
       - 'src/memory/diff-engine.ts'
+      - 'src/main.tsx'
       - '.github/workflows/phase8-temporal-photo-contract.yml'
   workflow_dispatch:
 
@@ -144,7 +145,25 @@ jobs:
           assert float(chair.get('confidence') or 0) >= 0.9, chair
           assert not [item for item in changes if item.get('type') == 'uncertain'], changes
 
+          # Retry the exact same current-photo request. This simulates a browser
+          # losing the first response after the server already persisted it.
+          retry_payload = scan('source_temporal_v2', second_uri, '2026-09-20T17:05:00.000Z')
+          retry_status, retried = request_json('/api/scan', retry_payload, timeout=180)
+          assert retry_status == 200, ('idempotent retry failed', retry_status, retried)
+          assert retried.get('replayed') is True, retried
+          assert retried.get('state', {}).get('id') == second.get('state', {}).get('id'), {
+              'message': 'same source retry must return the already-persisted state',
+              'first': second.get('state', {}).get('id'),
+              'retry': retried.get('state', {}).get('id'),
+          }
+          retry_states = retried.get('memory', {}).get('states') or []
+          assert len(retry_states) == 2, {
+              'message': 'same source retry must not create State v3',
+              'versions': [state.get('version') for state in retry_states],
+          }
+
           print('PHASE 8 TEMPORAL PHOTO PRODUCTION CONTRACT VERIFIED')
+          print('SCAN RETRY IDEMPOTENCY VERIFIED')
           print(json.dumps({
               'deploymentCommit': expected_commit,
               'environmentId': environment,
