@@ -236,6 +236,50 @@ try {
     throw new Error('real salient bag addition must remain visible')
   }
 
+  const learnedStateOnly = engine.compare(
+    {
+      stateId: 'state_learned_1',
+      environmentId,
+      objects: [object('closet_old', 'white closet', 'furniture', { state: undefined, description: 'white closet with silver handles' })],
+      conditions: [],
+      issues: [],
+      relations: [],
+    },
+    {
+      stateId: 'state_learned_2',
+      environmentId,
+      objects: [object('closet_new', 'white closet', 'furniture', { state: 'closed', description: 'white closet with two doors that are closed' })],
+      conditions: [],
+      issues: [],
+      relations: [],
+    },
+  )
+  if (learnedStateOnly.changes.some((change) => change.title === 'Changed: white closet')) {
+    throw new Error('unknown→known state refinement must not be presented as a physical change')
+  }
+
+  const textuallyReobserved = engine.compare(
+    {
+      stateId: 'state_basket_1',
+      environmentId,
+      objects: [object('basket_old_text', 'wicker basket', 'furniture')],
+      conditions: [],
+      issues: [],
+      relations: [],
+    },
+    {
+      stateId: 'state_basket_2',
+      environmentId,
+      objects: [object('shelf_with_basket', 'metal shelf', 'furniture', { description: 'metal shelf with potted plants, books, a globe, and a wicker basket on it' })],
+      conditions: [],
+      issues: [],
+      relations: [],
+    },
+  )
+  if (textuallyReobserved.changes.some((change) => /wicker basket/i.test(change.title))) {
+    throw new Error('explicit current description re-observation must suppress false missing-object uncertainty')
+  }
+
   // Relationship context must not manufacture identity when two repeated
   // instances remain indistinguishable.
   const ambiguous = engine.compare(
@@ -318,6 +362,77 @@ try {
       }],
     },
   )
+
+  const stateTextStore = new EnvironmentalMemoryStore({ now: () => new Date(at3) })
+  stateTextStore.createEnvironment({
+    id: 'photo-state-text-test',
+    name: 'Photo state text test',
+    type: 'office',
+    createdAt: at1,
+    updatedAt: at1,
+    stateIds: [],
+    roomIds: [],
+    objectIds: [],
+    issueIds: [],
+  })
+  const ingestPhotoText = (sourceId, capturedAt, doorDescription, closetDescription) => stateTextStore.ingestScan(
+    'photo-state-text-test',
+    { id: sourceId, environmentId: 'photo-state-text-test', modality: 'image', uri: `https://local/${sourceId}.jpg`, capturedAt },
+    {
+      sourceId,
+      observations: [],
+      objects: [
+        {
+          id: `door_${sourceId}`,
+          environmentId: 'photo-state-text-test',
+          category: 'door',
+          name: 'white door',
+          description: doorDescription,
+          confidence: 0.95,
+          firstSeenAt: capturedAt,
+          lastSeenAt: capturedAt,
+          evidenceIds: [`e_${sourceId}`],
+        },
+        {
+          id: `closet_${sourceId}`,
+          environmentId: 'photo-state-text-test',
+          category: 'furniture',
+          name: 'white closet',
+          description: closetDescription,
+          confidence: 0.95,
+          firstSeenAt: capturedAt,
+          lastSeenAt: capturedAt,
+          evidenceIds: [`e_${sourceId}`],
+        },
+      ],
+      conditions: [],
+      relations: [],
+      evidence: [{
+        id: `e_${sourceId}`,
+        type: 'frame',
+        sourceId,
+        capturedAt,
+        description: sourceId,
+      }],
+    },
+  )
+  const textState1 = ingestPhotoText('text_state_1', at1, 'closed white door with silver handle', 'white closet with silver handles')
+  const textState2 = ingestPhotoText('text_state_2', at2, 'a white door that is slightly ajar', 'white closet with two doors that are closed')
+  const textMemory = stateTextStore.get('photo-state-text-test')
+  const textSnapshot1 = textMemory?.snapshots.find((item) => item.stateId === textState1.id)
+  const textSnapshot2 = textMemory?.snapshots.find((item) => item.stateId === textState2.id)
+  const firstDoorState = textSnapshot1?.objects.find((item) => item.name === 'white door')?.state
+  const secondDoorState = textSnapshot2?.objects.find((item) => item.name === 'white door')?.state
+  if (firstDoorState !== 'closed' || secondDoorState !== 'open') {
+    throw new Error(`explicit still-photo wording must recover closed→open door state, got ${firstDoorState ?? 'unknown'}→${secondDoorState ?? 'unknown'}`)
+  }
+  const textDiff = stateTextStore.compare('photo-state-text-test', textState1.id, textState2.id)
+  if (!textDiff.changes.some((change) => change.title === 'Changed: white door' && /closed to open/.test(change.description))) {
+    throw new Error('recovered explicit door state must produce a closed→open physical change')
+  }
+  if (textDiff.changes.some((change) => change.title === 'Changed: white closet')) {
+    throw new Error('closet unknown→closed must remain knowledge refinement, not physical change')
+  }
 
   const s1 = ingest('source_1', at1, 'closed')
   const s2 = ingest('source_2', at2, 'open')
