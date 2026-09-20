@@ -774,9 +774,12 @@ function isCompositeOpenable(item: SpatialObject): boolean {
 }
 
 function hasIndependentOpenClosedCue(previous: SpatialObject, current: SpatialObject): boolean {
-  if (hasExplicitOpenClosedState(previous) || hasExplicitOpenClosedState(current)) return true
+  // Do not use object.state here: that field is exactly what temporal
+  // verification is auditing and may be a single-photo provider mistake.
   const text = normalizeSemanticText([
+    previous.name,
     previous.description ?? '',
+    current.name,
     current.description ?? '',
   ].join(' '))
   return /\b(?:open|opened|closed|ajar)\b/.test(text)
