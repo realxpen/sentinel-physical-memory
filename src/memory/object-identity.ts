@@ -1,7 +1,7 @@
 import type { SpatialObject } from '../domain/sentinel.js'
 
 type DoorColor = 'green' | 'red' | 'blue' | 'orange' | 'yellow' | 'white' | 'black' | 'brown' | 'gray'
-type ObjectFamily = 'shelving' | 'box' | 'wall' | 'floor' | 'ceiling' | 'fire-extinguisher' | 'exit-sign' | 'potted-plant' | `door:${DoorColor}`
+type ObjectFamily = 'shelving' | 'box' | 'wall' | 'floor' | 'ceiling' | 'fire-extinguisher' | 'exit-sign' | 'potted-plant' | 'duffel-bag' | 'cabinet-door' | `door:${DoorColor}`
 
 /**
  * Conservative semantic identity for recurring provider naming variance.
@@ -73,6 +73,12 @@ export function sameFrameStillObjectsCanConsolidate(a: SpatialObject, b: Spatial
   // still frame collapse unless grounded room/directional anchors conflict.
   if (isStructuralSurfaceFamily(familyA) && familyA === familyB) {
     return structuralSurfaceAnchorsCompatible(a, b)
+  }
+
+  // Still-photo providers often emit one movable item or cabinet door more than once.
+  // Collapse only when the semantic family matches and grounded position does not conflict.
+  if (familyA && familyA === familyB && (familyA === 'duffel-bag' || familyA === 'cabinet-door')) {
+    return positionsCompatible(a, b)
   }
 
   if (a.boundingBox && b.boundingBox) return boundingBoxesOverlap(a.boundingBox, b.boundingBox)
@@ -175,6 +181,8 @@ function semanticFamily(item: SpatialObject): ObjectFamily | undefined {
   if (item.category === 'signage' && /\b(?:emergency )?exit\b/.test(description) && /\bsign\b|\bsymbol\b/.test(description)) return 'exit-sign'
   if (/\b(?:shelf|shelves|shelving|rack|racks|racking)\b/.test(name)) return 'shelving'
   if (/\b(?:potted plant|plant pot|plant in (?:a )?pot|pot plant)\b/.test(name)) return 'potted-plant'
+  if (/\b(?:duffel|duffle)(?: bag)?\b|\bgym bag\b/.test(name)) return 'duffel-bag'
+  if (/\bcabinet door\b/.test(name)) return 'cabinet-door'
   if (/\b(?:box|boxes|carton|cartons|boxed items|boxed goods)\b/.test(name)) return 'box'
   if (/\b(?:wall|walls)\b/.test(name)) return 'wall'
   if (/\b(?:concrete |warehouse )?floor\b/.test(name)) return 'floor'
