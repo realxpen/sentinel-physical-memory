@@ -86,6 +86,17 @@ try {
           confidence: 0.94,
           basis: 'observed',
           evidenceIds: ['evidence_0'],
+        }, {
+          id: 'observation-negative-spam',
+          environmentId,
+          sourceId,
+          modality: 'video',
+          capturedAt,
+          label: 'No visible obstructions in server rooms',
+          description: 'No visible obstructions in server rooms.',
+          confidence: 0.9,
+          basis: 'observed',
+          evidenceIds: ['evidence_0'],
         }],
         objects: [{
           id: 'box-audit',
@@ -152,6 +163,8 @@ try {
   if (!prompts[1].includes('If an emergency/exit sign is visible, emit it as a signage object')) throw new Error('condition audit must keep exit signage in the durable object inventory')
   if (!prompts[1].includes('supply box (obstruction)')) throw new Error('condition audit prompt is missing scene-object context')
   if (!prompts[1].includes('Normal office environment [normal]')) throw new Error('condition audit prompt is missing benign-condition context')
+  if (!prompts[1].includes('Do not enumerate negative findings')) throw new Error('condition audit prompt must prohibit negative finding spam')
+  if (result.observations.some((item) => /no visible obstructions/i.test(item.label))) throw new Error('generic negative audit observation should be pruned before memory')
   if (result.conditions.length !== 2) throw new Error(`expected benign + audited conditions, got ${result.conditions.length}`)
   const obstruction = result.conditions.find((item) => item.title === 'Walkway obstructed')
   if (!obstruction) throw new Error('audited condition did not survive merge')
@@ -163,6 +176,7 @@ try {
   console.log('PASS  condition audit receives scene object + benign-condition context')
   console.log('PASS  audited condition remains grounded to SENTINEL-owned frame evidence')
   console.log('PASS  audited access condition persists and issue policy remains SENTINEL-owned')
+  console.log('PASS  generic negative audit spam is pruned before memory')
 
   const warehouseEnvironmentId = 'condition-audit-warehouse-identity-test'
   const warehouseSourceId = 'source-condition-audit-warehouse'
