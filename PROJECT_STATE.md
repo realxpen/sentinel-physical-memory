@@ -856,6 +856,27 @@ Canonical Phase 8 record:
 
 `Knowledge/UX/phase-8-reality-diff-ui.md`
 
+### Latest office photo hardening — CI PASS / fresh proof pending
+
+Fresh environment `env_cozy-office1_1b6ae62a` produced a usable visual before/after dashboard but exposed provider identity drift and audit noise: `area rug → carpet`, `wall art → picture`, `wicker basket → basket`, `table lamp → desk lamp`, exact-name category drift, repeated plant instances, small desk-item false additions, and generic negative audit observations.
+
+Historical v1/v2 and its persisted 18-change diff remain immutable.
+
+Current main hardening now:
+- expands conservative semantic identity for office aliases while retaining one-to-one ambiguity protection;
+- matches repeated semantic families by mutually grounded location anchors;
+- allows exact-name identity to survive non-person/non-room provider category drift;
+- keeps structural wall/floor/ceiling consolidation intact;
+- prunes generic negative/no-finding condition-audit observations before memory;
+- limits the openable-state audit to state/object evidence rather than extra conditions/observations;
+- suppresses low-salience single-photo change noise for cup/mug/pen-holder/switch-plate style items;
+- caps the default evidence list in the UI with an explicit Show all control;
+- renders persisted before/after image evidence directly in the dark facility-operations dashboard.
+
+Sentinel CI run `35514901462` passed the complete repository suite and production build on commit `eeb3f173af7b0474810b193add3e7dcd0420c672`.
+
+Phase 7 and Phase 8 remain open until one brand-new two-photo environment proves the post-hardening diff on deployed production.
+
 ## Verified implementation baseline
 
 ### Frontend
