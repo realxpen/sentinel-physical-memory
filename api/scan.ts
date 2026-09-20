@@ -90,9 +90,20 @@ export default async function handler(req: Request, res: Response) {
       console.warn('SENTINEL_SCAN_REJECTED', { code: error.code, message: error.message })
       return res.status(error.status).json({ error: error.code, message: error.message })
     }
+    if (error instanceof ModelAdapterError) {
+      const timedOut = /timeout/i.test(error.code) || /timed out/i.test(error.message)
+      const status = timedOut ? 504 : 502
+      console.error('SENTINEL_SCAN_PROVIDER_FAILED', summarizeError(error))
+      return res.status(status).json({
+        error: timedOut ? 'PERCEPTION_TIMEOUT' : 'PERCEPTION_PROVIDER_FAILED',
+        message: timedOut
+          ? 'SENTINEL perception timed out before the observation completed. Please try the observation again.'
+          : error.message,
+      })
+    }
     const message = error instanceof Error ? error.message : 'Unknown scan error'
     console.error('SENTINEL_SCAN_FAILED', summarizeError(error))
-    return res.status(400).json({ error: 'SCAN_FAILED', message })
+    return res.status(500).json({ error: 'SCAN_FAILED', message })
   }
 }
 
