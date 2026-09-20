@@ -102,6 +102,14 @@ try {
     throw new Error('still-photo exact duplicate objects with identical grounding should consolidate')
   }
   if (!sameFrameStillObjectsCanConsolidate(photoPlantA, photoPlantAlias)) throw new Error('plant pot / potted plant aliases at the same grounded location should consolidate')
+  const bagA = object('bag-a', 'other', 'duffel bag', 'green duffel bag', { evidenceIds: ['photo_frame'], position: { description: 'on floor near desk' } })
+  const bagB = object('bag-b', 'other', 'duffle bag', 'green bag', { evidenceIds: ['photo_frame'], position: { description: 'near desk on floor' } })
+  if (!sameFrameStillObjectsCanConsolidate(bagA, bagB)) throw new Error('same grounded duffel bag aliases should consolidate')
+
+  const cabinetWhole = object('cabinet-a', 'furniture', 'cabinet door', 'cabinet door', { evidenceIds: ['photo_frame'], position: { description: 'back wall' } })
+  const cabinetLeft = object('cabinet-b', 'furniture', 'left cabinet door', 'left cabinet door', { evidenceIds: ['photo_frame'], position: { description: 'back wall' } })
+  if (!sameFrameStillObjectsCanConsolidate(cabinetWhole, cabinetLeft)) throw new Error('same grounded cabinet-door aliases should consolidate')
+
   if (sameFrameStillObjectsCanConsolidate(photoPlantA, photoPlantDesk)) {
     throw new Error('still-photo objects with distinct grounded locations must remain separate')
   }
