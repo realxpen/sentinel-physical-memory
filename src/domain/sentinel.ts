@@ -74,4 +74,13 @@ export interface EnvironmentalMemory { environment: Environment; states: Environ
 export interface AskBuildingRequest { environmentId: ID; question: string; stateId?: ID }
 export interface AskBuildingResponse { answer: string; confidence: Confidence; stateId: ID; evidenceIds: ID[]; relatedObjectIds: ID[]; relatedIssueIds: ID[] }
 export interface PerceptionResult { sourceId: ID; observations: Observation[]; objects: SpatialObject[]; conditions: EnvironmentalCondition[]; relations: EnvironmentRelation[]; evidence: Evidence[] }
+export type TemporalChangeKind = 'state_change' | 'moved'
+export interface VerifiedTemporalChange {
+  kind: TemporalChangeKind
+  previousObjectName: string
+  currentObjectName: string
+  previousState?: 'open' | 'closed'
+  currentState?: 'open' | 'closed'
+  confidence: Confidence
+}
 export interface VerificationRequest { environmentId: ID; previousStateId: ID; currentStateId: ID; actionPlanId?: ID }
