@@ -331,17 +331,18 @@ function App() {
     void inspectHistoricalState({ at: parsed.toISOString() })
   }
 
-  async function askBuilding(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const trimmed = question.trim()
+  async function runAskBuilding(questionText: string) {
+    const trimmed = questionText.trim()
     if (!trimmed) return
     if (!memory) {
       setAskStatus(`Observe ${activeEnvironment.name} first so SENTINEL has grounded memory to reason over.`)
       return
     }
 
+    setQuestion(trimmed)
     setAskStatus('Reasoning across environmental memory…')
     setAnswer(null)
+    setView('memory')
     try {
       const response = await fetch('/api/ask-building', {
         method: 'POST',
@@ -352,10 +353,14 @@ function App() {
       if (!response.ok) throw new Error(payload.message ?? 'Ask request failed')
       setAnswer(payload)
       setAskStatus('')
-      setView('memory')
     } catch (askError) {
       setAskStatus(askError instanceof Error ? askError.message : 'Unable to ask SENTINEL')
     }
+  }
+
+  function askBuilding(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    void runAskBuilding(question)
   }
 
   const observation = selectedObservation === null ? null : result?.observations[selectedObservation]
@@ -693,9 +698,9 @@ function App() {
             </div>
           </div>}
           <button className="spatial-ask-button" type="button" onClick={() => {
-            setQuestion('What do you know about ' + selectedSpatialObject.name + ', where is it, how has it changed over time, and does it need attention?')
+            const objectQuestion = 'What do you know about ' + selectedSpatialObject.name + ', where is it, how has it changed over time, and does it need attention?'
             setSelectedSpatialObjectId(null)
-            setAskStatus('Question prepared from object memory.')
+            void runAskBuilding(objectQuestion)
           }}>Ask SENTINEL about this object ↗</button>
         </aside>
       </div>}
