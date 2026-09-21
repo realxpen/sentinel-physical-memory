@@ -4,9 +4,10 @@ import './styles.css'
 import './integration.css'
 import './environment.css'
 import './history.css'
-import type { AskBuildingResponse, Change, EnvironmentalCondition, EnvironmentalDiff, EnvironmentalMemory, EnvironmentalState, EnvironmentalStateSnapshot, EnvironmentRelation, EnvironmentType, Observation, SpatialObject } from './domain/sentinel'
+import type { AskBuildingResponse, Change, EnvironmentalCondition, EnvironmentalDiff, EnvironmentalMemory, EnvironmentalState, EnvironmentType, Observation, SpatialObject } from './domain/sentinel'
 import type { EnvironmentalStateHistoryEntry, EnvironmentalStateHistoryRecord } from './memory/history'
 import { changesForPresentation, presentedChangeSummary } from './memory/change-presentation'
+import { buildSpatialGroups, buildSpatialRelationEdges, describeSpatialRelations, focusSpatialGroups, spatialGroupForObject, spatialObjectSubtitle, spatialObjectTone } from './memory/spatial-memory'
 import { createEnvironmentProfile, DEFAULT_ENVIRONMENT, ENVIRONMENT_TYPES, loadActiveEnvironmentId, loadEnvironmentDirectory, saveActiveEnvironmentId, saveEnvironmentDirectory, type EnvironmentProfile } from './environment/directory'
 import { ingestImageFile } from './scan/image-ingestion'
 import { ingestVideoFile } from './scan/video-ingestion'
@@ -78,6 +79,7 @@ function App() {
   const [historyAt, setHistoryAt] = useState('')
   const [selectedChangeId, setSelectedChangeId] = useState<string | null>(null)
   const [selectedSpatialObjectId, setSelectedSpatialObjectId] = useState<string | null>(null)
+  const [selectedSpatialAreaId, setSelectedSpatialAreaId] = useState<string>('all')
   const [showAllObservations, setShowAllObservations] = useState(false)
 
   const activeEnvironment = environments.find((item) => item.id === activeEnvironmentId) ?? environments[0] ?? DEFAULT_ENVIRONMENT
@@ -99,6 +101,9 @@ function App() {
     ? memory.snapshots.find((snapshot) => snapshot.stateId === memory.environment.currentStateId)
     : undefined
   const spatialGroups = currentSnapshot ? buildSpatialGroups(currentSnapshot, activeEnvironment.name) : []
+  const normalizedSpatialAreaId = selectedSpatialAreaId === 'all' || spatialGroups.some((group) => group.id === selectedSpatialAreaId) ? selectedSpatialAreaId : 'all'
+  const focusedSpatialGroups = focusSpatialGroups(spatialGroups, normalizedSpatialAreaId)
+  const hasGroundedSpatialAreas = spatialGroups.some((group) => group.kind === 'room')
   const selectedSpatialObject = selectedSpatialObjectId && currentSnapshot
     ? currentSnapshot.objects.find((item) => item.id === selectedSpatialObjectId) ?? null
     : null
@@ -111,6 +116,10 @@ function App() {
   const selectedSpatialRelations = selectedSpatialObject && currentSnapshot
     ? describeSpatialRelations(selectedSpatialObject, currentSnapshot)
     : []
+  const selectedSpatialRelationEdges = selectedSpatialObject && currentSnapshot
+    ? buildSpatialRelationEdges(selectedSpatialObject, currentSnapshot)
+    : []
+  const relatedSpatialObjectIds = new Set(selectedSpatialRelationEdges.map((edge) => edge.otherId))
   const selectedSpatialTimeline = selectedSpatialObject && memory
     ? buildSpatialObjectTimeline(memory, selectedSpatialObject.id)
     : []
@@ -139,6 +148,7 @@ function App() {
     setHistoryAt('')
     setSelectedChangeId(null)
     setSelectedSpatialObjectId(null)
+    setSelectedSpatialAreaId('all')
     setShowAllObservations(false)
     setError('')
     setStatus(`Loading ${activeEnvironment.name} memory`)
@@ -199,7 +209,14 @@ function App() {
     setActiveEnvironmentId(environmentId)
     setQuestion('')
     setAskStatus('')
+    setSelectedSpatialAreaId('all')
     setView('memory')
+  }
+
+  function inspectSpatialObject(objectId: string) {
+    setSelectedSpatialObjectId(objectId)
+    const groupId = spatialGroupForObject(spatialGroups, objectId)
+    if (groupId) setSelectedSpatialAreaId(groupId)
   }
 
   function addEnvironment(event: FormEvent<HTMLFormElement>) {
@@ -411,16 +428,35 @@ function App() {
               </div>
               <span>STATE v{memory.states.find((item) => item.id === currentSnapshot.stateId)?.version ?? memory.states.length}</span>
             </div>
-            <div className="spatial-room-grid">
-              {spatialGroups.map((group) => <section className="spatial-room" key={group.id}>
+            {hasGroundedSpatialAreas ? <div className="spatial-area-navigation" aria-label="Spatial area navigation">
+              <span>BUILDING</span>
+              <div>
+                <button className={normalizedSpatialAreaId === 'all' ? 'active' : ''} type="button" onClick={() => setSelectedSpatialAreaId('all')}>
+                  <strong>{activeEnvironment.name}</strong><small>{currentSnapshot.objects.length} objects</small>
+                </button>
+                {spatialGroups.map((group) => <button className={normalizedSpatialAreaId === group.id ? 'active' : ''} type="button" key={group.id} onClick={() => setSelectedSpatialAreaId(group.id)}>
+                  <strong>{group.name}</strong><small>{group.kind === 'room' ? 'area' : 'unassigned'} · {group.objects.length}</small>
+                </button>)}
+              </div>
+            </div> : <div className="spatial-area-fallback">
+              <span>ENVIRONMENT-LEVEL MEMORY</span>
+              <strong>No grounded room structure is being claimed.</strong>
+              <small>SENTINEL is showing the observed space exactly as persisted.</small>
+            </div>}
+            <div className={'spatial-room-grid ' + (normalizedSpatialAreaId === 'all' ? 'building-view' : 'area-focused')}>
+              {focusedSpatialGroups.map((group) => <section className={normalizedSpatialAreaId === group.id ? 'spatial-room focused' : 'spatial-room'} key={group.id}>
                 <div className="spatial-room-heading">
                   <div><span>{group.name}</span><small>{group.kind === 'room' ? 'remembered area' : 'observed space'}</small></div>
-                  <strong>{group.objects.length}</strong>
+                  <div className="spatial-room-actions">
+                    <strong>{group.objects.length}</strong>
+                    {hasGroundedSpatialAreas && normalizedSpatialAreaId !== group.id && <button type="button" onClick={() => setSelectedSpatialAreaId(group.id)}>Focus ↗</button>}
+                  </div>
                 </div>
                 <div className="spatial-object-cloud">
                   {group.objects.length === 0 ? <span className="spatial-room-empty">No grounded objects assigned to this area yet.</span> : group.objects.map((item) => {
                     const tone = spatialObjectTone(item, currentSnapshot)
-                    return <button className={'spatial-object ' + tone} type="button" key={item.id} onClick={() => setSelectedSpatialObjectId(item.id)}>
+                    const relationshipClass = selectedSpatialObjectId === item.id ? ' selected-spatial' : relatedSpatialObjectIds.has(item.id) ? ' related-spatial' : ''
+                    return <button className={'spatial-object ' + tone + relationshipClass} type="button" key={item.id} onClick={() => inspectSpatialObject(item.id)}>
                       <i />
                       <span><strong>{item.name}</strong><small>{spatialObjectSubtitle(item)}</small></span>
                       <em>{Math.round(item.confidence * 100)}%</em>
@@ -658,8 +694,21 @@ function App() {
             <div><span>Evidence</span><strong>{selectedSpatialObject.evidenceIds.length} record{selectedSpatialObject.evidenceIds.length === 1 ? '' : 's'}</strong></div>
             <div><span>History</span><strong>{selectedSpatialHistoryCount} state{selectedSpatialHistoryCount === 1 ? '' : 's'}</strong></div>
           </div>
+          {selectedSpatialRelationEdges.length > 0 && <div className="spatial-drawer-section spatial-relation-visual-section">
+            <span className="eyebrow">RELATIONSHIP MAP / CURRENT STATE</span>
+            <div className="spatial-relation-map" aria-label={'Grounded relationships for ' + selectedSpatialObject.name}>
+              <div className="spatial-relation-anchor"><small>SELECTED OBJECT</small><strong>{selectedSpatialObject.name}</strong><span>{selectedSpatialObject.category}</span></div>
+              <div className="spatial-relation-branches">
+                {selectedSpatialRelationEdges.map((edge) => <button className={'spatial-relation-branch ' + (edge.outgoing ? 'outgoing' : 'incoming')} type="button" key={edge.id} onClick={() => inspectSpatialObject(edge.otherId)}>
+                  <span className="spatial-relation-path"><i /><b>{edge.outgoing ? edge.typeLabel + ' →' : '← ' + edge.typeLabel}</b><i /></span>
+                  <span className="spatial-relation-target"><strong>{edge.otherName}</strong><small>{edge.otherCategory} · {Math.round(edge.confidence * 100)}% grounded</small></span>
+                </button>)}
+              </div>
+            </div>
+            <small className="spatial-relation-note">Only persisted current-state relations are drawn. Line direction follows the stored relation edge; no geometry is invented.</small>
+          </div>}
           {selectedSpatialRelations.length > 0 && <div className="spatial-drawer-section">
-            <span className="eyebrow">RELATIONSHIPS</span>
+            <span className="eyebrow">RELATIONSHIP RECORDS</span>
             {selectedSpatialRelations.map((item) => <div className="spatial-relation-row" key={item.id}><strong>{item.label}</strong><small>{Math.round(item.confidence * 100)}% grounded</small></div>)}
           </div>}
           {selectedSpatialConditions.length > 0 && <div className="spatial-drawer-section">
@@ -725,18 +774,6 @@ function App() {
   )
 }
 
-interface SpatialGroup {
-  id: string
-  name: string
-  kind: 'room' | 'environment'
-  objects: SpatialObject[]
-}
-
-interface SpatialRelationDescription {
-  id: string
-  label: string
-  confidence: number
-}
 interface SpatialObjectTimelineEntry {
   stateId: string
   stateLabel: string
@@ -802,80 +839,6 @@ function buildSpatialObjectChanges(memory: EnvironmentalMemory, object: SpatialO
 
 function normalizeSpatialObjectName(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim()
-}
-
-function buildSpatialGroups(snapshot: EnvironmentalStateSnapshot, environmentName: string): SpatialGroup[] {
-  const rooms = snapshot.objects.filter((item) => item.category === 'room')
-  const objects = snapshot.objects.filter((item) => item.category !== 'room')
-  const assigned = new Set<string>()
-
-  const groups: SpatialGroup[] = rooms.map((room) => {
-    const roomObjects = objects.filter((item) => {
-      if (item.position?.roomId === room.id) return true
-      return snapshot.relations.some((relation) =>
-        (relation.type === 'located_in' && relation.fromId === item.id && relation.toId === room.id) ||
-        (relation.type === 'contains' && relation.fromId === room.id && relation.toId === item.id),
-      )
-    })
-    roomObjects.forEach((item) => assigned.add(item.id))
-    return { id: room.id, name: room.name, kind: 'room', objects: sortSpatialObjects(roomObjects, snapshot) }
-  })
-
-  const unassigned = objects.filter((item) => !assigned.has(item.id))
-  if (rooms.length === 0 || unassigned.length > 0) {
-    groups.push({
-      id: 'environment:' + snapshot.environmentId,
-      name: rooms.length === 0 ? environmentName : 'Other remembered objects',
-      kind: 'environment',
-      objects: sortSpatialObjects(unassigned.length > 0 ? unassigned : objects, snapshot),
-    })
-  }
-
-  if (groups.every((group) => group.objects.length === 0) && objects.length > 0) {
-    return [{ id: 'environment:' + snapshot.environmentId, name: environmentName, kind: 'environment', objects: sortSpatialObjects(objects, snapshot) }]
-  }
-
-  return groups
-}
-
-function sortSpatialObjects(objects: SpatialObject[], snapshot: EnvironmentalStateSnapshot): SpatialObject[] {
-  const score = (item: SpatialObject) => {
-    if (snapshot.issues.some((issue) => issue.objectIds.includes(item.id) && issue.status !== 'resolved' && issue.status !== 'dismissed')) return 0
-    if (snapshot.conditions.some((condition) => condition.objectIds.includes(item.id) && condition.kind !== 'normal')) return 1
-    if (['safety', 'electrical', 'equipment', 'door', 'obstruction'].includes(item.category)) return 2
-    return 3
-  }
-  return [...objects].sort((a, b) => score(a) - score(b) || a.name.localeCompare(b.name))
-}
-
-function spatialObjectTone(item: SpatialObject, snapshot: EnvironmentalStateSnapshot): 'attention' | 'condition' | 'normal' {
-  if (snapshot.issues.some((issue) => issue.objectIds.includes(item.id) && issue.status !== 'resolved' && issue.status !== 'dismissed')) return 'attention'
-  if (snapshot.conditions.some((condition) => condition.objectIds.includes(item.id) && condition.kind !== 'normal')) return 'condition'
-  return 'normal'
-}
-
-function spatialObjectSubtitle(item: SpatialObject): string {
-  const parts: string[] = [item.category]
-  if (item.state) parts.push(item.state)
-  else if (item.position?.description) parts.push(item.position.description)
-  return parts.join(' · ')
-}
-
-function describeSpatialRelations(item: SpatialObject, snapshot: EnvironmentalStateSnapshot): SpatialRelationDescription[] {
-  const names = new Map(snapshot.objects.map((object) => [object.id, object.name]))
-  return snapshot.relations
-    .filter((relation) => relation.fromId === item.id || relation.toId === item.id)
-    .map((relation: EnvironmentRelation) => {
-      const outgoing = relation.fromId === item.id
-      const otherId = outgoing ? relation.toId : relation.fromId
-      const otherName = names.get(otherId) ?? 'remembered object'
-      const relationLabel = relation.type.replace(/_/g, ' ')
-      return {
-        id: relation.id,
-        label: outgoing ? relationLabel + ' → ' + otherName : otherName + ' → ' + relationLabel,
-        confidence: relation.confidence,
-      }
-    })
 }
 
 function ChangeGroup({ title, subtitle, changes, onSelect }: { title: string; subtitle: string; changes: Change[]; onSelect: (id: string) => void }) {

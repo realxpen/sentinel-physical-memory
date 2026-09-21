@@ -27,7 +27,8 @@
     "check:photo-observation": "node --experimental-strip-types ./scripts/check-photo-observation.mjs",
     "check:state-concurrency": "node --experimental-strip-types ./scripts/check-state-concurrency.mjs",
     "check:phase8-presentation": "node --experimental-strip-types ./scripts/check-phase8-change-presentation.mjs",
-    "check:temporal-photo-diff": "node --experimental-strip-types ./scripts/check-temporal-photo-diff.mjs"
+    "check:temporal-photo-diff": "node --experimental-strip-types ./scripts/check-temporal-photo-diff.mjs",
+    "check:phase9-spatial-memory": "node ./scripts/check-phase9-spatial-memory.mjs"
   },
   "dependencies": {
     "@neondatabase/serverless": "latest",

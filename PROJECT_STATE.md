@@ -1,6 +1,6 @@
 # SENTINEL Project State
 
-Last updated: 2026-09-20
+Last updated: 2026-09-21
 
 ## North star
 
@@ -14,7 +14,7 @@ Hackathon track: **Best Apps and Agents**.
 
 ## Current phase
 
-**Phase 9 — Spatial Memory Experience: ACTIVE / LIVE CANVAS + OBJECT MEMORY HISTORY + DIRECT OBJECT ASK IMPLEMENTED / AREA FOCUS NEXT**
+**Phase 9 — Spatial Memory Experience: ACTIVE / AREA FOCUS + RELATIONSHIP MAP IMPLEMENTED / REPEATED-OBJECT IDENTITY NEXT**
 
 ## Phase 3 — COMPLETE
 
@@ -1021,7 +1021,13 @@ Current main:
   - source-image evidence when available;
   - Reality Diff events tied to the object;
 - lets the user jump from an object directly to its relevant Changes entry;
-- executes a contextual Ask SENTINEL query directly from the selected physical object.
+- executes a contextual Ask SENTINEL query directly from the selected physical object;
+- navigates **Building → grounded area → objects** when room structure exists;
+- focuses the canvas on one persisted area without changing durable memory;
+- keeps the honest environment-level fallback when no room graph is grounded;
+- visualizes selected-object relationships as current-state semantic edges;
+- highlights directly related physical objects without fabricating graph links;
+- lets relation targets become the next inspected object while preserving area context.
 
 Canonical record: `Knowledge/Technical/phase-9-spatial-memory.md`.
 
@@ -1066,7 +1072,7 @@ Phase 9 remains active until a real persisted environment can be navigated area 
 
 ## Highest-priority gaps
 
-1. Phase 9 — area focus / spatial relationship navigation and real multi-state object-history validation.
+1. Phase 9 — repeated-object identity presentation, mobile Spatial Memory polish, and real multi-state object-history validation.
 2. Phase 10 — Ask the Building as a first-class reasoning experience over Spatial Memory.
 3. Action + verification closed loop — Phases 11/12.
 4. Reliability, automated tests, security, and least-privilege database-role hardening.

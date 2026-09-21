@@ -57,6 +57,21 @@ Current main now:
 
 The canvas stays evidence-first: missing room or position knowledge is shown as missing rather than fabricated.
 
+## Area focus + relationship visualization slice
+
+Current main now also:
+
+- adds a **Building → grounded area → objects** navigation layer when persisted room objects exist;
+- lets the operator focus the canvas on one grounded room/area without altering memory;
+- keeps an explicit environment-level fallback when no room structure is grounded;
+- draws a selected object's current-state relationships as a semantic relation map;
+- highlights selected and directly related object cards on the canvas;
+- lets a relationship target become the next inspected object while preserving its grounded area focus;
+- draws only persisted relation edges whose opposite endpoint resolves to a physical object in the current immutable snapshot;
+- treats the relation map as semantic topology, **not** metric geometry or a reconstructed floor plan.
+
+The deterministic Phase 9 regression gate verifies room assignment through `position.roomId`, `located_in`, and `contains`; honest environment fallback; area focus; and relation-edge projection without fabricated endpoints.
+
 ## Trust constraints
 
 - Spatial layout labels must come from persisted environmental memory.
@@ -72,8 +87,6 @@ Phase 9 closes when a real remembered environment can be navigated from area →
 
 ## Next slices
 
-1. Spatial relationship visualization between selected objects.
-2. Area-focused filtering / zoom.
-3. Better object identity labels for repeated instances when grounded spatial context exists.
-4. Mobile interaction polish.
-5. Validate object-history navigation against a real multi-state environment.
+1. Better object identity labels for repeated instances when grounded spatial context exists.
+2. Mobile interaction polish for area navigation, relation maps, drawer, history and Ask.
+3. Validate object-history navigation against a real multi-state environment.
