@@ -111,9 +111,13 @@ function App() {
   const selectedSpatialRelations = selectedSpatialObject && currentSnapshot
     ? describeSpatialRelations(selectedSpatialObject, currentSnapshot)
     : []
-  const selectedSpatialHistoryCount = selectedSpatialObject && memory
-    ? memory.snapshots.filter((snapshot) => snapshot.objects.some((item) => item.id === selectedSpatialObject.id)).length
-    : 0
+  const selectedSpatialTimeline = selectedSpatialObject && memory
+    ? buildSpatialObjectTimeline(memory, selectedSpatialObject.id)
+    : []
+  const selectedSpatialChanges = selectedSpatialObject && memory
+    ? buildSpatialObjectChanges(memory, selectedSpatialObject)
+    : []
+  const selectedSpatialHistoryCount = selectedSpatialTimeline.length
 
   useEffect(() => {
     saveEnvironmentDirectory(environments)
@@ -661,11 +665,38 @@ function App() {
             <span className="eyebrow">OPERATIONS</span>
             {selectedSpatialIssues.map((item) => <div className="spatial-condition-row issue" key={item.id}><strong>{item.title}</strong><small>{item.severity} · {item.status}</small><p>{item.description}</p></div>)}
           </div>}
+          <div className="spatial-drawer-section">
+            <span className="eyebrow">OBJECT MEMORY / HISTORY</span>
+            {selectedSpatialTimeline.length === 0 ? <div className="spatial-history-empty">No immutable object history is available yet.</div> : <div className="spatial-object-timeline">
+              {selectedSpatialTimeline.map((entry) => <div className="spatial-timeline-entry" key={entry.stateId}>
+                {entry.imageUri ? <div className="spatial-timeline-image"><img src={entry.imageUri} alt={entry.stateLabel + ' evidence'} /></div> : <div className="spatial-timeline-image placeholder">◎</div>}
+                <div className="spatial-timeline-copy">
+                  <span>{entry.stateLabel} · {formatStateTimestamp(entry.capturedAt)}</span>
+                  <strong>{entry.visibleState ?? 'State unknown'}</strong>
+                  <small>{entry.position ?? 'No grounded position'} · {Math.round(entry.confidence * 100)}%</small>
+                </div>
+              </div>)}
+            </div>}
+          </div>
+          {selectedSpatialChanges.length > 0 && <div className="spatial-drawer-section">
+            <span className="eyebrow">REALITY DIFF / THIS OBJECT</span>
+            <div className="spatial-object-changes">
+              {selectedSpatialChanges.map((entry) => <button type="button" className="spatial-object-change" key={entry.change.id} onClick={() => {
+                setSelectedChangeId(entry.change.id)
+                setSelectedSpatialObjectId(null)
+                setView('changes')
+              }}>
+                <span className={'change-mark ' + entry.change.type}>{changeMark(entry.change.type)}</span>
+                <span><strong>{entry.change.title}</strong><small>{entry.fromLabel} → {entry.toLabel}</small><p>{entry.change.description}</p></span>
+                <em>{Math.round(entry.change.confidence * 100)}%</em>
+              </button>)}
+            </div>
+          </div>}
           <button className="spatial-ask-button" type="button" onClick={() => {
-            setQuestion('What do you know about ' + selectedSpatialObject.name + ', where is it, and does it need attention?')
+            setQuestion('What do you know about ' + selectedSpatialObject.name + ', where is it, how has it changed over time, and does it need attention?')
             setSelectedSpatialObjectId(null)
-            setAskStatus('Question prepared from spatial memory.')
-          }}>Ask about this object ↗</button>
+            setAskStatus('Question prepared from object memory.')
+          }}>Ask SENTINEL about this object ↗</button>
         </aside>
       </div>}
 
@@ -700,6 +731,72 @@ interface SpatialRelationDescription {
   id: string
   label: string
   confidence: number
+}
+interface SpatialObjectTimelineEntry {
+  stateId: string
+  stateLabel: string
+  capturedAt: string
+  visibleState?: string
+  position?: string
+  confidence: number
+  imageUri?: string
+}
+
+interface SpatialObjectChangeEntry {
+  change: Change
+  fromLabel: string
+  toLabel: string
+}
+
+
+function buildSpatialObjectTimeline(memory: EnvironmentalMemory, objectId: string): SpatialObjectTimelineEntry[] {
+  const stateById = new Map(memory.states.map((state) => [state.id, state]))
+  const sourceById = new Map(memory.sources.map((source) => [source.id, source]))
+
+  return memory.snapshots
+    .flatMap((snapshot): SpatialObjectTimelineEntry[] => {
+      const object = snapshot.objects.find((item) => item.id === objectId)
+      if (!object) return []
+      const state = stateById.get(snapshot.stateId)
+      if (!state) return []
+      const imageSource = state.sourceIds
+        .map((sourceId) => sourceById.get(sourceId))
+        .find((source) => source?.modality === 'image')
+      return [{
+        stateId: snapshot.stateId,
+        stateLabel: 'State v' + state.version,
+        capturedAt: state.capturedAt,
+        visibleState: object.state,
+        position: object.position?.description,
+        confidence: object.confidence,
+        imageUri: imageSource?.uri,
+      }]
+    })
+    .sort((a, b) => new Date(b.capturedAt).getTime() - new Date(a.capturedAt).getTime())
+}
+
+function buildSpatialObjectChanges(memory: EnvironmentalMemory, object: SpatialObject): SpatialObjectChangeEntry[] {
+  const normalizedName = normalizeSpatialObjectName(object.name)
+  const matches = memory.diffs.flatMap((diff) => diff.changes
+    .filter((change) =>
+      change.entityId === object.id ||
+      (change.entityKind === 'object' && normalizeSpatialObjectName(change.title.replace(/^[^:]+:\s*/, '')) === normalizedName),
+    )
+    .map((change) => ({
+      change,
+      fromLabel: stateLabel(memory, diff.fromStateId),
+      toLabel: stateLabel(memory, diff.toStateId),
+    })))
+
+  return matches.sort((a, b) => {
+    const aState = memory.states.find((state) => state.id === memory.diffs.find((diff) => diff.changes.some((change) => change.id === a.change.id))?.toStateId)
+    const bState = memory.states.find((state) => state.id === memory.diffs.find((diff) => diff.changes.some((change) => change.id === b.change.id))?.toStateId)
+    return (bState?.version ?? 0) - (aState?.version ?? 0)
+  })
+}
+
+function normalizeSpatialObjectName(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim()
 }
 
 function buildSpatialGroups(snapshot: EnvironmentalStateSnapshot, environmentName: string): SpatialGroup[] {
