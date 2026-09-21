@@ -16,6 +16,20 @@ if (expectedCommit) await waitForDeployment(expectedCommit)
 
 for (const [question, expectedIntent] of questions) {
   const payload = await askWithRetry(question)
+  console.log('ASK_RESPONSE', JSON.stringify({
+    question,
+    reasoningContract: payload.reasoningContract ?? null,
+    persistence: payload.persistence ?? null,
+    intent: payload.grounding?.intent ?? null,
+    stateId: payload.stateId ?? null,
+    groundingStateId: payload.grounding?.state?.id ?? null,
+    historyStates: payload.grounding?.historyStateIds?.length ?? 0,
+    evidenceCount: payload.evidenceIds?.length ?? 0,
+    objectCount: payload.relatedObjectIds?.length ?? 0,
+    issueCount: payload.relatedIssueIds?.length ?? 0,
+    confidence: payload.confidence ?? null,
+  }))
+  expect(payload.reasoningContract === 'phase10-grounded-v1', 'production Ask must expose the Phase 10 grounding contract marker')
   expect(payload.persistence === 'neon', 'production Ask must reason over Neon-backed memory')
   expect(typeof payload.answer === 'string' && payload.answer.trim().length > 0, 'production Ask must return a non-empty conclusion')
   expect(Number.isFinite(payload.confidence) && payload.confidence >= 0 && payload.confidence <= 1, 'production Ask confidence must be bounded')

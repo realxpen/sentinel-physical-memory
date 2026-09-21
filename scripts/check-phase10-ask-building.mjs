@@ -133,6 +133,7 @@ try {
     readFile(new URL('../src/main.tsx', import.meta.url), 'utf8'),
     readFile(new URL('../src/integration.css', import.meta.url), 'utf8'),
   ])
+  const apiSource = await readFile(new URL('../api/ask-building.ts', import.meta.url), 'utf8')
   for (const [question] of intents) expect(main.includes(question), `Product UI must expose core demo question: ${question}`)
   expect(main.includes('ASK THE BUILDING / EVIDENCE-GROUNDED'), 'Ask the Building must be a first-class environment surface')
   expect(main.includes('WHY THIS MATTERS'), 'answer surface must expose rationale')
@@ -141,6 +142,9 @@ try {
   expect(main.includes('answerRelatedObjectIds.has(item.id)'), 'related physical objects must illuminate in Spatial Memory')
   expect(css.includes('.spatial-object.answer-related-spatial'), 'Phase 10 related-object illumination style is missing')
   expect(css.includes('.ask-prompt-rail'), 'Phase 10 contextual question rail is missing')
+  expect(apiSource.includes("from '../src/memory/ask-building.ts'"), 'production API must explicitly bundle the Phase 10 TypeScript Ask service')
+  expect(apiSource.includes("reasoningContract: ASK_BUILDING_CONTRACT"), 'production API must expose the Phase 10 reasoning contract marker')
+  expect(apiSource.includes("if (!answer.grounding)"), 'production API must refuse a 200 response without the server-owned grounding envelope')
 
   console.log('PASS  seven MVP questions map to deterministic Ask intents')
   console.log('PASS  current Ask uses authoritative currentStateId and bounded immutable history')

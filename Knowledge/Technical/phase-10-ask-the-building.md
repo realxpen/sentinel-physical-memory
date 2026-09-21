@@ -70,6 +70,19 @@ Related current objects illuminate inside Spatial Memory. Historical-only refere
 
 The production gate validates integration/schema/grounding, not exact stochastic wording.
 
+### Production bundle freshness hardening
+
+The first exact-deployment smoke on commit `81433a819bbe644ba872f2489f3e529e6bf835db` detected that production returned a response whose grounding intent did not match the server-owned Phase 10 contract even though deterministic CI was green.
+
+To make the serverless boundary fail closed and observable:
+
+- `api/ask-building.ts` explicitly imports the Phase 10 TypeScript service source;
+- HTTP 200 is refused if the server-owned grounding envelope is absent;
+- successful responses include `reasoningContract: phase10-grounded-v1`;
+- the production smoke logs only sanitized contract/grounding metadata before assertions.
+
+This does not relax any reasoning or evidence rule. It makes stale/mismatched serverless bundling detectable rather than silently acceptable.
+
 ## Exit condition
 
 Phase 10 closes when all seven questions pass the deterministic product gate and the exact deployed main commit passes the seven-question production Ask smoke.

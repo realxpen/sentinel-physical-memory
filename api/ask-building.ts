@@ -1,6 +1,6 @@
 import { createNebiusNemotronAdapter } from '../src/ai/nebius.js'
 import { ModelAdapterError } from '../src/ai/model.js'
-import { AskBuildingService } from '../src/memory/ask-building.js'
+import { AskBuildingService } from '../src/memory/ask-building.ts'
 import { getMemoryPersistenceMode, getRuntimeEnvironmentalMemoryRepository } from '../server/memory-repository.js'
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown }
@@ -9,6 +9,7 @@ type Response = { status(code: number): Response; json(body: unknown): void }
 const MAX_BODY_BYTES = 64 * 1024
 const MAX_QUESTION_LENGTH = 1000
 const DEFAULT_REASONING_MODEL = 'nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B'
+const ASK_BUILDING_CONTRACT = 'phase10-grounded-v1'
 
 export default async function handler(req: Request, res: Response) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'METHOD_NOT_ALLOWED', message: 'Use POST /api/ask-building' })
@@ -35,7 +36,10 @@ export default async function handler(req: Request, res: Response) {
     })
     const service = new AskBuildingService(repository, adapter)
     const answer = await service.ask({ environmentId: body.environmentId, question: body.question, stateId: body.stateId })
-    return res.status(200).json({ ...answer, persistence: getMemoryPersistenceMode() })
+    if (!answer.grounding) {
+      throw new Error('Phase 10 grounding envelope was not produced by AskBuildingService')
+    }
+    return res.status(200).json({ ...answer, persistence: getMemoryPersistenceMode(), reasoningContract: ASK_BUILDING_CONTRACT })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown ask error'
     if (error instanceof ModelAdapterError) {
