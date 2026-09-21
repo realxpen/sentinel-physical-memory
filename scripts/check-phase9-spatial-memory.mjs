@@ -5,6 +5,7 @@ const vite = await createServer({ server: { middlewareMode: true }, appType: 'cu
 try {
   const {
     buildSpatialGroups,
+    buildSpatialObjectDisplayNames,
     buildSpatialRelationEdges,
     focusSpatialGroups,
     spatialGroupForObject,
@@ -105,10 +106,53 @@ try {
     throw new Error('missing room structure must retain the honest environment-level fallback')
   }
 
+  const bookshelf = object('bookshelf', 'furniture', 'Bookshelf', { description: 'storage wall' })
+  const plantDesk = object('plant_desk', 'other', 'Plant', { description: 'beside the desk' })
+  const plantShelf = object('plant_shelf', 'other', 'Plant', { description: 'on the shelf' })
+  const chairA = object('chair_a', 'furniture', 'Visitor chair', { description: 'north side', roomId: 'room_desk' })
+  const chairB = object('chair_b', 'furniture', 'Visitor chair', { description: 'north side', roomId: 'room_desk' })
+  const lampDesk = object('lamp_desk', 'electrical', 'Lamp', { description: 'wall side', roomId: 'room_desk' })
+  const lampEntry = object('lamp_entry', 'electrical', 'Lamp', { description: 'wall side', roomId: 'room_entry' })
+
+  const identitySnapshot = {
+    ...snapshot,
+    objects: [roomDesk, roomEntry, desk, bookshelf, plantDesk, plantShelf, chairA, chairB, lampDesk, lampEntry],
+    relations: [
+      relation('rel_plant_desk', 'plant_desk', 'desk', 'near', 0.94),
+      relation('rel_plant_shelf', 'plant_shelf', 'bookshelf', 'on', 0.92),
+    ],
+  }
+
+  const displayNames = buildSpatialObjectDisplayNames(identitySnapshot)
+  if (displayNames.get('plant_desk') !== 'Plant · near Desk') {
+    throw new Error('repeated object may use a unique persisted relation as a human-readable qualifier')
+  }
+  if (displayNames.get('plant_shelf') !== 'Plant · on Bookshelf') {
+    throw new Error('a second repeated object must preserve its own grounded relation context')
+  }
+  if (displayNames.get('lamp_desk') !== 'Lamp · Desk area' || displayNames.get('lamp_entry') !== 'Lamp · Entry') {
+    throw new Error('different grounded room membership may distinguish otherwise repeated object names')
+  }
+  if (displayNames.get('chair_a') !== 'Visitor chair' || displayNames.get('chair_b') !== 'Visitor chair') {
+    throw new Error('ambiguous repeated objects must remain honestly ambiguous instead of receiving invented numbering')
+  }
+  if ([...displayNames.values()].some((name) => /\b(?:1|2|#1|#2)\b/.test(name))) {
+    throw new Error('presentation must not manufacture ordinal identity labels')
+  }
+  if (displayNames.get('desk') !== 'Desk') {
+    throw new Error('unique object names must remain unchanged even when spatial context exists')
+  }
+
+  const contextualPlantEdges = buildSpatialRelationEdges(desk, identitySnapshot, displayNames)
+  if (!contextualPlantEdges.some((edge) => edge.otherId === 'plant_desk' && edge.otherName === 'Plant · near Desk')) {
+    throw new Error('relationship map must reuse grounded repeated-object presentation labels')
+  }
+
   console.log('PASS  grounded room membership combines roomId, located_in and contains')
   console.log('PASS  area focus is navigable and fails safely when a target disappears')
   console.log('PASS  relationship visualization projects persisted current-state physical-object edges only')
   console.log('PASS  environment-level fallback remains honest when room structure is absent')
+  console.log('PASS  repeated-object labels use only unique grounded context and never invented numbering')
   console.log('SENTINEL PHASE 9 SPATIAL MEMORY VERIFIED')
 } finally {
   await vite.close()

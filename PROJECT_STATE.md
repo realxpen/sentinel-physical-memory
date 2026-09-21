@@ -14,7 +14,7 @@ Hackathon track: **Best Apps and Agents**.
 
 ## Current phase
 
-**Phase 9 — Spatial Memory Experience: ACTIVE / AREA FOCUS + RELATIONSHIP MAP IMPLEMENTED / REPEATED-OBJECT IDENTITY NEXT**
+**Phase 9 — Spatial Memory Experience: ACTIVE / GROUNDED REPEATED-OBJECT LABELS IMPLEMENTED / MOBILE POLISH NEXT**
 
 ## Phase 3 — COMPLETE
 
@@ -1027,7 +1027,11 @@ Current main:
 - keeps the honest environment-level fallback when no room graph is grounded;
 - visualizes selected-object relationships as current-state semantic edges;
 - highlights directly related physical objects without fabricating graph links;
-- lets relation targets become the next inspected object while preserving area context.
+- lets relation targets become the next inspected object while preserving area context;
+- gives repeated object names human-readable distinctions only when unique persisted spatial context supports them;
+- prefers grounded object relations, then grounded room membership, then unique persisted position text;
+- preserves durable IDs and canonical persisted names while keeping unsupported repeated instances honestly ambiguous;
+- never invents ordinal labels such as `Plant 1` / `Plant 2`.
 
 Canonical record: `Knowledge/Technical/phase-9-spatial-memory.md`.
 
@@ -1072,7 +1076,7 @@ Phase 9 remains active until a real persisted environment can be navigated area 
 
 ## Highest-priority gaps
 
-1. Phase 9 — repeated-object identity presentation, mobile Spatial Memory polish, and real multi-state object-history validation.
+1. Phase 9 — mobile Spatial Memory polish and real multi-state object-history validation.
 2. Phase 10 — Ask the Building as a first-class reasoning experience over Spatial Memory.
 3. Action + verification closed loop — Phases 11/12.
 4. Reliability, automated tests, security, and least-privilege database-role hardening.

@@ -72,6 +72,22 @@ Current main now also:
 
 The deterministic Phase 9 regression gate verifies room assignment through `position.roomId`, `located_in`, and `contains`; honest environment fallback; area focus; and relation-edge projection without fabricated endpoints.
 
+## Repeated-object identity presentation slice
+
+Current main now also distinguishes repeated human-readable object names **only when the current persisted snapshot contains unique grounding context**.
+
+Presentation rules:
+
+- durable object IDs and persisted `object.name` values are never rewritten;
+- a unique relation to a uniquely named remembered object is preferred, for example `Plant · near Desk` or `Plant · on Bookshelf`;
+- grounded room membership can distinguish repeated names across areas, for example `Lamp · Desk area` and `Lamp · Entry`;
+- a unique persisted position description may be used when stronger relational/room context is absent;
+- ambiguous instances remain honestly identical in presentation;
+- SENTINEL does **not** manufacture `Plant 1`, `Plant 2`, ordinal suffixes, or unsupported identity claims;
+- the same display context is reused in object cards, the inspector, contextual Ask, and relationship targets.
+
+The Phase 9 deterministic gate now covers both positive contextual distinctions and the fail-closed ambiguous case.
+
 ## Trust constraints
 
 - Spatial layout labels must come from persisted environmental memory.
@@ -87,6 +103,5 @@ Phase 9 closes when a real remembered environment can be navigated from area →
 
 ## Next slices
 
-1. Better object identity labels for repeated instances when grounded spatial context exists.
-2. Mobile interaction polish for area navigation, relation maps, drawer, history and Ask.
-3. Validate object-history navigation against a real multi-state environment.
+1. Mobile interaction polish for area navigation, relation maps, object cards, drawer, history and Ask.
+2. Validate object-history navigation against a real multi-state environment.

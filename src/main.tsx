@@ -7,7 +7,7 @@ import './history.css'
 import type { AskBuildingResponse, Change, EnvironmentalCondition, EnvironmentalDiff, EnvironmentalMemory, EnvironmentalState, EnvironmentType, Observation, SpatialObject } from './domain/sentinel'
 import type { EnvironmentalStateHistoryEntry, EnvironmentalStateHistoryRecord } from './memory/history'
 import { changesForPresentation, presentedChangeSummary } from './memory/change-presentation'
-import { buildSpatialGroups, buildSpatialRelationEdges, describeSpatialRelations, focusSpatialGroups, spatialGroupForObject, spatialObjectSubtitle, spatialObjectTone } from './memory/spatial-memory'
+import { buildSpatialGroups, buildSpatialObjectDisplayNames, buildSpatialRelationEdges, describeSpatialRelations, focusSpatialGroups, spatialGroupForObject, spatialObjectSubtitle, spatialObjectTone } from './memory/spatial-memory'
 import { createEnvironmentProfile, DEFAULT_ENVIRONMENT, ENVIRONMENT_TYPES, loadActiveEnvironmentId, loadEnvironmentDirectory, saveActiveEnvironmentId, saveEnvironmentDirectory, type EnvironmentProfile } from './environment/directory'
 import { ingestImageFile } from './scan/image-ingestion'
 import { ingestVideoFile } from './scan/video-ingestion'
@@ -101,12 +101,16 @@ function App() {
     ? memory.snapshots.find((snapshot) => snapshot.stateId === memory.environment.currentStateId)
     : undefined
   const spatialGroups = currentSnapshot ? buildSpatialGroups(currentSnapshot, activeEnvironment.name) : []
+  const spatialObjectDisplayNames = currentSnapshot ? buildSpatialObjectDisplayNames(currentSnapshot) : new Map<string, string>()
   const normalizedSpatialAreaId = selectedSpatialAreaId === 'all' || spatialGroups.some((group) => group.id === selectedSpatialAreaId) ? selectedSpatialAreaId : 'all'
   const focusedSpatialGroups = focusSpatialGroups(spatialGroups, normalizedSpatialAreaId)
   const hasGroundedSpatialAreas = spatialGroups.some((group) => group.kind === 'room')
   const selectedSpatialObject = selectedSpatialObjectId && currentSnapshot
     ? currentSnapshot.objects.find((item) => item.id === selectedSpatialObjectId) ?? null
     : null
+  const selectedSpatialObjectDisplayName = selectedSpatialObject
+    ? spatialObjectDisplayNames.get(selectedSpatialObject.id) ?? selectedSpatialObject.name
+    : ''
   const selectedSpatialConditions = selectedSpatialObject && currentSnapshot
     ? currentSnapshot.conditions.filter((item) => item.objectIds.includes(selectedSpatialObject.id))
     : []
@@ -114,10 +118,10 @@ function App() {
     ? currentSnapshot.issues.filter((item) => item.objectIds.includes(selectedSpatialObject.id))
     : []
   const selectedSpatialRelations = selectedSpatialObject && currentSnapshot
-    ? describeSpatialRelations(selectedSpatialObject, currentSnapshot)
+    ? describeSpatialRelations(selectedSpatialObject, currentSnapshot, spatialObjectDisplayNames)
     : []
   const selectedSpatialRelationEdges = selectedSpatialObject && currentSnapshot
-    ? buildSpatialRelationEdges(selectedSpatialObject, currentSnapshot)
+    ? buildSpatialRelationEdges(selectedSpatialObject, currentSnapshot, spatialObjectDisplayNames)
     : []
   const relatedSpatialObjectIds = new Set(selectedSpatialRelationEdges.map((edge) => edge.otherId))
   const selectedSpatialTimeline = selectedSpatialObject && memory
@@ -455,10 +459,11 @@ function App() {
                 <div className="spatial-object-cloud">
                   {group.objects.length === 0 ? <span className="spatial-room-empty">No grounded objects assigned to this area yet.</span> : group.objects.map((item) => {
                     const tone = spatialObjectTone(item, currentSnapshot)
+                    const displayName = spatialObjectDisplayNames.get(item.id) ?? item.name
                     const relationshipClass = selectedSpatialObjectId === item.id ? ' selected-spatial' : relatedSpatialObjectIds.has(item.id) ? ' related-spatial' : ''
-                    return <button className={'spatial-object ' + tone + relationshipClass} type="button" key={item.id} onClick={() => inspectSpatialObject(item.id)}>
+                    return <button className={'spatial-object ' + tone + relationshipClass} type="button" key={item.id} onClick={() => inspectSpatialObject(item.id)} aria-label={'Inspect ' + displayName}>
                       <i />
-                      <span><strong>{item.name}</strong><small>{spatialObjectSubtitle(item)}</small></span>
+                      <span><strong>{displayName}</strong><small>{spatialObjectSubtitle(item)}</small></span>
                       <em>{Math.round(item.confidence * 100)}%</em>
                     </button>
                   })}
@@ -680,10 +685,10 @@ function App() {
       </div>}
 
       {selectedSpatialObject && currentSnapshot && <div className="drawer-backdrop" role="presentation" onClick={() => setSelectedSpatialObjectId(null)}>
-        <aside className="evidence-drawer spatial-object-drawer" role="dialog" aria-modal="true" aria-label={selectedSpatialObject.name + ' spatial memory'} onClick={(event) => event.stopPropagation()}>
+        <aside className="evidence-drawer spatial-object-drawer" role="dialog" aria-modal="true" aria-label={selectedSpatialObjectDisplayName + ' spatial memory'} onClick={(event) => event.stopPropagation()}>
           <button className="drawer-close" type="button" onClick={() => setSelectedSpatialObjectId(null)}>×</button>
           <span className="eyebrow">SPATIAL MEMORY / CURRENT OBJECT</span>
-          <h2>{selectedSpatialObject.name}</h2>
+          <h2>{selectedSpatialObjectDisplayName}</h2>
           <p>{selectedSpatialObject.description ?? 'No additional visual description was persisted for this object.'}</p>
           <Confidence value={selectedSpatialObject.confidence} />
           <div className="spatial-object-meta">
@@ -696,8 +701,8 @@ function App() {
           </div>
           {selectedSpatialRelationEdges.length > 0 && <div className="spatial-drawer-section spatial-relation-visual-section">
             <span className="eyebrow">RELATIONSHIP MAP / CURRENT STATE</span>
-            <div className="spatial-relation-map" aria-label={'Grounded relationships for ' + selectedSpatialObject.name}>
-              <div className="spatial-relation-anchor"><small>SELECTED OBJECT</small><strong>{selectedSpatialObject.name}</strong><span>{selectedSpatialObject.category}</span></div>
+            <div className="spatial-relation-map" aria-label={'Grounded relationships for ' + selectedSpatialObjectDisplayName}>
+              <div className="spatial-relation-anchor"><small>SELECTED OBJECT</small><strong>{selectedSpatialObjectDisplayName}</strong><span>{selectedSpatialObject.category}</span></div>
               <div className="spatial-relation-branches">
                 {selectedSpatialRelationEdges.map((edge) => <button className={'spatial-relation-branch ' + (edge.outgoing ? 'outgoing' : 'incoming')} type="button" key={edge.id} onClick={() => inspectSpatialObject(edge.otherId)}>
                   <span className="spatial-relation-path"><i /><b>{edge.outgoing ? edge.typeLabel + ' →' : '← ' + edge.typeLabel}</b><i /></span>
@@ -747,7 +752,7 @@ function App() {
             </div>
           </div>}
           <button className="spatial-ask-button" type="button" onClick={() => {
-            const objectQuestion = 'What do you know about ' + selectedSpatialObject.name + ', where is it, how has it changed over time, and does it need attention?'
+            const objectQuestion = 'What do you know about ' + selectedSpatialObjectDisplayName + ', where is it, how has it changed over time, and does it need attention?'
             setSelectedSpatialObjectId(null)
             void runAskBuilding(objectQuestion)
           }}>Ask SENTINEL about this object ↗</button>
