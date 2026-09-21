@@ -759,3 +759,395 @@ h1 { margin: 18px 0 22px; font-size: clamp(58px, 8.4vw, 128px); line-height: .88
   .spatial-relation-branch { grid-template-columns: 1fr; gap: 5px; padding-right: 4px; }
   .spatial-relation-path { grid-template-columns: 28px minmax(0,1fr) 8px; }
 }
+
+
+/* Phase 9 — mobile spatial memory polish */
+@media (max-width: 650px) {
+  .overlay-open .ask-bar,
+  .overlay-open .mobile-nav {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateX(-50%) translateY(18px);
+  }
+
+  .spatial-memory-stage {
+    padding-inline: 12px;
+  }
+
+  .spatial-stage-header {
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+
+  .spatial-stage-header > div > strong {
+    font-size: clamp(27px, 9vw, 38px);
+    line-height: .98;
+  }
+
+  .spatial-stage-header > div > small {
+    max-width: 280px;
+    line-height: 1.45;
+  }
+
+  .spatial-stage-header > span {
+    align-self: flex-start;
+  }
+
+  .spatial-area-navigation {
+    margin-inline: -12px;
+    gap: 8px;
+  }
+
+  .spatial-area-navigation > span {
+    padding-inline: 14px;
+  }
+
+  .spatial-area-navigation > div {
+    width: 100%;
+    gap: 9px;
+    padding: 2px 14px 10px;
+    scroll-padding-inline: 14px;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+    overscroll-behavior-x: contain;
+    touch-action: pan-x;
+  }
+
+  .spatial-area-navigation > div::-webkit-scrollbar,
+  .history-track::-webkit-scrollbar {
+    display: none;
+  }
+
+  .spatial-area-navigation button {
+    min-width: min(72vw, 220px);
+    min-height: 54px;
+    padding: 11px 13px;
+    scroll-snap-align: start;
+  }
+
+  .spatial-area-navigation button strong {
+    font-size: 12px;
+  }
+
+  .spatial-area-navigation button small {
+    margin-top: 5px;
+    font-size: 8px;
+  }
+
+  .spatial-area-fallback {
+    padding: 13px;
+  }
+
+  .spatial-room-grid {
+    gap: 12px;
+  }
+
+  .spatial-room {
+    min-height: 0;
+    padding: 13px;
+    border-radius: 17px;
+  }
+
+  .spatial-room-heading {
+    gap: 10px;
+    padding-bottom: 12px;
+  }
+
+  .spatial-room-heading div span {
+    font-size: 15px;
+  }
+
+  .spatial-object-cloud {
+    gap: 7px;
+    padding-top: 10px;
+  }
+
+  .spatial-object {
+    min-height: 56px;
+    grid-template-columns: 8px minmax(0,1fr) auto;
+    gap: 10px;
+    padding: 11px;
+    border-radius: 14px;
+    touch-action: manipulation;
+  }
+
+  .spatial-object:active {
+    transform: scale(.985);
+  }
+
+  .spatial-object span strong {
+    font-size: 13px;
+    line-height: 1.22;
+  }
+
+  .spatial-object span small {
+    max-width: none;
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    line-height: 1.35;
+  }
+
+  .spatial-object > em {
+    align-self: start;
+    padding-top: 2px;
+  }
+
+  .history-section {
+    overflow: hidden;
+  }
+
+  .history-heading {
+    gap: 14px;
+  }
+
+  .history-quick-actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .history-quick-actions button {
+    min-height: 44px;
+  }
+
+  .history-time-query > div {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .history-time-query input,
+  .history-time-query button {
+    width: 100%;
+    min-height: 46px;
+  }
+
+  .history-track {
+    display: flex;
+    gap: 10px;
+    margin-inline: -18px;
+    padding-inline: 18px;
+    overflow-x: auto;
+    scroll-padding-inline: 18px;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+    overscroll-behavior-x: contain;
+    touch-action: pan-x;
+  }
+
+  .history-card {
+    flex: 0 0 min(82vw, 320px);
+    min-height: 176px;
+    scroll-snap-align: start;
+  }
+
+  .drawer-backdrop {
+    display: flex;
+    align-items: flex-end;
+    background: rgba(3,6,4,.58);
+    backdrop-filter: blur(7px);
+    overscroll-behavior: contain;
+  }
+
+  .evidence-drawer {
+    position: relative;
+    inset: auto;
+    width: 100%;
+    height: min(90dvh, 820px);
+    max-height: 90dvh;
+    margin: 0;
+    padding: 46px 18px calc(28px + env(safe-area-inset-bottom));
+    border-width: 1px 0 0;
+    border-radius: 28px 28px 0 0;
+    box-shadow: 0 -24px 72px rgba(0,0,0,.38);
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .evidence-drawer::before {
+    content: '';
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    width: 42px;
+    height: 4px;
+    border-radius: 999px;
+    background: rgba(255,255,255,.2);
+    transform: translateX(-50%);
+  }
+
+  .drawer-close {
+    top: 17px;
+    right: 16px;
+    width: 38px;
+    height: 38px;
+    z-index: 4;
+  }
+
+  .evidence-drawer h2,
+  .change-drawer h2 {
+    padding-right: 34px;
+    font-size: clamp(36px, 11vw, 52px);
+    line-height: .94;
+  }
+
+  .evidence-drawer > p {
+    font-size: 13px;
+  }
+
+  .confidence {
+    margin-top: 30px;
+  }
+
+  .spatial-object-meta {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 26px;
+  }
+
+  .spatial-object-meta > div {
+    min-height: 76px;
+    padding: 11px;
+  }
+
+  .spatial-object-meta strong {
+    overflow-wrap: anywhere;
+  }
+
+  .spatial-drawer-section {
+    margin-top: 26px;
+    padding-top: 22px;
+  }
+
+  .spatial-relation-map {
+    margin-inline: -2px;
+    padding: 12px;
+    border-radius: 16px;
+  }
+
+  .spatial-relation-map::before {
+    left: 29px;
+    top: 57px;
+  }
+
+  .spatial-relation-anchor {
+    max-width: calc(100% - 4px);
+  }
+
+  .spatial-relation-branch {
+    min-height: 58px;
+    gap: 7px;
+    padding: 8px 4px 8px 0;
+    touch-action: manipulation;
+  }
+
+  .spatial-relation-branch:active {
+    background: rgba(91,255,138,.045);
+  }
+
+  .spatial-relation-path {
+    grid-template-columns: 25px minmax(0,1fr) 8px;
+  }
+
+  .spatial-relation-path b {
+    white-space: normal;
+    line-height: 1.25;
+  }
+
+  .spatial-relation-target strong {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    font-size: 12px;
+    line-height: 1.3;
+  }
+
+  .spatial-relation-note {
+    font-size: 9px;
+    line-height: 1.55;
+  }
+
+  .spatial-timeline-entry {
+    grid-template-columns: 76px minmax(0,1fr);
+    gap: 10px;
+  }
+
+  .spatial-timeline-image {
+    width: 76px;
+  }
+
+  .spatial-timeline-copy small {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+  }
+
+  .spatial-object-change {
+    min-height: 72px;
+    grid-template-columns: 30px minmax(0,1fr) 38px;
+    gap: 9px;
+    touch-action: manipulation;
+  }
+
+  .spatial-object-change > span:nth-child(2) p {
+    font-size: 10px;
+    line-height: 1.48;
+  }
+
+  .spatial-ask-button {
+    position: sticky;
+    z-index: 3;
+    bottom: calc(env(safe-area-inset-bottom) + 2px);
+    min-height: 52px;
+    margin-top: 28px;
+    box-shadow: 0 -14px 34px rgba(8,12,9,.82), 0 10px 28px rgba(91,255,138,.12);
+  }
+
+  .change-state-transition {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    margin: 28px 0;
+  }
+
+  .change-state-transition > b {
+    justify-self: center;
+    transform: rotate(90deg);
+  }
+
+  .change-manager-actions button {
+    min-height: 50px;
+  }
+
+  .ask-bar {
+    width: calc(100% - 24px);
+    bottom: calc(82px + env(safe-area-inset-bottom));
+    transition: opacity .18s ease, transform .18s ease;
+  }
+
+  .ask-bar input {
+    min-width: 0;
+  }
+
+  .ask-status {
+    position: absolute;
+    left: 18px;
+    right: 18px;
+    top: -28px;
+    overflow: hidden;
+    padding: 6px 10px;
+    border: 1px solid rgba(91,255,138,.14);
+    border-radius: 999px;
+    background: rgba(8,12,9,.88);
+    color: #9db3a3;
+    font-size: 9px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    backdrop-filter: blur(14px);
+  }
+
+  .mobile-nav {
+    bottom: calc(10px + env(safe-area-inset-bottom));
+    transition: opacity .18s ease, transform .18s ease;
+  }
+}

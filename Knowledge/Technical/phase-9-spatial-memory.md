@@ -88,6 +88,24 @@ Presentation rules:
 
 The Phase 9 deterministic gate now covers both positive contextual distinctions and the fail-closed ambiguous case.
 
+## Mobile Spatial Memory polish slice
+
+The phone experience now treats Spatial Memory as a native interaction surface rather than a compressed desktop canvas.
+
+Current main now:
+
+- turns grounded area navigation into a horizontal snap-scrolling touch rail with explicit selected-area semantics;
+- increases physical-object and relationship touch targets while allowing grounded context labels to wrap rather than truncate;
+- makes immutable state history swipeable as snap-aligned cards;
+- turns evidence, history, object, and Reality Diff drawers into safe-area-aware mobile bottom sheets;
+- contains overscroll inside sheets/scrollers so the background memory surface does not fight the interaction;
+- keeps the selected object's **Ask SENTINEL** action sticky and reachable while the object sheet is scrolled;
+- suppresses the global Ask bar and mobile nav while a modal sheet is open, preventing stacked fixed controls;
+- stacks state-transition content vertically in the mobile Reality Diff drawer;
+- preserves desktop behavior outside the phone breakpoint.
+
+A dedicated deterministic mobile experience gate verifies the required interaction and responsive contracts at source level; the normal TypeScript/Vite build remains the executable compile gate.
+
 ## Trust constraints
 
 - Spatial layout labels must come from persisted environmental memory.
@@ -103,5 +121,4 @@ Phase 9 closes when a real remembered environment can be navigated from area →
 
 ## Next slices
 
-1. Mobile interaction polish for area navigation, relation maps, object cards, drawer, history and Ask.
-2. Validate object-history navigation against a real multi-state environment.
+1. Validate object-history navigation against an existing real multi-state environment without mutating historical state.

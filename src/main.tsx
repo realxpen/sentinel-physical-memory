@@ -131,6 +131,7 @@ function App() {
     ? buildSpatialObjectChanges(memory, selectedSpatialObject)
     : []
   const selectedSpatialHistoryCount = selectedSpatialTimeline.length
+  const overlayOpen = Boolean(selectedChange || historySelection || selectedSpatialObject || selectedObservation !== null || showEnvironmentDialog)
 
   useEffect(() => {
     saveEnvironmentDirectory(environments)
@@ -387,7 +388,7 @@ function App() {
   const observation = selectedObservation === null ? null : result?.observations[selectedObservation]
 
   return (
-    <main className={`app view-${view}`}>
+    <main className={`app view-${view}${overlayOpen ? ' overlay-open' : ''}`}>
       <header className="topbar">
         <SentinelMark active={isWorking} />
         <div className="environment-status environment-switcher">
@@ -435,10 +436,10 @@ function App() {
             {hasGroundedSpatialAreas ? <div className="spatial-area-navigation" aria-label="Spatial area navigation">
               <span>BUILDING</span>
               <div>
-                <button className={normalizedSpatialAreaId === 'all' ? 'active' : ''} type="button" onClick={() => setSelectedSpatialAreaId('all')}>
+                <button className={normalizedSpatialAreaId === 'all' ? 'active' : ''} type="button" aria-current={normalizedSpatialAreaId === 'all' ? 'true' : undefined} onClick={() => setSelectedSpatialAreaId('all')}>
                   <strong>{activeEnvironment.name}</strong><small>{currentSnapshot.objects.length} objects</small>
                 </button>
-                {spatialGroups.map((group) => <button className={normalizedSpatialAreaId === group.id ? 'active' : ''} type="button" key={group.id} onClick={() => setSelectedSpatialAreaId(group.id)}>
+                {spatialGroups.map((group) => <button className={normalizedSpatialAreaId === group.id ? 'active' : ''} type="button" aria-current={normalizedSpatialAreaId === group.id ? 'true' : undefined} key={group.id} onClick={() => setSelectedSpatialAreaId(group.id)}>
                   <strong>{group.name}</strong><small>{group.kind === 'room' ? 'area' : 'unassigned'} · {group.objects.length}</small>
                 </button>)}
               </div>
