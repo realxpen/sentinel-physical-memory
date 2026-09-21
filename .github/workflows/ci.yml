@@ -50,5 +50,7 @@ jobs:
         run: npm run check:phase9-spatial-memory
       - name: Verify Phase 9 mobile spatial memory experience
         run: npm run check:phase9-mobile
+      - name: Verify Phase 10 Ask the Building
+        run: npm run check:phase10-ask-building
       - name: Build
         run: npm run build

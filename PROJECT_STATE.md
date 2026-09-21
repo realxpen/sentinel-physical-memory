@@ -14,7 +14,7 @@ Hackathon track: **Best Apps and Agents**.
 
 ## Current phase
 
-**Phase 10 — Ask the Building: READY TO START / PHASE 9 COMPLETE**
+**Phase 10 — Ask the Building: ACTIVE / FIRST-CLASS GROUNDED REASONING IMPLEMENTED / PRODUCTION SEVEN-QUESTION GATE PENDING**
 
 ## Phase 3 — COMPLETE
 
@@ -1093,9 +1093,10 @@ Canonical production proof: `Knowledge/Technical/phase-9-real-history-proof.md`.
 
 ## Highest-priority gaps
 
-1. Phase 10 — Ask the Building as a first-class reasoning experience over Spatial Memory.
-2. Action + verification closed loop — Phases 11/12.
-3. Reliability, automated tests, security, and least-privilege database-role hardening.
+1. Phase 10 — exact-deployment seven-question production Ask gate.
+2. Phase 11 — Action Planner.
+3. Phase 12 — Verification Agent.
+4. Reliability, automated tests, security, and least-privilege database-role hardening.
 
 ## Locked decisions
 
@@ -1200,3 +1201,29 @@ Phase 8 duplicate-surface hardening: **CI PASS (`35509707873`, commit `ec91d73a`
 Phase 8 phone visual validation: **PARTIAL — mobile grouping and uncertainty semantics passed; duplicate white-wall card diagnosed and hardened; fresh deployed confirmation pending**.
 
 **Next gate: deploy the duplicate-surface hardening, confirm the corrected three-card office result on phone, then run the controlled Phase 7 three-change proof before closing Phases 7 and 8.**
+
+
+## Phase 10 — ACTIVE
+
+Ask the Building has been promoted from a thin conclusion call into the first-class reasoning layer over Spatial Memory.
+
+Implemented:
+
+- deterministic intent selection for all seven MVP questions;
+- authoritative selected/current immutable state resolution;
+- bounded state history, object history, grounded relations, conditions, issues, evidence and Reality Diff history in Nemotron context;
+- temporal fail-closed behavior for historical Ask;
+- context-scoped validation of model evidence/object/issue references;
+- automatic confidence cap when no grounded evidence survives;
+- server-owned grounding envelope with state/evidence/object/issue metadata;
+- editorial conclusion + rationale instead of chat-message UI;
+- current-vs-previous, evidence, confidence and related-object presentation;
+- related physical objects illuminate on Spatial Memory;
+- current/historical reasoning-state selector;
+- all seven source-defined MVP questions surfaced in the product;
+- historical state → Ask scope;
+- object/change → contextual immediate Ask.
+
+Canonical record: `Knowledge/Technical/phase-10-ask-the-building.md`.
+
+Phase 10 remains active only until the exact deployed main commit passes the production seven-question Ask smoke.

@@ -46,6 +46,16 @@ const previewChanges = [
   { mark: '✓', type: 'Resolved', detail: 'Verified changes close the physical-world memory loop.' },
 ]
 
+const ASK_BUILDING_PROMPTS = [
+  { label: 'Attention', question: 'What needs my attention?' },
+  { label: 'Locate', question: 'Where is the electrical panel?' },
+  { label: 'Nearby', question: 'What did you see near the server room?' },
+  { label: 'Changes', question: 'What changed since the last scan?' },
+  { label: 'Priority', question: 'Which change matters most?' },
+  { label: 'Next step', question: 'What should I do?' },
+  { label: 'Verify', question: 'Has it been resolved?' },
+] as const
+
 function SentinelMark({ active = false }: { active?: boolean }) {
   return <div className="brand" aria-label="SENTINEL"><span>SENTINEL</span><i className={active ? 'brand-dot active' : 'brand-dot'} /></div>
 }
@@ -72,6 +82,7 @@ function App() {
   const [selectedObservation, setSelectedObservation] = useState<number | null>(null)
   const [question, setQuestion] = useState('')
   const [askStatus, setAskStatus] = useState('')
+  const [askStateId, setAskStateId] = useState<string>('current')
   const [answer, setAnswer] = useState<AskBuildingResponse | null>(null)
   const [history, setHistory] = useState<EnvironmentalStateHistoryEntry[]>([])
   const [historySelection, setHistorySelection] = useState<EnvironmentalStateHistoryRecord | null>(null)
@@ -131,6 +142,16 @@ function App() {
     ? buildSpatialObjectChanges(memory, selectedSpatialObject)
     : []
   const selectedSpatialHistoryCount = selectedSpatialTimeline.length
+  const resolvedAskStateId = askStateId === 'current' ? memory?.environment.currentStateId : askStateId
+  const askState = resolvedAskStateId ? memory?.states.find((item) => item.id === resolvedAskStateId) : undefined
+  const askHistoryCount = askState && memory ? memory.states.filter((item) => item.version <= askState.version).length : memory?.states.length ?? 0
+  const answerState = answer?.grounding?.state ?? (answer && memory ? (() => {
+    const state = memory.states.find((item) => item.id === answer.stateId)
+    return state ? { id: state.id, version: state.version, capturedAt: state.capturedAt, summary: state.summary, isCurrent: state.id === memory.environment.currentStateId } : undefined
+  })() : undefined)
+  const answerPreviousState = answerState && memory ? memory.states.find((item) => item.version === answerState.version - 1) : undefined
+  const answerDiff = answerState && memory ? memory.diffs.find((item) => item.toStateId === answerState.id) : undefined
+  const answerRelatedObjectIds = new Set(answer?.grounding?.objects.filter((item) => item.isCurrent).map((item) => item.id) ?? answer?.relatedObjectIds ?? [])
   const overlayOpen = Boolean(selectedChange || historySelection || selectedSpatialObject || selectedObservation !== null || showEnvironmentDialog)
 
   useEffect(() => {
@@ -146,6 +167,7 @@ function App() {
     setResult(null)
     setMemory(null)
     setAnswer(null)
+    setAskStateId('current')
     setSelectedObservation(null)
     setHistory([])
     setHistorySelection(null)
@@ -214,6 +236,8 @@ function App() {
     setActiveEnvironmentId(environmentId)
     setQuestion('')
     setAskStatus('')
+    setAskStateId('current')
+    setAnswer(null)
     setSelectedSpatialAreaId('all')
     setView('memory')
   }
@@ -353,7 +377,7 @@ function App() {
     void inspectHistoricalState({ at: parsed.toISOString() })
   }
 
-  async function runAskBuilding(questionText: string) {
+  async function runAskBuilding(questionText: string, requestedStateId?: string) {
     const trimmed = questionText.trim()
     if (!trimmed) return
     if (!memory) {
@@ -361,20 +385,30 @@ function App() {
       return
     }
 
+    const stateId = requestedStateId ?? resolvedAskStateId ?? memory.environment.currentStateId
+    const reasoningState = stateId ? memory.states.find((item) => item.id === stateId) : undefined
+    const reasoningCount = reasoningState ? memory.states.filter((item) => item.version <= reasoningState.version).length : memory.states.length
+
     setQuestion(trimmed)
-    setAskStatus('Reasoning across environmental memory…')
+    setAskStatus(`Reasoning across ${reasoningCount} remembered state${reasoningCount === 1 ? '' : 's'}…`)
     setAnswer(null)
     setView('memory')
     try {
       const response = await fetch('/api/ask-building', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ environmentId: memory.environment.id, question: trimmed, stateId: memory.environment.currentStateId }),
+        body: JSON.stringify({ environmentId: memory.environment.id, question: trimmed, stateId }),
       })
       const payload = await readApiResponse<AskBuildingResponse & { message?: string }>(response, 'Ask request failed')
       if (!response.ok) throw new Error(payload.message ?? 'Ask request failed')
       setAnswer(payload)
       setAskStatus('')
+
+      const currentRelated = payload.grounding?.objects.filter((item) => item.isCurrent) ?? []
+      if (currentRelated.length === 1) {
+        const groupId = spatialGroupForObject(spatialGroups, currentRelated[0].id)
+        if (groupId) setSelectedSpatialAreaId(groupId)
+      }
     } catch (askError) {
       setAskStatus(askError instanceof Error ? askError.message : 'Unable to ask SENTINEL')
     }
@@ -416,10 +450,70 @@ function App() {
           <p>{memory ? `SENTINEL holds ${memory.states.length} grounded environmental state${memory.states.length === 1 ? '' : 's'}, ${memory.objects.length} remembered objects, ${memory.conditions.length} condition${memory.conditions.length === 1 ? '' : 's'} and ${memory.issues.length} actionable issue${memory.issues.length === 1 ? '' : 's'} for ${activeEnvironment.name}.` : `${activeEnvironment.name} has no saved observation yet. Take a photo of the area or use a walkthrough video and SENTINEL will create its own independent environmental memory.`}</p>
         </div>
 
-        {answer && <section className="answer-panel" aria-live="polite">
-          <span className="eyebrow">SENTINEL / CONCLUSION</span>
+        {memory && <section className="ask-building-context" aria-label="Ask the Building">
+          <div className="ask-building-heading">
+            <div>
+              <span className="eyebrow">ASK THE BUILDING / EVIDENCE-GROUNDED</span>
+              <strong>Ask this place what it remembers.</strong>
+              <small>Questions reason over persisted Spatial Memory, immutable state history, grounded relations and Reality Diff—not a generic chat transcript.</small>
+            </div>
+            <label className="ask-state-scope">
+              <span>Reason from</span>
+              <select value={askStateId} onChange={(event) => { setAskStateId(event.target.value); setAnswer(null); setAskStatus('') }} aria-label="Ask reasoning state">
+                <option value="current">Current state · v{memory.states.find((item) => item.id === memory.environment.currentStateId)?.version ?? memory.states.length}</option>
+                {[...memory.states].filter((item) => item.id !== memory.environment.currentStateId).sort((a, b) => b.version - a.version).map((item) => <option key={item.id} value={item.id}>State v{item.version} · {formatStateTimestamp(item.capturedAt)}</option>)}
+              </select>
+              <small>{askHistoryCount} remembered state{askHistoryCount === 1 ? '' : 's'} available to reasoning</small>
+            </label>
+          </div>
+          <div className="ask-prompt-rail" aria-label="Core Ask the Building questions">
+            {ASK_BUILDING_PROMPTS.map((item) => <button type="button" key={item.question} onClick={() => void runAskBuilding(item.question)} disabled={Boolean(askStatus)}><span>{item.label}</span><strong>{item.question}</strong></button>)}
+          </div>
+        </section>}
+
+        {answer && <section className="answer-panel phase10-answer" aria-live="polite">
+          <div className="answer-heading-row">
+            <div><span className="eyebrow">SENTINEL / CONCLUSION</span><small>{answer.grounding?.intent ? answer.grounding.intent.toUpperCase() + ' REASONING' : 'GROUNDED REASONING'}</small></div>
+            <button type="button" onClick={() => { setAnswer(null); setQuestion('') }} aria-label="Clear Ask the Building answer">×</button>
+          </div>
           <h2>{answer.answer}</h2>
-          <div className="answer-meta"><span>Confidence {Math.round(answer.confidence * 100)}%</span><span>{answer.evidenceIds.length} evidence reference(s)</span><span>State {answer.stateId}</span></div>
+          {answer.rationale && <div className="answer-rationale"><span>WHY THIS MATTERS</span><p>{answer.rationale}</p></div>}
+          <div className="answer-meta">
+            <span>Confidence {Math.round(answer.confidence * 100)}%</span>
+            <span>{answer.evidenceIds.length} grounded evidence</span>
+            <span>{answerState ? `State v${answerState.version}` : 'Remembered state'}</span>
+            <span>{answer.grounding?.historyStateIds.length ?? 1} state{(answer.grounding?.historyStateIds.length ?? 1) === 1 ? '' : 's'} considered</span>
+          </div>
+          <div className="answer-grounding-grid">
+            <div className="answer-grounding-block answer-comparison">
+              <span className="answer-label">CURRENT VS PREVIOUS</span>
+              <div><strong>{answerState ? `State v${answerState.version}` : stateLabel(memory, answer.stateId)}</strong><small>{answerState ? formatStateTimestamp(answerState.capturedAt) : shortStateId(answer.stateId)}</small></div>
+              <b>←</b>
+              <div><strong>{answerPreviousState ? `State v${answerPreviousState.version}` : 'No earlier state'}</strong><small>{answerDiff?.summary ?? (answerPreviousState ? formatStateTimestamp(answerPreviousState.capturedAt) : 'First remembered state')}</small></div>
+            </div>
+            <div className="answer-grounding-block">
+              <span className="answer-label">RELATED PHYSICAL OBJECTS</span>
+              <div className="answer-object-links">
+                {(answer.grounding?.objects ?? []).length === 0 ? <small>No object reference was needed for this conclusion.</small> : answer.grounding!.objects.map((item) => <button type="button" key={item.id} onClick={() => {
+                  if (item.isCurrent && currentSnapshot?.objects.some((object) => object.id === item.id)) { inspectSpatialObject(item.id); return }
+                  const historicalStateId = item.stateIds.at(-1)
+                  if (historicalStateId) void inspectHistoricalState({ stateId: historicalStateId })
+                }}><strong>{item.name}</strong><small>{item.category}{item.position ? ' · ' + item.position : ''} · {item.isCurrent ? 'current' : 'historical'}</small></button>)}
+              </div>
+            </div>
+            <div className="answer-grounding-block">
+              <span className="answer-label">OPERATIONAL ISSUES</span>
+              <div className="answer-issue-links">
+                {(answer.grounding?.issues ?? []).length === 0 ? <small>No operational issue was cited.</small> : answer.grounding!.issues.map((item) => <span key={item.id}><strong>{item.title}</strong><small>{item.severity} · {item.status} · {Math.round(item.confidence * 100)}%</small></span>)}
+              </div>
+            </div>
+            <details className="answer-grounding-block answer-evidence" open={answer.evidenceIds.length > 0 && answer.evidenceIds.length <= 4}>
+              <summary><span className="answer-label">SHOW EVIDENCE</span><strong>{answer.grounding?.evidence.length ?? answer.evidenceIds.length} reference{(answer.grounding?.evidence.length ?? answer.evidenceIds.length) === 1 ? '' : 's'} ↘</strong></summary>
+              <div className="answer-evidence-list">
+                {(answer.grounding?.evidence ?? []).length === 0 ? <small>No evidence ID survived grounding validation. Confidence is automatically capped when that happens.</small> : answer.grounding!.evidence.map((item) => <div key={item.id}><span>{item.type} · {formatStateTimestamp(item.capturedAt)}</span><strong>{item.description}</strong><small>{item.frameIndex === undefined ? item.sourceId : `Frame ${item.frameIndex} · ${item.sourceId}`}</small></div>)}
+              </div>
+            </details>
+          </div>
         </section>}
 
         <div className="environment-stage spatial-memory-stage" aria-label={activeEnvironment.name + ' environmental memory canvas'}>
@@ -461,7 +555,7 @@ function App() {
                   {group.objects.length === 0 ? <span className="spatial-room-empty">No grounded objects assigned to this area yet.</span> : group.objects.map((item) => {
                     const tone = spatialObjectTone(item, currentSnapshot)
                     const displayName = spatialObjectDisplayNames.get(item.id) ?? item.name
-                    const relationshipClass = selectedSpatialObjectId === item.id ? ' selected-spatial' : relatedSpatialObjectIds.has(item.id) ? ' related-spatial' : ''
+                    const relationshipClass = selectedSpatialObjectId === item.id ? ' selected-spatial' : relatedSpatialObjectIds.has(item.id) ? ' related-spatial' : answerRelatedObjectIds.has(item.id) ? ' answer-related-spatial' : ''
                     return <button className={'spatial-object ' + tone + relationshipClass} type="button" key={item.id} onClick={() => inspectSpatialObject(item.id)} aria-label={'Inspect ' + displayName}>
                       <i />
                       <span><strong>{displayName}</strong><small>{spatialObjectSubtitle(item)}</small></span>
@@ -627,9 +721,10 @@ function App() {
 
           <div className="change-manager-actions">
             {(changeBucket(selectedChange) === 'attention' || changeBucket(selectedChange) === 'verification') && <button type="button" className="change-ask-action" onClick={() => {
-              setQuestion(`What should I do about: ${selectedChange.title}?`)
+              const changeQuestion = `What should I do about: ${selectedChange.title}?`
+              setAskStateId(latestDiff.toStateId)
               setSelectedChangeId(null)
-              setView('memory')
+              void runAskBuilding(changeQuestion, latestDiff.toStateId)
             }}>Ask SENTINEL what to do ↗</button>}
             <button type="button" onClick={() => { setSelectedChangeId(null); libraryInputRef.current?.click() }}>Choose verification photo</button>
           </div>
@@ -661,6 +756,12 @@ function App() {
             <button type="button" disabled={!historySelection.previousStateId} onClick={() => historySelection.previousStateId && void inspectHistoricalState({ stateId: historySelection.previousStateId })}>← Older state</button>
             <button type="button" disabled={!historySelection.nextStateId} onClick={() => historySelection.nextStateId && void inspectHistoricalState({ stateId: historySelection.nextStateId })}>Newer state →</button>
           </div>
+          <button className="history-ask-action" type="button" onClick={() => {
+            setAskStateId(historySelection.state.id)
+            setQuestion('What did you see in this remembered state?')
+            setHistorySelection(null)
+            setView('memory')
+          }}>Ask from State v{historySelection.state.version} ↗</button>
 
           <div className="history-snapshot-section">
             <span className="eyebrow">OBJECTS AS REMEMBERED</span>
@@ -754,8 +855,9 @@ function App() {
           </div>}
           <button className="spatial-ask-button" type="button" onClick={() => {
             const objectQuestion = 'What do you know about ' + selectedSpatialObjectDisplayName + ', where is it, how has it changed over time, and does it need attention?'
+            setAskStateId(currentSnapshot.stateId)
             setSelectedSpatialObjectId(null)
-            void runAskBuilding(objectQuestion)
+            void runAskBuilding(objectQuestion, currentSnapshot.stateId)
           }}>Ask SENTINEL about this object ↗</button>
         </aside>
       </div>}
@@ -766,7 +868,7 @@ function App() {
 
       <form className={`ask-bar ${answer ? 'has-answer' : ''}`} role="search" onSubmit={askBuilding}>
         <span className="ask-spark">✦</span>
-        <input value={question} onChange={(event) => { setQuestion(event.target.value); if (askStatus) setAskStatus('') }} placeholder={memory ? `Ask ${activeEnvironment.name}…` : `Observe ${activeEnvironment.name} first…`} aria-label="Ask this environment" />
+        <input value={question} onChange={(event) => { setQuestion(event.target.value); if (askStatus) setAskStatus('') }} placeholder={memory ? `Ask ${askState ? `State v${askState.version}` : activeEnvironment.name}…` : `Observe ${activeEnvironment.name} first…`} aria-label="Ask this environment" />
         <button type="submit" aria-label="Ask SENTINEL" disabled={!question.trim() || askStatus.startsWith('Reasoning')}>↗</button>
         {askStatus && <span className="ask-status">{askStatus}</span>}
       </form>

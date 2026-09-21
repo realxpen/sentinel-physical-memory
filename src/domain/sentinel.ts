@@ -72,7 +72,29 @@ export interface VerificationResult { id: ID; environmentId: ID; actionPlanId?: 
 export interface ScanSource { id: ID; environmentId: ID; modality: ObservationModality; uri: string; capturedAt: ISODateTime; durationMs?: number; metadata?: Record<string, string | number | boolean> }
 export interface EnvironmentalMemory { environment: Environment; states: EnvironmentalState[]; snapshots: EnvironmentalStateSnapshot[]; objects: SpatialObject[]; conditions: EnvironmentalCondition[]; issues: Issue[]; observations: Observation[]; evidence: Evidence[]; relations: EnvironmentRelation[]; sources: ScanSource[]; diffs: EnvironmentalDiff[] }
 export interface AskBuildingRequest { environmentId: ID; question: string; stateId?: ID }
-export interface AskBuildingResponse { answer: string; confidence: Confidence; stateId: ID; evidenceIds: ID[]; relatedObjectIds: ID[]; relatedIssueIds: ID[] }
+export type AskBuildingIntent = 'attention' | 'location' | 'nearby' | 'change' | 'priority' | 'action' | 'resolution' | 'general'
+export interface AskBuildingStateReference { id: ID; version: number; capturedAt: ISODateTime; summary: string; isCurrent: boolean }
+export interface AskBuildingEvidenceReference { id: ID; sourceId: ID; type: EvidenceType; capturedAt: ISODateTime; description: string; frameIndex?: number; timestampMs?: number; uri?: string; stateIds: ID[] }
+export interface AskBuildingObjectReference { id: ID; name: string; category: ObjectCategory; state?: string; position?: string; confidence: Confidence; stateIds: ID[]; isCurrent: boolean }
+export interface AskBuildingIssueReference { id: ID; title: string; severity: IssueSeverity; status: IssueStatus; confidence: Confidence; stateIds: ID[]; isCurrent: boolean }
+export interface AskBuildingGrounding {
+  intent: AskBuildingIntent
+  state: AskBuildingStateReference
+  historyStateIds: ID[]
+  evidence: AskBuildingEvidenceReference[]
+  objects: AskBuildingObjectReference[]
+  issues: AskBuildingIssueReference[]
+}
+export interface AskBuildingResponse {
+  answer: string
+  rationale?: string
+  confidence: Confidence
+  stateId: ID
+  evidenceIds: ID[]
+  relatedObjectIds: ID[]
+  relatedIssueIds: ID[]
+  grounding?: AskBuildingGrounding
+}
 export interface PerceptionResult { sourceId: ID; observations: Observation[]; objects: SpatialObject[]; conditions: EnvironmentalCondition[]; relations: EnvironmentRelation[]; evidence: Evidence[] }
 export type TemporalChangeKind = 'state_change' | 'moved'
 export interface VerifiedTemporalChange {

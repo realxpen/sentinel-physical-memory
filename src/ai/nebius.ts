@@ -101,7 +101,12 @@ export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapte
       'Every factual claim about the environment must be supported by evidenceIds from the context.',
       'If the memory does not contain enough evidence, say that clearly instead of guessing.',
       'Treat Observed conditions as direct evidence and Inferred conditions as interpretations with lower epistemic authority.',
-      'Return ONLY JSON with: answer (string), confidence (0..1), stateId (string), evidenceIds (string[]), relatedObjectIds (string[]), relatedIssueIds (string[]).',
+      'Write answer as a concise editorial conclusion, not a chatty assistant preamble. Lead with the conclusion.',
+      'Write rationale as a short explanation of why the memory supports that conclusion. Keep recommendations explicitly framed as recommendations.',
+      'For location questions, never invent metric distance or room geometry that is absent from context.',
+      'For change/resolution questions, use persisted state history and diffs. Not re-observed is uncertainty, not proof of removal or resolution.',
+      'For historical-state questions, never use later states as evidence for what was true then.',
+      'Return ONLY JSON with: answer (string), rationale (string), confidence (0..1), stateId (string), evidenceIds (string[]), relatedObjectIds (string[]), relatedIssueIds (string[]).',
       `Question: ${request.request.question}`,
       `Requested state: ${request.request.stateId ?? 'current'}`,
       'Environmental memory context:',
@@ -373,6 +378,7 @@ export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapte
 
     return {
       answer: value.answer,
+      ...(typeof value.rationale === 'string' && value.rationale.trim() ? { rationale: value.rationale.trim() } : {}),
       confidence: Math.max(0, Math.min(1, value.confidence)),
       stateId: value.stateId,
       evidenceIds: value.evidenceIds,

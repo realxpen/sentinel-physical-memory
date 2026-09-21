@@ -1,0 +1,39 @@
+name: Phase 10 Production Ask Smoke
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase10-ask-building.yml'
+      - 'api/ask-building.ts'
+      - 'src/ai/model.ts'
+      - 'src/ai/nebius.ts'
+      - 'src/domain/sentinel.ts'
+      - 'src/memory/ask-building.ts'
+      - 'src/main.tsx'
+      - 'src/integration.css'
+      - 'scripts/check-phase10-ask-building.mjs'
+      - 'scripts/check-phase10-production-ask.mjs'
+      - 'package.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ask-production:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Run seven-question production Ask smoke
+        env:
+          SENTINEL_PRODUCTION_ORIGIN: https://sentinel-physical-memory.vercel.app
+          SENTINEL_PHASE10_ENVIRONMENT_ID: env_warehouse_73266674
+          SENTINEL_EXPECTED_DEPLOYMENT_COMMIT: ${{ github.sha }}
+        run: node ./scripts/check-phase10-production-ask.mjs
