@@ -14,7 +14,7 @@ Hackathon track: **Best Apps and Agents**.
 
 ## Current phase
 
-**Phase 9 — Spatial Memory Experience: ACTIVE / MOBILE SPATIAL MEMORY POLISHED / REAL MULTI-STATE VALIDATION NEXT**
+**Phase 10 — Ask the Building: READY TO START / PHASE 9 COMPLETE**
 
 ## Phase 3 — COMPLETE
 
@@ -996,7 +996,7 @@ The earlier exact-output production replay remains useful as a historical proof,
 
 No additional Office Proof 7/8/9 environment is required to reopen these phases unless a future regression breaks their deterministic contracts.
 
-## Phase 9 — ACTIVE
+## Phase 9 — COMPLETE
 
 Spatial Memory now replaces the previous decorative placeholder map.
 
@@ -1039,7 +1039,20 @@ Current main:
 
 Canonical record: `Knowledge/Technical/phase-9-spatial-memory.md`.
 
-Phase 9 remains active until a real persisted environment can be navigated area → object → condition/evidence/history/Ask without fabricated spatial labels.
+Phase 9 closed on the existing real Neon environment `env_warehouse_73266674` without creating a new scan or rewriting history.
+
+Verified read-only production proof:
+
+- 3 immutable states / 3 snapshots;
+- 36 evidence records / 3 sources / 2 diffs;
+- five durable objects persist across all three states;
+- State v2 reopens grounded relations, conditions and an operational issue for durable objects;
+- State v3 honestly falls back to environment-level Spatial Memory because no room graph is persisted;
+- current / previous / by-ID / by-time history traversal works through `/api/states`;
+- before/after canonical snapshot fingerprints remain unchanged by validation;
+- ongoing integration gate: `.github/workflows/phase9-real-history.yml`.
+
+Canonical production proof: `Knowledge/Technical/phase-9-real-history-proof.md`.
 
 ## Verified implementation baseline
 
@@ -1080,10 +1093,9 @@ Phase 9 remains active until a real persisted environment can be navigated area 
 
 ## Highest-priority gaps
 
-1. Phase 9 — read-only real multi-state object-history validation and Phase 9 exit decision.
-2. Phase 10 — Ask the Building as a first-class reasoning experience over Spatial Memory.
-3. Action + verification closed loop — Phases 11/12.
-4. Reliability, automated tests, security, and least-privilege database-role hardening.
+1. Phase 10 — Ask the Building as a first-class reasoning experience over Spatial Memory.
+2. Action + verification closed loop — Phases 11/12.
+3. Reliability, automated tests, security, and least-privilege database-role hardening.
 
 ## Locked decisions
 

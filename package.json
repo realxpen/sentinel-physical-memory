@@ -29,7 +29,8 @@
     "check:phase8-presentation": "node --experimental-strip-types ./scripts/check-phase8-change-presentation.mjs",
     "check:temporal-photo-diff": "node --experimental-strip-types ./scripts/check-temporal-photo-diff.mjs",
     "check:phase9-spatial-memory": "node ./scripts/check-phase9-spatial-memory.mjs",
-    "check:phase9-mobile": "node ./scripts/check-phase9-mobile-experience.mjs"
+    "check:phase9-mobile": "node ./scripts/check-phase9-mobile-experience.mjs",
+    "check:phase9-real-history": "node ./scripts/check-phase9-real-history.mjs"
   },
   "dependencies": {
     "@neondatabase/serverless": "latest",

@@ -1,6 +1,6 @@
 # Phase 9 — Spatial Memory Experience
 
-Status: **ACTIVE**
+Status: **COMPLETE**
 
 ## Objective
 
@@ -106,6 +106,24 @@ Current main now:
 
 A dedicated deterministic mobile experience gate verifies the required interaction and responsive contracts at source level; the normal TypeScript/Vite build remains the executable compile gate.
 
+## Real multi-state production validation
+
+Phase 9 closes against the existing real Neon environment `env_warehouse_73266674`; no new Office Proof environment is created.
+
+The read-only production gate proves:
+
+- three immutable persisted states can be listed and reopened through `GET /api/states`;
+- current / previous / state-by-ID / state-by-time navigation resolves the real stored snapshots;
+- durable objects remain navigable across multiple immutable states;
+- historical object inspection restores state-scoped relations, conditions, issues and evidence;
+- the current state, which has no grounded room graph, remains an honest environment-level Spatial Memory group;
+- relation visualization resolves only endpoints present in the selected immutable snapshot;
+- a canonical before/after snapshot fingerprint is unchanged by validation.
+
+Canonical proof: `Knowledge/Technical/phase-9-real-history-proof.md`.
+
+The integration is continuously checked by `.github/workflows/phase9-real-history.yml`. The workflow uses GET-only production history reads; it does not scan, save, create a state, or mutate Neon.
+
 ## Trust constraints
 
 - Spatial layout labels must come from persisted environmental memory.
@@ -119,6 +137,6 @@ A dedicated deterministic mobile experience gate verifies the required interacti
 
 Phase 9 closes when a real remembered environment can be navigated from area → object → state / condition / evidence / history / Ask, and the interface still behaves honestly when room relationships are sparse or absent.
 
-## Next slices
+## Exit status
 
-1. Validate object-history navigation against an existing real multi-state environment without mutating historical state.
+**COMPLETE.** The next product phase is Phase 10 — Ask the Building.
