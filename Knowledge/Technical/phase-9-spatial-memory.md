@@ -50,7 +50,10 @@ Current main now:
   - grounded relationships;
   - associated conditions;
   - associated operational issues;
-- prepares a contextual Ask question from the selected object.
+- prepares a contextual Ask question from the selected object;
+- shows immutable per-object history across remembered state versions, including state, grounded position, confidence and source image when available;
+- shows Reality Diff events tied to that physical object and lets the user jump directly to the relevant Changes entry;
+- executes Ask SENTINEL directly from the selected object instead of requiring a second submit step.
 
 The canvas stays evidence-first: missing room or position knowledge is shown as missing rather than fabricated.
 
@@ -71,6 +74,6 @@ Phase 9 closes when a real remembered environment can be navigated from area →
 
 1. Spatial relationship visualization between selected objects.
 2. Area-focused filtering / zoom.
-3. Current-vs-historical object memory from the object inspector.
-4. Better object identity labels for repeated instances when grounded spatial context exists.
-5. Mobile interaction polish.
+3. Better object identity labels for repeated instances when grounded spatial context exists.
+4. Mobile interaction polish.
+5. Validate object-history navigation against a real multi-state environment.
