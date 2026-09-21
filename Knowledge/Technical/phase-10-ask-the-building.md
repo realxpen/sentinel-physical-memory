@@ -1,6 +1,6 @@
 # Phase 10 — Ask the Building
 
-Status: **ACTIVE / IMPLEMENTED / PRODUCTION SEVEN-QUESTION GATE PENDING**
+Status: **COMPLETE**
 
 ## Objective
 
@@ -83,6 +83,40 @@ To make the serverless boundary fail closed and observable:
 
 This does not relax any reasoning or evidence rule. It makes stale/mismatched serverless bundling detectable rather than silently acceptable.
 
-## Exit condition
+## Production proof
 
-Phase 10 closes when all seven questions pass the deterministic product gate and the exact deployed main commit passes the seven-question production Ask smoke.
+Phase 10 closed on exact deployed commit:
+
+`1b5b00e77bd6fa6f0d30458d4c08b43f85e01309`
+
+Production workflow:
+
+- **Phase 10 Production Ask Smoke**
+- run `35617092565`
+- result: **SUCCESS**
+- production persistence: **Neon**
+- reasoning contract: **phase10-grounded-v1**
+- real environment: `env_warehouse_73266674`
+- immutable history supplied to every question: **3 states**
+
+The seven source-defined MVP questions all passed through real production Nemotron reasoning:
+
+| Intent | Question | Confidence | Evidence | Related objects | Related issues |
+| --- | --- | ---: | ---: | ---: | ---: |
+| attention | What needs my attention? | 80% | 10 | 2 | 1 |
+| location | Where is the electrical panel? | 100% | 10 | 6 | 0 |
+| nearby | What did you see near the server room? | 90% | 3 | 6 | 0 |
+| change | What changed since the last scan? | 50% | 10 | 2 | 1 |
+| priority | Which change matters most? | 85% | 3 | 2 | 1 |
+| action | What should I do? | 75% | 5 | 2 | 1 |
+| resolution | Has it been resolved? | 60% | 10 | 2 | 1 |
+
+These figures are production response metadata, not hand-authored answer scores. The gate intentionally does not require deterministic wording from Nemotron; it verifies the reasoning contract, Neon grounding, state scope, evidence/object/issue grounding, and confidence constraints.
+
+The smoke first detected a serverless bundle mismatch on commit `81433a819bbe644ba872f2489f3e529e6bf835db`. Phase 10 was not closed on that run. The API boundary was then hardened so a successful response must contain the server-owned grounding envelope and `phase10-grounded-v1` marker. The exact-deployment rerun passed all seven questions.
+
+## Exit status
+
+**COMPLETE.**
+
+Ask the Building is now the first-class evidence-grounded reasoning surface over Spatial Memory. The next build phase is **Phase 11 — Action Planner**.

@@ -14,7 +14,7 @@ Hackathon track: **Best Apps and Agents**.
 
 ## Current phase
 
-**Phase 10 — Ask the Building: ACTIVE / FIRST-CLASS GROUNDED REASONING IMPLEMENTED / PRODUCTION SEVEN-QUESTION GATE PENDING**
+**Phase 11 — Action Planner: READY TO START / PHASE 10 COMPLETE**
 
 ## Phase 3 — COMPLETE
 
@@ -1093,10 +1093,9 @@ Canonical production proof: `Knowledge/Technical/phase-9-real-history-proof.md`.
 
 ## Highest-priority gaps
 
-1. Phase 10 — exact-deployment seven-question production Ask gate.
-2. Phase 11 — Action Planner.
-3. Phase 12 — Verification Agent.
-4. Reliability, automated tests, security, and least-privilege database-role hardening.
+1. Phase 11 — Action Planner.
+2. Phase 12 — Verification Agent.
+3. Reliability, automated tests, security, and least-privilege database-role hardening.
 
 ## Locked decisions
 
@@ -1203,7 +1202,7 @@ Phase 8 phone visual validation: **PARTIAL — mobile grouping and uncertainty s
 **Next gate: deploy the duplicate-surface hardening, confirm the corrected three-card office result on phone, then run the controlled Phase 7 three-change proof before closing Phases 7 and 8.**
 
 
-## Phase 10 — ACTIVE
+## Phase 10 — COMPLETE
 
 Ask the Building has been promoted from a thin conclusion call into the first-class reasoning layer over Spatial Memory.
 
@@ -1226,4 +1225,16 @@ Implemented:
 
 Canonical record: `Knowledge/Technical/phase-10-ask-the-building.md`.
 
-Phase 10 remains active only until the exact deployed main commit passes the production seven-question Ask smoke.
+Phase 10 closed on exact deployed commit `1b5b00e77bd6fa6f0d30458d4c08b43f85e01309`.
+
+Production proof:
+
+- Phase 10 Production Ask Smoke run `35617092565` — **SUCCESS**;
+- `phase10-grounded-v1` confirmed from the deployed API;
+- persistence reported **Neon**;
+- all seven source-defined MVP questions passed against `env_warehouse_73266674`;
+- every response grounded to the authoritative current state and three-state immutable history;
+- returned evidence/object/issue references were constrained to the server-owned grounding envelope;
+- the initial failed production bundle check was diagnosed and fixed before Phase 10 was closed.
+
+Canonical record: `Knowledge/Technical/phase-10-ask-the-building.md`.
