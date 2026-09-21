@@ -14,7 +14,7 @@ Hackathon track: **Best Apps and Agents**.
 
 ## Current phase
 
-**Phase 9 — Spatial Memory Experience: ACTIVE / LIVE DATA-DRIVEN CANVAS IMPLEMENTED / FIRST DEPLOYED VALIDATION NEXT**
+**Phase 9 — Spatial Memory Experience: ACTIVE / LIVE CANVAS + OBJECT MEMORY HISTORY + DIRECT OBJECT ASK IMPLEMENTED / AREA FOCUS NEXT**
 
 ## Phase 3 — COMPLETE
 
@@ -1017,7 +1017,11 @@ Current main:
   - grounded relationships;
   - current conditions;
   - current operational issues;
-- prepares a contextual Ask query from the selected physical object.
+  - immutable object history across remembered state versions;
+  - source-image evidence when available;
+  - Reality Diff events tied to the object;
+- lets the user jump from an object directly to its relevant Changes entry;
+- executes a contextual Ask SENTINEL query directly from the selected physical object.
 
 Canonical record: `Knowledge/Technical/phase-9-spatial-memory.md`.
 
@@ -1062,11 +1066,10 @@ Phase 9 remains active until a real persisted environment can be navigated area 
 
 ## Highest-priority gaps
 
-1. **Phase 7 real phone proof — intentionally create three supported changes and verify Diff v2 in production.**
-2. **Phase 8 phone visual validation — verify the duplicate-surface correction on a fresh deployed comparison and complete the remaining drawer/action checks.**
-3. Phase 9 — Spatial Memory experience through the facility-operations lens.
-4. Action + verification closed loop — Phases 11/12.
-5. Reliability, automated tests, security, and least-privilege database-role hardening.
+1. Phase 9 — area focus / spatial relationship navigation and real multi-state object-history validation.
+2. Phase 10 — Ask the Building as a first-class reasoning experience over Spatial Memory.
+3. Action + verification closed loop — Phases 11/12.
+4. Reliability, automated tests, security, and least-privilege database-role hardening.
 
 ## Locked decisions
 
