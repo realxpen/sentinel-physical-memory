@@ -98,6 +98,7 @@ export interface VerificationInferenceRequest {
   role: 'verification'
   request: VerificationRequest
   context: string
+  artifacts: ScanArtifact[]
 }
 export interface VerificationModelAdapter {
   readonly provider: string
