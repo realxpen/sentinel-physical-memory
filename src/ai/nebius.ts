@@ -186,22 +186,25 @@ export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapte
 
   async verifyConditions(request: VerificationInferenceRequest): Promise<VerificationDraft> {
     const prompt = [
-      'Verify earlier physical-environment conditions against the CURRENT state using ONLY the supplied SENTINEL verification context.',
+      'Verify earlier physical-environment conditions against the CURRENT state using ONLY the supplied SENTINEL verification context and CURRENT rescan image(s).',
+      'Every supplied image is from the CURRENT state. Use it as direct visual evidence only; do not assume anything from missing detections.',
       'Missing from the current condition list is NOT evidence of resolution.',
-      'resolved = positive current evidence from the same physical object/area shows the earlier condition is no longer present.',
-      'remaining = positive current evidence still supports the earlier condition.',
+      'resolved = positive current visual evidence from the same physical object/area shows the earlier condition is no longer present.',
+      'For access obstruction, a visibly re-observed same doorway with the doorway path clearly unobstructed can support resolved even when the former obstacle is no longer visible.',
+      'remaining = positive current visual evidence still supports the earlier condition.',
       'inconclusive = the relevant object/area was not clearly re-observed or current evidence cannot distinguish resolved from remaining.',
-      'Use only CURRENT_EVIDENCE IDs and CURRENT_OBJECT IDs from the context.',
-      'Never infer resolution from an action plan, issue disappearance, generic normal wording, or lack of detection.',
+      'Use only CURRENT_EVIDENCE IDs and CURRENT_OBJECT IDs from the context. Link visual claims to the CURRENT_EVIDENCE ID whose source matches the supplied image source.',
+      'Never infer resolution from an action plan, issue disappearance, generic normal wording, or lack of detection alone.',
       'Keep each reason concise and factual.',
       'Return ONLY JSON with shape: {"verdicts":[{"conditionId":"id","status":"resolved|remaining|inconclusive","confidence":0.0,"reason":"string","evidenceIds":["id"],"relatedObjectIds":["id"]}]}.',
       'Verification context:',
       request.context,
     ].join('\n')
 
+    const content = await this.buildContent(prompt, request.artifacts)
     const response = await this.requestCompletion(
-      'You are SENTINEL Verification Agent. Be conservative: positive current evidence is required for resolved or remaining; otherwise return inconclusive.',
-      [{ type: 'text', text: prompt }],
+      'You are SENTINEL Verification Agent. Inspect the supplied CURRENT rescan image(s) conservatively. Positive visual evidence is required for resolved or remaining; otherwise return inconclusive.',
+      content,
     )
     return this.parseVerificationDraft(this.extractText(response))
   }
