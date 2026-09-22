@@ -762,11 +762,11 @@ try {
   if (!ordinaryGeometryPrompts[2].includes('do not call the doorway an emergency exit')) {
     throw new Error('ordinary geometry audit must preserve the emergency-exit identity boundary')
   }
-  const ordinaryAccessConditions = ordinaryGeometryResult.conditions.filter((item) => item.title === 'Doorway access obstructed')
-  if (ordinaryAccessConditions.length !== 1) {
-    throw new Error(`expected exactly one ordinary doorway access condition, got ${ordinaryAccessConditions.length}`)
+  const ordinaryProviderConditions = ordinaryGeometryResult.conditions.filter((item) => item.title === 'Doorway access obstructed')
+  if (ordinaryProviderConditions.length === 0) {
+    throw new Error('ordinary geometry relation did not enable deterministic doorway access derivation')
   }
-  if (ordinaryAccessConditions[0].basis !== 'inferred' || ordinaryAccessConditions[0].confidence < 0.85) {
+  if (ordinaryProviderConditions.some((item) => item.basis !== 'inferred' || item.confidence < 0.85)) {
     throw new Error('ordinary doorway condition must remain strong inferred evidence, not direct observation')
   }
   if (ordinaryGeometryResult.state.issueIds.length !== 1) {
@@ -776,9 +776,20 @@ try {
     throw new Error('ordinary geometry audit relation did not survive the scan pipeline')
   }
 
+  const ordinaryMemory = await ordinaryGeometryPipeline.getMemory(ordinaryGeometryEnvironmentId)
+  const ordinarySnapshot = ordinaryMemory?.snapshots.find((item) => item.stateId === ordinaryGeometryResult.state.id)
+  const ordinaryPersistedConditions = ordinarySnapshot?.conditions.filter((item) => item.title === 'Doorway access obstructed') ?? []
+  if (ordinaryPersistedConditions.length !== 1) {
+    throw new Error(`expected exactly one persisted semantic ordinary doorway condition, got ${ordinaryPersistedConditions.length}`)
+  }
+  if (ordinarySnapshot?.issues.length !== 1 || ordinarySnapshot.issues[0].type !== 'access' || ordinarySnapshot.issues[0].severity !== 'medium') {
+    throw new Error('ordinary doorway obstruction must persist exactly one medium access issue')
+  }
+
   console.log('PASS  ordinary chair + door without placement triggers one targeted access-geometry audit')
   console.log('PASS  targeted audit grounds chair -> door in_front_of from current image evidence')
-  console.log('PASS  ordinary doorway obstruction derives exactly one inferred medium access issue')
+  console.log('PASS  pass-local aliases consolidate into exactly one persisted ordinary doorway condition')
+  console.log('PASS  ordinary doorway obstruction persists exactly one inferred medium access issue')
   console.log('PASS  ordinary geometry audit cannot silently relabel the doorway as an emergency exit')
 
   const completionEnvironmentId = 'condition-audit-exit-sign-completion-test'
