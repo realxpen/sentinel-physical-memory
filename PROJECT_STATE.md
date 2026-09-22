@@ -14,7 +14,7 @@ Hackathon track: **Best Apps and Agents**.
 
 ## Current phase
 
-**Phase 11 — Action Planner: READY TO START / PHASE 10 COMPLETE**
+**Phase 11 — Action Planner: ACTIVE / EVIDENCE-GROUNDED RECOMMENDATIONS IMPLEMENTED / PRODUCTION HISTORICAL-STATE GATE PENDING**
 
 ## Phase 3 — COMPLETE
 
@@ -1093,7 +1093,7 @@ Canonical production proof: `Knowledge/Technical/phase-9-real-history-proof.md`.
 
 ## Highest-priority gaps
 
-1. Phase 11 — Action Planner.
+1. Phase 11 — exact-deployment historical-state Action Planner production gate.
 2. Phase 12 — Verification Agent.
 3. Reliability, automated tests, security, and least-privilege database-role hardening.
 
@@ -1238,3 +1238,36 @@ Production proof:
 - the initial failed production bundle check was diagnosed and fixed before Phase 10 was closed.
 
 Canonical record: `Knowledge/Technical/phase-10-ask-the-building.md`.
+
+
+## Phase 11 — ACTIVE
+
+Action Planner now turns a grounded environmental condition into a bounded **Recommended** action sequence without crossing into execution or verification.
+
+Implemented:
+
+- new `ActionPlannerService` over the selected immutable environmental state;
+- new `POST /api/action-plan` production contract;
+- dedicated Nemotron action-planning mode with a compact structured draft;
+- default planning scope limited to non-normal conditions and active issues in the selected state;
+- optional condition / issue / object targeting that fails closed when an ID is outside the selected immutable snapshot;
+- every model-returned condition / issue / object / evidence ID filtered through server-owned grounding;
+- ungrounded steps dropped rather than presented;
+- all accepted steps forced to `status: recommended`;
+- action priority capped by the authority of the related condition / issue;
+- inferred conditions remain at most medium action priority;
+- hazardous specialist work is framed as safe isolation / qualified-professional escalation, not unqualified repair instructions;
+- no invented costs, marketplace, contractor search, procurement, payments, or schedules;
+- normal current states do not manufacture work;
+- deterministic final **Rescan to verify** step, with resolution explicitly deferred to Phase 12;
+- first-class dark editorial **ACTION PLAN / RECOMMENDED** UI;
+- historical-plan warning when the selected state is not current;
+- contextual Action Plan entry from Ask the Building and actionable object inspectors;
+- action-related current objects illuminate separately in Spatial Memory;
+- human checkpoint states that nothing is completed or verified until a new observation is compared.
+
+The production proof deliberately targets immutable Warehouse State v2 (`state_9eef338f-2f7c-49f8-ac54-c8901f678d04`), which contains the real grounded exit-obstruction condition / issue. Current State v3 is normal and must not silently inherit the old issue.
+
+Canonical implementation record: `Knowledge/Technical/phase-11-action-planner.md`.
+
+Phase 11 remains active only until the exact deployed main commit passes the historical-state production Action Planner smoke.

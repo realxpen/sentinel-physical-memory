@@ -65,9 +65,29 @@ export interface EnvironmentalStateSnapshot { stateId: ID; environmentId: ID; ob
 export interface Environment { id: ID; name: string; type: EnvironmentType; description?: string; createdAt: ISODateTime; updatedAt: ISODateTime; currentStateId?: ID; stateIds: ID[]; roomIds: ID[]; objectIds: ID[]; issueIds: ID[] }
 export interface Change { id: ID; environmentId: ID; fromStateId: ID; toStateId: ID; type: ChangeType; entityId?: ID; entityKind?: 'object' | 'condition' | 'issue'; title: string; description: string; confidence: Confidence; evidenceIds: ID[] }
 export interface EnvironmentalDiff { id: ID; environmentId: ID; fromStateId: ID; toStateId: ID; createdAt: ISODateTime; changes: Change[]; summary: string }
-export interface ActionStep { id: ID; title: string; description: string; priority: ActionPriority; status: ActionStatus; issueIds: ID[]; requiredSpecialist?: string; estimatedCost?: MoneyEstimate; evidenceIds: ID[] }
+export interface ActionStep {
+  id: ID
+  title: string
+  description: string
+  priority: ActionPriority
+  status: ActionStatus
+  relatedConditionIds: ID[]
+  relatedIssueIds: ID[]
+  relatedObjectIds: ID[]
+  requiredSpecialist?: string
+  evidenceIds: ID[]
+}
 export interface MoneyEstimate { currency: string; min: number; max: number; basis: string }
-export interface ActionPlan { id: ID; environmentId: ID; createdAt: ISODateTime; goal: string; steps: ActionStep[]; rationale: string; evidenceIds: ID[] }
+export interface ActionPlan {
+  id: ID
+  environmentId: ID
+  stateId: ID
+  createdAt: ISODateTime
+  goal: string
+  steps: ActionStep[]
+  rationale: string
+  evidenceIds: ID[]
+}
 export interface VerificationResult { id: ID; environmentId: ID; actionPlanId?: ID; verifiedAt: ISODateTime; status: 'passed' | 'partial' | 'failed' | 'inconclusive'; resolvedIssueIds: ID[]; remainingIssueIds: ID[]; newIssueIds: ID[]; changes: Change[]; summary: string; evidenceIds: ID[] }
 export interface ScanSource { id: ID; environmentId: ID; modality: ObservationModality; uri: string; capturedAt: ISODateTime; durationMs?: number; metadata?: Record<string, string | number | boolean> }
 export interface EnvironmentalMemory { environment: Environment; states: EnvironmentalState[]; snapshots: EnvironmentalStateSnapshot[]; objects: SpatialObject[]; conditions: EnvironmentalCondition[]; issues: Issue[]; observations: Observation[]; evidence: Evidence[]; relations: EnvironmentRelation[]; sources: ScanSource[]; diffs: EnvironmentalDiff[] }
@@ -94,6 +114,36 @@ export interface AskBuildingResponse {
   relatedObjectIds: ID[]
   relatedIssueIds: ID[]
   grounding?: AskBuildingGrounding
+}
+export interface ActionPlanningRequest {
+  environmentId: ID
+  stateId?: ID
+  goal?: string
+  relatedConditionIds?: ID[]
+  relatedIssueIds?: ID[]
+  relatedObjectIds?: ID[]
+}
+export interface ActionPlanConditionReference {
+  id: ID
+  title: string
+  description: string
+  kind: ConditionKind
+  basis: ClaimBasis
+  status: ConditionStatus
+  confidence: Confidence
+  objectIds: ID[]
+  evidenceIds: ID[]
+}
+export interface ActionPlanGrounding {
+  state: AskBuildingStateReference
+  evidence: AskBuildingEvidenceReference[]
+  conditions: ActionPlanConditionReference[]
+  issues: AskBuildingIssueReference[]
+  objects: AskBuildingObjectReference[]
+}
+export interface ActionPlanningResponse {
+  plan: ActionPlan
+  grounding: ActionPlanGrounding
 }
 export interface PerceptionResult { sourceId: ID; observations: Observation[]; objects: SpatialObject[]; conditions: EnvironmentalCondition[]; relations: EnvironmentRelation[]; evidence: Evidence[] }
 export type TemporalChangeKind = 'state_change' | 'moved'

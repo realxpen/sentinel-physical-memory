@@ -1,0 +1,40 @@
+name: Phase 11 Production Action Planner
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase11-action-planner.yml'
+      - 'api/action-plan.ts'
+      - 'src/action/planner.ts'
+      - 'src/ai/model.ts'
+      - 'src/ai/nebius.ts'
+      - 'src/domain/sentinel.ts'
+      - 'src/main.tsx'
+      - 'src/integration.css'
+      - 'scripts/check-phase11-action-planner.mjs'
+      - 'scripts/check-phase11-production-action.mjs'
+      - 'package.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  action-plan-production:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Run historical-state production action-plan smoke
+        env:
+          SENTINEL_PRODUCTION_ORIGIN: https://sentinel-physical-memory.vercel.app
+          SENTINEL_PHASE11_ENVIRONMENT_ID: env_warehouse_73266674
+          SENTINEL_PHASE11_STATE_ID: state_9eef338f-2f7c-49f8-ac54-c8901f678d04
+          SENTINEL_EXPECTED_DEPLOYMENT_COMMIT: ${{ github.sha }}
+        run: node ./scripts/check-phase11-production-action.mjs

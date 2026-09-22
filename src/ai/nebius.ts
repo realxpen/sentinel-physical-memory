@@ -5,6 +5,9 @@ import { normalizePerceptionEvidenceReferences } from './perception-normalizatio
 import { validatePerception, PerceptionValidationError } from './perception-schema.js'
 import {
   ModelAdapterError,
+  type ActionPlanningDraft,
+  type ActionPlanningInferenceRequest,
+  type ActionPlanningModelAdapter,
   type ArtifactResolver,
   type ModelAdapter,
   type ModelInferenceRequest,
@@ -31,7 +34,7 @@ interface ChatCompletionResponse {
   choices?: Array<{ message?: { content?: string | Array<{ type?: string; text?: string }> } }>
 }
 
-export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapter {
+export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapter, ActionPlanningModelAdapter {
   readonly provider = 'nebius-token-factory'
   readonly model: string
   private readonly apiKey: string
@@ -117,6 +120,65 @@ export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapte
       [{ type: 'text', text: prompt }],
     )
     return this.parseReasoningResult(this.extractText(response), request)
+  }
+
+  async plan(request: ActionPlanningInferenceRequest): Promise<ActionPlanningDraft> {
+    const prompt = [
+      'Create a compact recommended action plan using ONLY the supplied SENTINEL planning context.',
+      'This is planning, not execution. Never claim that work is completed, resolved, or verified.',
+      'Every step must reference supplied relatedConditionIds or relatedIssueIds and supplied evidenceIds.',
+      'Use relatedObjectIds only when those IDs appear in context.',
+      'Do not invent diagnoses, distances, costs, parts, vendors, contractors, payments, procurement, or schedules.',
+      'Do not give unqualified hazardous repair instructions. For specialist electrical, fire-safety, structural, gas, pressurized, or similar work, recommend safe isolation when directly supportable and a qualified professional.',
+      'For uncertain conditions, prefer inspection or re-observation.',
+      'Keep the plan to 1-5 practical corrective steps; SENTINEL will append the final rescan/verification step deterministically.',
+      'Return ONLY JSON with shape: {"goal":"string","rationale":"string","steps":[{"title":"string","description":"string","priority":"critical|high|medium|low","relatedConditionIds":["id"],"relatedIssueIds":["id"],"relatedObjectIds":["id"],"evidenceIds":["id"],"requiredSpecialist":"optional string"}]}.',
+      'Planning context:',
+      request.context,
+    ].join('\n')
+
+    const response = await this.requestCompletion(
+      'You are SENTINEL Action Planner. Produce only safe, evidence-grounded recommended actions for the selected physical-environment state.',
+      [{ type: 'text', text: prompt }],
+    )
+    return this.parseActionPlanningDraft(this.extractText(response))
+  }
+
+  private parseActionPlanningDraft(text: string): ActionPlanningDraft {
+    let value: unknown
+    try {
+      const parsed = parseModelJson(text)
+      value = parsed.value
+      if (parsed.repaired) console.warn('SENTINEL_MODEL_JSON_REPAIRED', { model: this.model, kind: 'action-plan', chars: text.length })
+    } catch {
+      throw new ModelAdapterError({ code: 'INVALID_ACTION_PLAN_JSON', message: 'Nemotron returned invalid action-plan JSON', retryable: false })
+    }
+
+    if (!isRecord(value) || typeof value.goal !== 'string' || typeof value.rationale !== 'string' || !Array.isArray(value.steps)) {
+      throw new ModelAdapterError({ code: 'INVALID_ACTION_PLAN_SCHEMA', message: 'Nemotron action plan did not match the required schema', retryable: false })
+    }
+
+    const steps = value.steps.flatMap((raw): ActionPlanningDraft['steps'] => {
+      if (!isRecord(raw) || typeof raw.title !== 'string' || typeof raw.description !== 'string') return []
+      const priority = raw.priority === 'critical' || raw.priority === 'high' || raw.priority === 'medium' || raw.priority === 'low' ? raw.priority : undefined
+      if (!priority || !isStringArray(raw.relatedConditionIds) || !isStringArray(raw.relatedIssueIds) || !isStringArray(raw.relatedObjectIds) || !isStringArray(raw.evidenceIds)) return []
+      return [{
+        title: raw.title,
+        description: raw.description,
+        priority,
+        relatedConditionIds: raw.relatedConditionIds,
+        relatedIssueIds: raw.relatedIssueIds,
+        relatedObjectIds: raw.relatedObjectIds,
+        evidenceIds: raw.evidenceIds,
+        ...(typeof raw.requiredSpecialist === 'string' ? { requiredSpecialist: raw.requiredSpecialist } : {}),
+      }]
+    })
+
+    if (!steps.length) {
+      throw new ModelAdapterError({ code: 'INVALID_ACTION_PLAN_STEPS', message: 'Nemotron action plan contained no valid steps', retryable: false })
+    }
+
+    return { goal: value.goal, rationale: value.rationale, steps }
   }
 
   private async requestCompletion(system: string, content: unknown): Promise<ChatCompletionResponse> {

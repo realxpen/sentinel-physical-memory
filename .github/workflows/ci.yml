@@ -52,5 +52,7 @@ jobs:
         run: npm run check:phase9-mobile
       - name: Verify Phase 10 Ask the Building
         run: npm run check:phase10-ask-building
+      - name: Verify Phase 11 Action Planner
+        run: npm run check:phase11-action-planner
       - name: Build
         run: npm run build

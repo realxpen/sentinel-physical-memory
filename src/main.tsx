@@ -4,7 +4,7 @@ import './styles.css'
 import './integration.css'
 import './environment.css'
 import './history.css'
-import type { AskBuildingResponse, Change, EnvironmentalCondition, EnvironmentalDiff, EnvironmentalMemory, EnvironmentalState, EnvironmentType, Observation, SpatialObject } from './domain/sentinel'
+import type { ActionPlanningResponse, AskBuildingResponse, Change, EnvironmentalCondition, EnvironmentalDiff, EnvironmentalMemory, EnvironmentalState, EnvironmentType, Observation, SpatialObject } from './domain/sentinel'
 import type { EnvironmentalStateHistoryEntry, EnvironmentalStateHistoryRecord } from './memory/history'
 import { changesForPresentation, presentedChangeSummary } from './memory/change-presentation'
 import { buildSpatialGroups, buildSpatialObjectDisplayNames, buildSpatialRelationEdges, describeSpatialRelations, focusSpatialGroups, spatialGroupForObject, spatialObjectSubtitle, spatialObjectTone } from './memory/spatial-memory'
@@ -36,6 +36,14 @@ interface StateHistoryResponse {
   selection?: EnvironmentalStateHistoryRecord
   persistence: 'neon' | 'volatile'
   message?: string
+}
+
+interface ActionPlannerOptions {
+  stateId?: string
+  goal?: string
+  relatedConditionIds?: string[]
+  relatedIssueIds?: string[]
+  relatedObjectIds?: string[]
 }
 
 type View = 'memory' | 'observe' | 'changes'
@@ -84,6 +92,8 @@ function App() {
   const [askStatus, setAskStatus] = useState('')
   const [askStateId, setAskStateId] = useState<string>('current')
   const [answer, setAnswer] = useState<AskBuildingResponse | null>(null)
+  const [actionPlan, setActionPlan] = useState<ActionPlanningResponse | null>(null)
+  const [actionPlanStatus, setActionPlanStatus] = useState('')
   const [history, setHistory] = useState<EnvironmentalStateHistoryEntry[]>([])
   const [historySelection, setHistorySelection] = useState<EnvironmentalStateHistoryRecord | null>(null)
   const [historyStatus, setHistoryStatus] = useState('')
@@ -152,6 +162,7 @@ function App() {
   const answerPreviousState = answerState && memory ? memory.states.find((item) => item.version === answerState.version - 1) : undefined
   const answerDiff = answerState && memory ? memory.diffs.find((item) => item.toStateId === answerState.id) : undefined
   const answerRelatedObjectIds = new Set(answer?.grounding?.objects.filter((item) => item.isCurrent).map((item) => item.id) ?? answer?.relatedObjectIds ?? [])
+  const actionPlanObjectIds = new Set(actionPlan?.grounding.objects.filter((item) => item.isCurrent).map((item) => item.id) ?? [])
   const overlayOpen = Boolean(selectedChange || historySelection || selectedSpatialObject || selectedObservation !== null || showEnvironmentDialog)
 
   useEffect(() => {
@@ -167,6 +178,8 @@ function App() {
     setResult(null)
     setMemory(null)
     setAnswer(null)
+    setActionPlan(null)
+    setActionPlanStatus('')
     setAskStateId('current')
     setSelectedObservation(null)
     setHistory([])
@@ -238,6 +251,8 @@ function App() {
     setAskStatus('')
     setAskStateId('current')
     setAnswer(null)
+    setActionPlan(null)
+    setActionPlanStatus('')
     setSelectedSpatialAreaId('all')
     setView('memory')
   }
@@ -377,6 +392,39 @@ function App() {
     void inspectHistoricalState({ at: parsed.toISOString() })
   }
 
+  async function runActionPlanner(options: ActionPlannerOptions = {}) {
+    if (!memory) {
+      setActionPlanStatus(`Observe ${activeEnvironment.name} first so SENTINEL has grounded conditions to plan from.`)
+      return
+    }
+
+    const stateId = options.stateId ?? resolvedAskStateId ?? memory.environment.currentStateId
+    setActionPlan(null)
+    setActionPlanStatus('Planning evidence-backed next steps…')
+    setView('memory')
+
+    try {
+      const response = await fetch('/api/action-plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({
+          environmentId: memory.environment.id,
+          stateId,
+          goal: options.goal,
+          relatedConditionIds: options.relatedConditionIds,
+          relatedIssueIds: options.relatedIssueIds,
+          relatedObjectIds: options.relatedObjectIds,
+        }),
+      })
+      const payload = await readApiResponse<ActionPlanningResponse & { message?: string }>(response, 'Action planning failed')
+      if (!response.ok) throw new Error(payload.message ?? 'Action planning failed')
+      setActionPlan(payload)
+      setActionPlanStatus('')
+    } catch (planError) {
+      setActionPlanStatus(planError instanceof Error ? planError.message : 'Unable to create a grounded action plan')
+    }
+  }
+
   async function runAskBuilding(questionText: string, requestedStateId?: string) {
     const trimmed = questionText.trim()
     if (!trimmed) return
@@ -392,6 +440,8 @@ function App() {
     setQuestion(trimmed)
     setAskStatus(`Reasoning across ${reasoningCount} remembered state${reasoningCount === 1 ? '' : 's'}…`)
     setAnswer(null)
+    setActionPlan(null)
+    setActionPlanStatus('')
     setView('memory')
     try {
       const response = await fetch('/api/ask-building', {
@@ -403,6 +453,9 @@ function App() {
       if (!response.ok) throw new Error(payload.message ?? 'Ask request failed')
       setAnswer(payload)
       setAskStatus('')
+      if (payload.grounding?.intent === 'action') {
+        void runActionPlanner({ stateId: payload.stateId, goal: trimmed })
+      }
 
       const currentRelated = payload.grounding?.objects.filter((item) => item.isCurrent) ?? []
       if (currentRelated.length === 1) {
@@ -459,7 +512,7 @@ function App() {
             </div>
             <label className="ask-state-scope">
               <span>Reason from</span>
-              <select value={askStateId} onChange={(event) => { setAskStateId(event.target.value); setAnswer(null); setAskStatus('') }} aria-label="Ask reasoning state">
+              <select value={askStateId} onChange={(event) => { setAskStateId(event.target.value); setAnswer(null); setActionPlan(null); setActionPlanStatus(''); setAskStatus('') }} aria-label="Ask reasoning state">
                 <option value="current">Current state · v{memory.states.find((item) => item.id === memory.environment.currentStateId)?.version ?? memory.states.length}</option>
                 {[...memory.states].filter((item) => item.id !== memory.environment.currentStateId).sort((a, b) => b.version - a.version).map((item) => <option key={item.id} value={item.id}>State v{item.version} · {formatStateTimestamp(item.capturedAt)}</option>)}
               </select>
@@ -514,6 +567,44 @@ function App() {
               </div>
             </details>
           </div>
+          {(answer.grounding?.intent === 'attention' || answer.grounding?.intent === 'priority' || answer.grounding?.intent === 'action') && <button className="answer-plan-action" type="button" disabled={Boolean(actionPlanStatus)} onClick={() => void runActionPlanner({ stateId: answer.stateId, goal: answer.answer })}>
+            {actionPlanStatus ? 'Planning grounded next steps…' : actionPlan ? 'Rebuild action plan ↗' : 'Create grounded action plan ↗'}
+          </button>}
+        </section>}
+
+        {actionPlanStatus && <div className="action-plan-status" role="status">{actionPlanStatus}</div>}
+
+        {actionPlan && <section className="action-plan-panel" aria-label="Recommended action plan">
+          <div className="action-plan-header">
+            <div>
+              <span className="eyebrow">ACTION PLAN / RECOMMENDED</span>
+              <strong>{actionPlan.plan.goal}</strong>
+              <small>State v{actionPlan.grounding.state.version} · {actionPlan.plan.evidenceIds.length} grounded evidence reference{actionPlan.plan.evidenceIds.length === 1 ? '' : 's'}</small>
+            </div>
+            <button type="button" onClick={() => { setActionPlan(null); setActionPlanStatus('') }} aria-label="Clear action plan">×</button>
+          </div>
+          {!actionPlan.grounding.state.isCurrent && <div className="action-plan-history-warning"><strong>Historical plan.</strong><span>This plan is grounded in an immutable past state. Reconfirm the current environment before acting.</span></div>}
+          <p className="action-plan-rationale">{actionPlan.plan.rationale}</p>
+          <div className="action-plan-steps">
+            {actionPlan.plan.steps.map((step, index) => <article className="action-step" key={step.id}>
+              <div className="action-step-number">{String(index + 1).padStart(2, '0')}</div>
+              <div className="action-step-copy">
+                <div className="action-step-meta"><span className={'action-priority ' + step.priority}>{step.priority}</span><span>{step.status}</span></div>
+                <h3>{step.title}</h3>
+                <p>{step.description}</p>
+                <div className="action-step-grounding">
+                  <span>{step.relatedConditionIds.length} condition{step.relatedConditionIds.length === 1 ? '' : 's'}</span>
+                  <span>{step.relatedIssueIds.length} issue{step.relatedIssueIds.length === 1 ? '' : 's'}</span>
+                  <span>{step.evidenceIds.length} evidence</span>
+                  {step.requiredSpecialist && <span>Specialist: {step.requiredSpecialist}</span>}
+                </div>
+              </div>
+            </article>)}
+          </div>
+          <div className="action-plan-footer">
+            <div><span>HUMAN CHECKPOINT</span><strong>Nothing here is marked completed or verified.</strong><p>Follow only the appropriate recommended steps, then rescan. Phase 12 will decide whether the physical condition actually changed.</p></div>
+            <button type="button" onClick={() => libraryInputRef.current?.click()}>Choose rescan photo ↗</button>
+          </div>
         </section>}
 
         <div className="environment-stage spatial-memory-stage" aria-label={activeEnvironment.name + ' environmental memory canvas'}>
@@ -555,7 +646,7 @@ function App() {
                   {group.objects.length === 0 ? <span className="spatial-room-empty">No grounded objects assigned to this area yet.</span> : group.objects.map((item) => {
                     const tone = spatialObjectTone(item, currentSnapshot)
                     const displayName = spatialObjectDisplayNames.get(item.id) ?? item.name
-                    const relationshipClass = selectedSpatialObjectId === item.id ? ' selected-spatial' : relatedSpatialObjectIds.has(item.id) ? ' related-spatial' : answerRelatedObjectIds.has(item.id) ? ' answer-related-spatial' : ''
+                    const relationshipClass = selectedSpatialObjectId === item.id ? ' selected-spatial' : relatedSpatialObjectIds.has(item.id) ? ' related-spatial' : actionPlanObjectIds.has(item.id) ? ' action-related-spatial' : answerRelatedObjectIds.has(item.id) ? ' answer-related-spatial' : ''
                     return <button className={'spatial-object ' + tone + relationshipClass} type="button" key={item.id} onClick={() => inspectSpatialObject(item.id)} aria-label={'Inspect ' + displayName}>
                       <i />
                       <span><strong>{displayName}</strong><small>{spatialObjectSubtitle(item)}</small></span>
@@ -853,6 +944,19 @@ function App() {
               </button>)}
             </div>
           </div>}
+          {(selectedSpatialIssues.length > 0 || selectedSpatialConditions.some((item) => item.kind !== 'normal')) && <button className="spatial-plan-button" type="button" onClick={() => {
+            const objectId = selectedSpatialObject.id
+            const conditionIds = selectedSpatialConditions.filter((item) => item.kind !== 'normal').map((item) => item.id)
+            const issueIds = selectedSpatialIssues.map((item) => item.id)
+            setSelectedSpatialObjectId(null)
+            void runActionPlanner({
+              stateId: currentSnapshot.stateId,
+              goal: 'Create a safe plan for ' + selectedSpatialObjectDisplayName,
+              relatedConditionIds: conditionIds,
+              relatedIssueIds: issueIds,
+              relatedObjectIds: [objectId],
+            })
+          }}>Create action plan ↗</button>}
           <button className="spatial-ask-button" type="button" onClick={() => {
             const objectQuestion = 'What do you know about ' + selectedSpatialObjectDisplayName + ', where is it, how has it changed over time, and does it need attention?'
             setAskStateId(currentSnapshot.stateId)

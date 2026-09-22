@@ -1,0 +1,163 @@
+# Phase 11 — Action Planner
+
+Status: **ACTIVE / IMPLEMENTED / PRODUCTION HISTORICAL-STATE GATE PENDING**
+
+## Goal
+
+Move SENTINEL from **knowing** to **doing** while keeping the action layer lightweight and evidence-first.
+
+Source product flow:
+
+`What should I do? → grounded condition / issue → ACTION PLAN → human action → rescan → Phase 12 verification`
+
+The MVP contract remains deliberately narrow:
+
+- generate one evidence-backed plan;
+- order practical steps;
+- keep every step visibly **Recommended**;
+- tie actions to grounded conditions / issues / evidence;
+- finish with **Rescan to verify**;
+- do **not** build contractor marketplace, payments, procurement, or work-order commerce.
+
+## Domain contract
+
+Phase 11 uses the existing `ActionPlan` / `ActionStep` concepts and tightens them around the trust model.
+
+Each accepted step carries:
+
+- priority;
+- description;
+- `status: recommended`;
+- related condition IDs;
+- related issue IDs;
+- related object IDs;
+- optional specialist class;
+- evidence IDs.
+
+The plan itself is pinned to one immutable `stateId`.
+
+This means a plan generated from a historical condition stays a historical recommendation. It cannot silently become a statement about the current environment.
+
+## Grounding boundary
+
+`ActionPlannerService` owns the trust boundary.
+
+Planning can use only:
+
+- non-normal conditions in the selected snapshot;
+- active issues in the selected snapshot;
+- objects connected to those conditions / issues or explicitly targeted by the caller;
+- evidence already persisted for those grounded entities.
+
+Explicit condition / issue / object IDs that do not belong to the selected immutable state fail closed with HTTP 422.
+
+Nemotron returns only a draft. SENTINEL then:
+
+1. filters every condition / issue / object / evidence ID to the server-owned scope;
+2. drops steps that do not retain a grounded condition or issue;
+3. fills grounded evidence from the accepted condition / issue;
+4. caps priority against the condition / issue authority;
+5. forces status to `recommended`;
+6. appends the deterministic final step **Rescan to verify**.
+
+No model output can mark a step `completed`, `resolved`, or `verified`.
+
+## Priority policy
+
+Planning priority cannot exceed the environmental trust layer:
+
+- inferred condition → at most **medium**;
+- observed hazard → at most **high**;
+- observed damage / maintenance / access / compliance → at most **medium**;
+- observed attention / unknown → at most **low**;
+- issue-backed action → at most the issue severity.
+
+This preserves the same evidence-first authority boundary used by condition / issue promotion.
+
+## Safety / scope guardrails
+
+The planning prompt forbids:
+
+- invented diagnoses;
+- invented measurements;
+- costs or estimates;
+- vendors / contractors / marketplace search;
+- parts / procurement;
+- payments;
+- schedules;
+- claims that work is complete;
+- claims that a condition is resolved;
+- claims that verification passed.
+
+For electrical, fire-safety, structural, gas, pressurized, or similar specialist work, the plan may recommend safe isolation when directly supportable and escalation to an appropriate qualified professional. It must not generate unqualified repair instructions.
+
+For uncertain conditions, the correct action is inspection / re-observation rather than asserting a repair.
+
+## Product experience
+
+Phase 11 stays inside the Living Spatial Intelligence interface.
+
+Ask the Building now leads into planning:
+
+`Conclusion → Why it matters → Create grounded action plan`
+
+The Action Plan panel presents:
+
+- **ACTION PLAN / RECOMMENDED**;
+- plan goal;
+- source state;
+- grounded evidence count;
+- ordered `01 / 02 / 03 ...` steps;
+- priority;
+- condition / issue / evidence grounding counts;
+- optional specialist label;
+- a visible **HUMAN CHECKPOINT**;
+- **Choose rescan photo** as the handoff to the verification loop.
+
+If a plan comes from an immutable historical state, the UI warns the user to reconfirm the current environment before acting.
+
+Action-linked current physical objects use a separate amber Spatial Memory highlight.
+
+## Deterministic gate
+
+`npm run check:phase11-action-planner` verifies:
+
+- explicit historical-state planning stays pinned to that immutable snapshot;
+- later current-state conditions do not leak into historical planning context;
+- hallucinated condition / issue / object / evidence IDs fail closed;
+- a model attempt to escalate an inferred-access / medium issue to critical is capped at medium;
+- a normal current state produces no fabricated plan and never calls the model;
+- foreign requested IDs fail closed;
+- every accepted action remains `recommended`;
+- **Rescan to verify** is appended deterministically;
+- no cost field is generated;
+- product UI exposes Recommended action, Human Checkpoint, contextual planning, and action-object Spatial Memory highlighting.
+
+## Production gate
+
+`.github/workflows/phase11-action-planner.yml` waits for the exact Vercel deployment and then calls the production action API against:
+
+- environment: `env_warehouse_73266674`;
+- immutable state: `state_9eef338f-2f7c-49f8-ac54-c8901f678d04` (State v2).
+
+State v2 is the real persisted warehouse state containing the grounded emergency-exit obstruction condition / medium access issue.
+
+Current Warehouse State v3 is normal. The proof intentionally plans from State v2 and asserts:
+
+- the plan remains historical;
+- all steps are `recommended`;
+- all IDs resolve inside the server-owned grounding envelope;
+- corrective steps are evidence-backed;
+- priority cannot exceed medium for this grounded case;
+- the final step is **Rescan to verify**;
+- no cost estimate is invented.
+
+## Phase boundary
+
+Phase 11 creates the plan. It does **not** decide whether the physical world changed.
+
+That belongs to **Phase 12 — Verification Agent**.
+
+## Exit condition
+
+Phase 11 closes when the deterministic planner gate is green and the exact deployed main commit passes the real historical-state production Action Planner smoke.
