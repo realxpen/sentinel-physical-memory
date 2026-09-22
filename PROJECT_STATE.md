@@ -14,7 +14,7 @@ Hackathon track: **Best Apps and Agents**.
 
 ## Current phase
 
-**Phase 12 — Verification Agent: ACTIVE / POSITIVE VISUAL + FALSE-RESOLUTION PROOFS PASS / REAL PHYSICAL PASS NEXT**
+**Phase 13 — Living Spatial Intelligence UI: ACTIVE / PHASE 12 REAL PHYSICAL PROOF DEFERRED**
 
 ## Phase 3 — COMPLETE
 
@@ -1093,9 +1093,9 @@ Canonical production proof: `Knowledge/Technical/phase-9-real-history-proof.md`.
 
 ## Highest-priority gaps
 
-1. Phase 12 — one real physical Action Plan → actual change → rescan → `passed` verification proof.
-2. Phase 13 — Living Spatial Intelligence UI rebuild/polish.
-3. Reliability, automated tests, security, and least-privilege database-role hardening.
+1. Phase 13 — production UI contract + visual review.
+2. Return to the deferred Phase 12 real physical Action Plan → change → rescan → `passed` proof when a real camera is available.
+3. Phase 14 — demo scenario engineering.
 
 ## Locked decisions
 
@@ -1387,3 +1387,44 @@ The warehouse false-resolution proof was rerun on the same v2 contract and remai
 This proves both positive and negative verification behavior in production without weakening **Not re-observed is not resolved**.
 
 The Test 4 images were generated for functional testing. Phase 12 therefore remains ACTIVE. The only remaining exit gate is one real-world physical before/action/change/rescan sequence that returns **passed**.
+
+
+## Phase 13 — ACTIVE
+
+Phase 13 rebuilds the product presentation around the locked **Living Spatial Intelligence** identity.
+
+Design contract:
+
+- **Quiet. Alive. Precise.**
+- dark = SENTINEL is observing / reasoning about the present;
+- light = SENTINEL is remembering / navigating history;
+- primary shell = **Memory / Observe / Changes**;
+- **Ask** remains permanently available as contextual intelligence, not a standalone chat page;
+- environmental imagery is treated as product surface, not thumbnail evidence;
+- large editorial conclusions replace dashboard-style summaries;
+- green is reserved for intelligence / verified understanding rather than generic decoration;
+- red / amber / cyan remain restrained semantic accents;
+- no generic SaaS Dashboard screen.
+
+Implemented on the Phase 13 branch:
+
+- one shared `phase13-shell` across the product;
+- cinematic current-state environmental hero on Memory;
+- first-use **Give this place a memory.** state;
+- remembered-home **Your space remembers.** state;
+- current-state image promoted to the primary Memory surface;
+- current state / last remembered / object / condition context anchored over the environmental capture;
+- dark spatial Observe state can inherit the current remembered scene as a background layer;
+- dark **Reality Diff / What changed.** signature state;
+- subtle vertical desktop rail with Memory / Observe / Changes labels revealed contextually;
+- existing three-tab mobile navigation retained;
+- contextual Ask prompt rail reduced into a quieter intelligence strip;
+- persistent bottom Ask bar retained across the environment;
+- Spatial Memory kept as a dark limitless canvas with restrained green focus;
+- desktop immutable state history becomes a vertical environmental timeline;
+- existing Object Detail, Ask response, Reality Diff, Action Plan and Verification surfaces visually converge through the same radii, depth and editorial scale;
+- reduced-motion accessibility is explicitly respected.
+
+Canonical implementation record: `Knowledge/Technical/phase-13-living-spatial-intelligence-ui.md`.
+
+Phase 12 remains technically production-proven in both positive and negative visual directions, but its final real-world physical-camera proof is still pending and must be revisited later. Phase 13 does not rewrite or waive that gate.
