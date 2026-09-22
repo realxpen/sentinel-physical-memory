@@ -11,6 +11,7 @@ try {
   expect(passed.result.resolvedConditionIds.join(',') === 'condition_access', 'passed verification should resolve the baseline condition ID')
   expect(passed.result.remainingConditionIds.length === 0, 'passed verification must have no remaining target condition')
   expect(passed.modelCalls === 1, 'resolved case should call the model once for the missing prior condition')
+  expect(passed.artifactIds.join(',') === 'verification_source_current', 'verification must send only the current-state image artifact to the model')
   expect(passed.result.verdicts[0].evidenceIds.includes('e_current'), 'resolved verdict must retain current-state evidence')
 
   const failed = await runFailedAccessCase(VerificationAgentService)
@@ -72,10 +73,11 @@ try {
   expect(main.includes('verificationObjectIds.has(item.id)'), 'verified physical context must illuminate Spatial Memory')
   expect(css.includes('.verification-panel.status-passed'), 'verification status styling is missing')
   expect(css.includes('.spatial-object.verification-related-spatial'), 'verification-related Spatial Memory styling is missing')
-  expect(api.includes("VERIFICATION_CONTRACT = 'phase12-verification-v1'"), 'production verification contract marker is missing')
+  expect(api.includes("VERIFICATION_CONTRACT = 'phase12-visual-verification-v2'"), 'production visual verification contract marker is missing')
   expect(api.includes("from '../src/verification/service.ts'"), 'production API must explicitly bundle the Phase 12 service')
   expect(source.includes('Missing from the current condition list is NOT evidence of resolution.'), 'model context must reject absence-as-resolution')
   expect(source.includes('deterministicContinuedSupport'), 'server-owned continued-support override is missing')
+  expect(source.includes('verificationArtifactsForState'), 'verification must attach current-state visual artifacts')
 
   console.log('PASS  positive current same-object evidence can verify a resolved condition')
   console.log('PASS  continued obstruction geometry overrides condition/issue disappearance')
@@ -91,11 +93,13 @@ try {
 async function runPassedCase(Service) {
   const fixture = baseFixture({ currentCartPosition: 'beside orange shelving' })
   let modelCalls = 0
+  let artifactIds = []
   const model = {
     provider: 'test',
     model: 'test',
-    async verifyConditions() {
+    async verifyConditions(request) {
       modelCalls += 1
+      artifactIds = request.artifacts.map((item) => item.artifactId)
       return {
         verdicts: [{
           conditionId: 'condition_access',
@@ -115,7 +119,7 @@ async function runPassedCase(Service) {
     actionPlanId: 'plan_test',
     conditionIds: ['condition_access'],
   })
-  return { result, modelCalls }
+  return { result, modelCalls, artifactIds }
 }
 
 async function runFailedAccessCase(Service) {
