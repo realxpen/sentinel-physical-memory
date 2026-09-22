@@ -14,7 +14,7 @@ Hackathon track: **Best Apps and Agents**.
 
 ## Current phase
 
-**Phase 13 — Living Spatial Intelligence UI: ACTIVE / PHASE 12 REAL PHYSICAL PROOF DEFERRED**
+**Phase 13 — Living Spatial Intelligence UI: ACTIVE / DEPLOYED / VISUAL REVIEW PENDING / PHASE 12 REAL PHYSICAL PROOF DEFERRED**
 
 ## Phase 3 — COMPLETE
 
@@ -1428,3 +1428,23 @@ Implemented on the Phase 13 branch:
 Canonical implementation record: `Knowledge/Technical/phase-13-living-spatial-intelligence-ui.md`.
 
 Phase 12 remains technically production-proven in both positive and negative visual directions, but its final real-world physical-camera proof is still pending and must be revisited later. Phase 13 does not rewrite or waive that gate.
+
+
+### Phase 13 production deployment — LIVE
+
+Exact deployed main commit: `41136eeb3e0ccda42f86217c289ed7f654b6ef18`.
+
+Verified on that commit:
+
+- Vercel deployment — **SUCCESS**;
+- Sentinel CI `35741974921` — **SUCCESS**;
+- immutable Neon history `35741975048` — **SUCCESS**;
+- production Ask `35741975004` — **SUCCESS**;
+- production Action Planner `35741974947` — **SUCCESS**;
+- production Verification `35741974945` — **SUCCESS**;
+- observation contract `35741974822` — **SUCCESS**;
+- deterministic Phase 13 UI contract and build — **SUCCESS**.
+
+Phase 13 remains ACTIVE only for direct production visual review. The current tool environment cannot honestly complete that visual gate because its browser connector is disconnected and fallback runtime has no external DNS.
+
+The deferred Phase 12 real physical-camera proof remains a separate open gate and is not waived by Phase 13.
