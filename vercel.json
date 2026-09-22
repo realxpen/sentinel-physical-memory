@@ -2,6 +2,9 @@
   "functions": {
     "api/scan.ts": {
       "maxDuration": 180
+    },
+    "api/action-plan.ts": {
+      "maxDuration": 120
     }
   }
 }

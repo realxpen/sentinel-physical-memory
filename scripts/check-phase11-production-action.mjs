@@ -5,22 +5,7 @@ const expectedCommit = process.env.SENTINEL_EXPECTED_DEPLOYMENT_COMMIT?.trim() |
 
 if (expectedCommit) await waitForDeployment(expectedCommit)
 
-const response = await fetch(origin + '/api/action-plan', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-    Accept: 'application/json',
-    'User-Agent': 'sentinel-phase11-production-smoke',
-  },
-  body: JSON.stringify({
-    environmentId,
-    stateId,
-    goal: 'Create a safe action plan for the grounded emergency exit obstruction in this remembered state.',
-  }),
-})
-const text = await response.text()
-if (!response.ok) throw new Error('Production action plan failed (' + response.status + '): ' + text.slice(0, 600))
-const payload = JSON.parse(text)
+const payload = await requestPlanWithRetry()
 
 console.log('ACTION_PLAN_RESPONSE', JSON.stringify({
   actionContract: payload.actionContract ?? null,
@@ -67,6 +52,35 @@ console.log('PASS  all action IDs resolve inside the server-owned grounding enve
 console.log('PASS  priority remains bounded by inferred-access / medium-issue authority')
 console.log('PASS  final step hands off to rescan without claiming resolution')
 console.log('SENTINEL PHASE 11 PRODUCTION ACTION PLANNER VERIFIED')
+
+async function requestPlanWithRetry() {
+  let lastError
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const response = await fetch(origin + '/api/action-plan', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        'User-Agent': 'sentinel-phase11-production-smoke',
+      },
+      body: JSON.stringify({
+        environmentId,
+        stateId,
+        goal: 'Create a safe action plan for the grounded emergency exit obstruction in this remembered state.',
+      }),
+    })
+    const text = await response.text()
+    if (response.ok) return JSON.parse(text)
+    lastError = new Error('Production action plan failed (' + response.status + '): ' + text.slice(0, 600))
+    if (attempt < 2 && [502,503,504].includes(response.status)) {
+      console.log('Retrying transient production action-plan provider failure after HTTP ' + response.status)
+      await delay(1500)
+      continue
+    }
+    throw lastError
+  }
+  throw lastError
+}
 
 async function waitForDeployment(commit) {
   for (let attempt = 1; attempt <= 48; attempt += 1) {

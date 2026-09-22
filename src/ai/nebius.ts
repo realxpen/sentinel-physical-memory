@@ -131,7 +131,7 @@ export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapte
       'Do not invent diagnoses, distances, costs, parts, vendors, contractors, payments, procurement, or schedules.',
       'Do not give unqualified hazardous repair instructions. For specialist electrical, fire-safety, structural, gas, pressurized, or similar work, recommend safe isolation when directly supportable and a qualified professional.',
       'For uncertain conditions, prefer inspection or re-observation.',
-      'Keep the plan to 1-5 practical corrective steps; SENTINEL will append the final rescan/verification step deterministically.',
+      'Keep the plan to 1-3 practical corrective steps. Each description should be concise (prefer under 180 characters). SENTINEL will append the final rescan/verification step deterministically.',
       'Return ONLY JSON with shape: {"goal":"string","rationale":"string","steps":[{"title":"string","description":"string","priority":"critical|high|medium|low","relatedConditionIds":["id"],"relatedIssueIds":["id"],"relatedObjectIds":["id"],"evidenceIds":["id"],"requiredSpecialist":"optional string"}]}.',
       'Planning context:',
       request.context,

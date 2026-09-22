@@ -39,6 +39,7 @@ export default async function handler(req: Request, res: Response) {
     const adapter = createNebiusNemotronAdapter(apiKey, {
       baseUrl: process.env.NEBIUS_TOKEN_FACTORY_BASE_URL,
       model: process.env.NEBIUS_NEMOTRON_REASONING_MODEL?.trim() || DEFAULT_REASONING_MODEL,
+      timeoutMs: 90_000,
     })
     const result = await new ActionPlannerService(repository, adapter).create(body)
 

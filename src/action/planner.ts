@@ -49,11 +49,15 @@ export class ActionPlannerService {
       throw new ActionPlannerInputError('A requested object does not belong to the selected immutable state.')
     }
 
-    const evidenceIdSet = new Set([
+    const claimEvidenceIds = [
       ...conditions.flatMap((item) => item.evidenceIds),
       ...issues.flatMap((item) => item.evidenceIds),
-      ...objects.flatMap((item) => item.evidenceIds),
-    ])
+    ]
+    const evidenceIdSet = new Set(
+      claimEvidenceIds.length > 0
+        ? claimEvidenceIds
+        : objects.flatMap((item) => item.evidenceIds),
+    )
     const evidence = memory.evidence.filter((item) => evidenceIdSet.has(item.id))
     const context = buildContext(memory, state, conditions, issues, objects, evidence, request.goal)
 
@@ -109,7 +113,7 @@ function buildContext(
     'ISSUES:',
     ...issues.map((item) => `- ${item.id} | ${item.title} | type=${item.type} | severity=${item.severity} | status=${item.status} | objects=${item.objectIds.join(',')} | evidence=${item.evidenceIds.join(',')} | ${item.description}`),
     'OBJECTS:',
-    ...objects.map((item) => `- ${item.id} | ${item.name} | category=${item.category} | state=${item.state ?? 'unknown'} | position=${item.position?.description ?? 'unknown'} | evidence=${item.evidenceIds.join(',')}`),
+    ...objects.map((item) => `- ${item.id} | ${item.name} | category=${item.category} | state=${item.state ?? 'unknown'} | position=${item.position?.description ?? 'unknown'} | confidence=${item.confidence}`),
     'EVIDENCE:',
     ...evidence.map((item) => `- ${item.id} | ${item.description}`),
   ].join('\n')
@@ -129,7 +133,7 @@ function groundPlan(
   const allowedObjects = new Set(objects.map((item) => item.id))
   const allowedEvidence = new Set(evidence.map((item) => item.id))
 
-  const steps = draft.steps.slice(0, 5).flatMap((raw, index) => {
+  const steps = draft.steps.slice(0, 3).flatMap((raw, index) => {
     const relatedConditionIds = uniq(raw.relatedConditionIds.filter((id) => allowedConditions.has(id)))
     const relatedIssueIds = uniq(raw.relatedIssueIds.filter((id) => allowedIssues.has(id)))
     if (!relatedConditionIds.length && !relatedIssueIds.length) return []

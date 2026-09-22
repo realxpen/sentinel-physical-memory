@@ -158,6 +158,24 @@ Phase 11 creates the plan. It does **not** decide whether the physical world cha
 
 That belongs to **Phase 12 — Verification Agent**.
 
+## Production inference-budget hardening
+
+The first exact-deployment production smoke on `fc25185dcc71f09f4ad5652becd526dc77a7c8e4` reached the correct fresh deployment and failed cleanly with `ACTION_PLAN_TIMEOUT` at the adapter's previous 60-second ceiling.
+
+No trust or grounding rule was relaxed.
+
+The follow-up hardening:
+
+- removes redundant object-wide evidence IDs from the planning prompt when condition / issue evidence already exists;
+- keeps object identity / position / confidence context without repeating large evidence lists;
+- caps model-authored corrective steps at three before the deterministic rescan step;
+- requests concise step descriptions;
+- gives the dedicated action-planning inference a 90-second model timeout;
+- gives `api/action-plan.ts` a bounded 120-second Vercel function ceiling;
+- allows the production smoke one retry only for transient 502/503/504 provider failures.
+
+The action IDs, priority caps, Recommended-only status, historical-state scope, and Phase 12 verification boundary remain unchanged.
+
 ## Exit condition
 
 Phase 11 closes when the deterministic planner gate is green and the exact deployed main commit passes the real historical-state production Action Planner smoke.
