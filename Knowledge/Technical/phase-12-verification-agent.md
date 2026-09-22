@@ -261,3 +261,34 @@ To close Phase 12 completely, perform one controlled real rescan where:
 5. Verification Agent returns **passed** from positive current evidence.
 
 No historical snapshot may be rewritten to manufacture that result.
+
+## Ordinary doorway obstruction hardening — 2026-09-22
+
+The first controlled Phase 12 positive-pass attempt exposed a real product gap.
+
+MiniCPM grounded an ordinary office scene with:
+
+- an open office/conference-room door;
+- a gray chair;
+- the chair positioned directly in front of that door.
+
+Ask the Building could describe that geometry, but no non-normal access condition had been created, so Action Planner correctly returned **Insufficient information to recommend an action**.
+
+The root cause was deterministic composition scope: `deriveOperationalConditions` only composed obstacle→door geometry when the door was independently proven to be an emergency exit.
+
+Current hardening adds a separate ordinary-doorway path:
+
+- the object must be a grounded physical door;
+- the obstacle must be on the conservative obstruction whitelist;
+- placement must still be explicit and evidence-backed (`in_front_of`, blocking, obstructing, or across);
+- explicit evidence-backed object `position.description` now participates in the same semantic geometry test;
+- inference confidence remains bounded below its source facts;
+- the unchanged **0.85 inferred threshold** still applies;
+- severity remains capped at **medium**;
+- safe/beside placement produces no condition;
+- emergency-labelled doors without independent exit grounding cannot fall back to this generic rule;
+- the stricter emergency-exit derivation remains unchanged and still requires independent grounded exit identity.
+
+A qualifying ordinary scene now produces **Doorway access obstructed** — Inferred / Present / medium maximum operational issue.
+
+Historical test states are not rewritten. A fresh scan is required to exercise the fix.
