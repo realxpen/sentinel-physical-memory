@@ -90,8 +90,11 @@ try {
     firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: ['frame_door'],
   })
   const ambiguousDoorDerived = deriveOperationalConditions(ambiguousDoorSign, capturedAt)
-  if (ambiguousDoorDerived.derivedConditions.length !== 0) {
-    throw new Error('generic exit sign above door wording must not choose between multiple visible doors')
+  if (ambiguousDoorDerived.derivedConditions.length !== 1 || ambiguousDoorDerived.derivedConditions[0].title !== 'Doorway access obstructed') {
+    throw new Error('ambiguous exit signage may not identify an emergency exit, but explicit green-door obstruction may remain an ordinary doorway access condition')
+  }
+  if (ambiguousDoorDerived.derivedConditions.some((item) => item.title === 'Emergency exit access obstructed')) {
+    throw new Error('ambiguous exit signage must never promote the ordinary obstruction into an emergency-exit claim')
   }
 
   const ordinaryDoorway = structuredClone(base)
@@ -174,7 +177,7 @@ try {
   console.log('PASS  green emergency exit door aliases to grounded green-door wording without lowering confidence policy')
   console.log('PASS  derived condition preserves evidence and stays below source confidence')
   console.log('PASS  grounded exit sign above the only visible door preserves independent exit grounding')
-  console.log('PASS  generic sign-above-door wording does not choose between multiple doors')
+  console.log('PASS  ambiguous exit signage cannot create an emergency-exit claim; explicit ordinary doorway obstruction remains allowed')
   console.log('PASS  ordinary evidence-backed chair-in-front-of-door geometry derives a medium doorway access issue')
   console.log('PASS  ordinary chair beside the doorway does not create an access issue')
   console.log('PASS  safe obstacle placement does not create an access condition')
