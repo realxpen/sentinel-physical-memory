@@ -33,7 +33,8 @@
     "check:phase9-real-history": "node ./scripts/check-phase9-real-history.mjs",
     "check:phase10-ask-building": "node ./scripts/check-phase10-ask-building.mjs",
     "check:phase11-action-planner": "node ./scripts/check-phase11-action-planner.mjs",
-    "check:phase12-verification": "node ./scripts/check-phase12-verification.mjs"
+    "check:phase12-verification": "node ./scripts/check-phase12-verification.mjs",
+    "check:phase13-ui": "node ./scripts/check-phase13-living-ui.mjs"
   },
   "dependencies": {
     "@neondatabase/serverless": "latest",
