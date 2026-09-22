@@ -772,12 +772,11 @@ try {
   if (ordinaryGeometryResult.state.issueIds.length !== 1) {
     throw new Error('ordinary doorway obstruction should promote exactly one operational access issue')
   }
-  if (!ordinaryGeometryResult.relations.some((item) => item.type === 'in_front_of')) {
-    throw new Error('ordinary geometry audit relation did not survive the scan pipeline')
-  }
-
   const ordinaryMemory = await ordinaryGeometryPipeline.getMemory(ordinaryGeometryEnvironmentId)
   const ordinarySnapshot = ordinaryMemory?.snapshots.find((item) => item.stateId === ordinaryGeometryResult.state.id)
+  if (!ordinarySnapshot?.relations.some((item) => item.type === 'in_front_of')) {
+    throw new Error('ordinary geometry audit relation did not survive into the immutable snapshot')
+  }
   const ordinaryPersistedConditions = ordinarySnapshot?.conditions.filter((item) => item.title === 'Doorway access obstructed') ?? []
   if (ordinaryPersistedConditions.length !== 1) {
     throw new Error(`expected exactly one persisted semantic ordinary doorway condition, got ${ordinaryPersistedConditions.length}`)
