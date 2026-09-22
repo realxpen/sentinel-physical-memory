@@ -481,7 +481,7 @@ export class ScanPipeline {
       }
 
       if (!hasOperationalConditionCandidate(merged) && shouldRunAccessGeometryAudit(merged)) {
-        const geometryCandidates = materialHandlingCandidates(merged)
+        const geometryCandidates = accessGeometryCandidates(merged)
           .map((item) => `${item.name} (${item.category})`)
           .join(', ')
         const geometryDoors = merged.objects
@@ -493,13 +493,13 @@ export class ScanPipeline {
           `Targeted access-geometry verification for scan ${scanId} in environment ${input.environmentId}.`,
           `The scan source id is ${input.source.id}.`,
           `The trusted scan capturedAt is ${input.source.capturedAt}.`,
-          `Visible material-handling/obstruction candidates: ${geometryCandidates || 'none'}.`,
+          `Visible physical-obstruction candidates: ${geometryCandidates || 'none'}.`,
           `Visible door candidates: ${geometryDoors || 'none'}.`,
-          'Inspect the supplied frames only to verify the physical relationship between the named current-scan candidate object(s) and the visible door/exit.',
+          'Inspect the supplied frames only to verify the physical relationship between the named current-scan candidate object(s) and the visible door or doorway.',
           'If a candidate is directly in front of the door, emit an explicit relation with type="in_front_of", fromId=candidate object id, toId=door object id, plus grounded evidenceIds. The direction must be obstacle -> door.',
           'Also state the placement explicitly in a direct observation when visually supported.',
           'Near, beside, left/right, or sharing the center of the image is NOT sufficient evidence of obstruction and must not be converted to in_front_of.',
-          'If exit signage is visible, include the exit-sign observation/object so emergency-exit identity remains independently grounded.',
+          'If exit signage is visible, include the exit-sign observation/object so emergency-exit identity remains independently grounded. If no exit signage is visible, do not call the doorway an emergency exit.',
           'Do not infer from filenames, metadata, prior memory, or the earlier model wording. Use only visible frame evidence.',
           'Do not force a relation or operational condition when geometry is unclear.',
           'Reference only exact supplied FRAME_ID values in evidenceIds. Return the full SENTINEL PerceptionResult JSON schema.',
@@ -507,7 +507,7 @@ export class ScanPipeline {
 
         console.warn('SENTINEL_ACCESS_GEOMETRY_AUDIT_STARTED', {
           scanId,
-          reason: 'material_handling_object_and_exit_without_explicit_placement',
+          reason: 'physical_obstacle_and_door_without_explicit_placement',
           candidates: geometryCandidates,
         })
         try {
@@ -889,13 +889,15 @@ function shouldRunIdentityAudit(result: PerceptionResult): boolean {
 }
 
 function shouldRunAccessGeometryAudit(result: PerceptionResult): boolean {
-  if (!hasIndependentExitContext(result)) return false
-
-  const doors = result.objects.filter((item) => item.category === 'door')
+  const doors = result.objects.filter((item) =>
+    item.category === 'door' &&
+    item.evidenceIds.length > 0
+  )
   if (doors.length === 0) return false
 
-  return materialHandlingCandidates(result).some((candidate) =>
-    !hasExplicitPlacementForCandidate(result, candidate, doors),
+  return accessGeometryCandidates(result).some((candidate) =>
+    !hasExplicitPlacementForCandidate(result, candidate, doors) &&
+    sharesTrustedEvidenceWithAnyDoor(candidate, doors),
   )
 }
 
@@ -908,12 +910,19 @@ function hasIndependentExitContext(result: PerceptionResult): boolean {
   })
 }
 
-function materialHandlingCandidates(result: PerceptionResult): SpatialObject[] {
+function accessGeometryCandidates(result: PerceptionResult): SpatialObject[] {
   return result.objects.filter((item) => {
+    if (item.evidenceIds.length === 0) return false
     if (item.category === 'obstruction') return true
+
     const text = `${item.name} ${item.description ?? ''}`
-    return /\b(?:pallet\s+jack|trolley|cart|forklift|material[-\s]+handling\s+equipment)\b/i.test(text)
+    return /\b(?:pallet\s+jack|pallet|trolley|cart|forklift|box|carton|chair|cabinet|desk|table|equipment|material[-\s]+handling\s+equipment)\b/i.test(text)
   })
+}
+
+function sharesTrustedEvidenceWithAnyDoor(candidate: SpatialObject, doors: SpatialObject[]): boolean {
+  const evidence = new Set(candidate.evidenceIds)
+  return doors.some((door) => door.evidenceIds.some((id) => evidence.has(id)))
 }
 
 function hasExplicitPlacementForCandidate(
@@ -930,7 +939,9 @@ function hasExplicitPlacementForCandidate(
 
   const candidateName = normalizeSemanticText(candidate.name)
   const texts = [...result.observations, ...result.objects].map((item) =>
-    normalizeSemanticText('label' in item ? `${item.label} ${item.description}` : `${item.name} ${item.description ?? ''}`),
+    normalizeSemanticText('label' in item
+      ? `${item.label} ${item.description}`
+      : `${item.name} ${item.description ?? ''} ${item.position?.description ?? ''}`),
   )
 
   return texts.some((text) =>
