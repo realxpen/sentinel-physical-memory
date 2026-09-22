@@ -1,6 +1,6 @@
 # Phase 11 — Action Planner
 
-Status: **ACTIVE / IMPLEMENTED / PRODUCTION HISTORICAL-STATE GATE PENDING**
+Status: **COMPLETE**
 
 ## Goal
 
@@ -176,6 +176,44 @@ The follow-up hardening:
 
 The action IDs, priority caps, Recommended-only status, historical-state scope, and Phase 12 verification boundary remain unchanged.
 
-## Exit condition
+## Production proof
 
-Phase 11 closes when the deterministic planner gate is green and the exact deployed main commit passes the real historical-state production Action Planner smoke.
+Phase 11 closed on exact deployed commit:
+
+`8c3193e0a87e0974fc414edb9da2e76222a5d810`
+
+Production workflow:
+
+- **Phase 11 Production Action Planner**
+- run `35717004333`
+- result: **SUCCESS**
+- persistence: **Neon**
+- action contract: **phase11-action-plan-v1**
+- environment: `env_warehouse_73266674`
+- immutable source state: `state_9eef338f-2f7c-49f8-ac54-c8901f678d04` / **State v2**
+- selected state current: **false**
+- generated steps: **4**
+- grounded evidence references: **10**
+- grounded conditions: **1**
+- grounded issues: **1**
+- grounded objects: **2**
+
+The production gate verified:
+
+- a real historical environmental condition can become a bounded Recommended action plan;
+- every action condition / issue / object / evidence ID resolves inside the server-owned grounding envelope;
+- the inferred access condition / medium issue cannot escalate action priority above medium;
+- every step remains `recommended`;
+- the final step is **Rescan to verify**;
+- the plan does not claim physical resolution;
+- the plan does not invent cost data.
+
+The initial exact-deployment smoke on `fc25185dcc71f09f4ad5652becd526dc77a7c8e4` failed cleanly at the previous 60-second model timeout. That failure was not accepted as Phase 11 proof. Context/inference-budget hardening was applied without weakening any trust rule, and the exact deployed rerun passed.
+
+## Exit status
+
+**COMPLETE.**
+
+SENTINEL can now move from a grounded environmental condition to a practical evidence-backed Recommended action sequence while preserving the human checkpoint and the separation between **Recommended** and **Verified**.
+
+The next build phase is **Phase 12 — Verification Agent**.

@@ -1,6 +1,6 @@
 # SENTINEL Project State
 
-Last updated: 2026-09-21
+Last updated: 2026-09-22
 
 ## North star
 
@@ -14,7 +14,7 @@ Hackathon track: **Best Apps and Agents**.
 
 ## Current phase
 
-**Phase 11 — Action Planner: ACTIVE / EVIDENCE-GROUNDED RECOMMENDATIONS IMPLEMENTED / PRODUCTION HISTORICAL-STATE GATE PENDING**
+**Phase 12 — Verification Agent: READY TO START / PHASE 11 COMPLETE**
 
 ## Phase 3 — COMPLETE
 
@@ -1093,8 +1093,8 @@ Canonical production proof: `Knowledge/Technical/phase-9-real-history-proof.md`.
 
 ## Highest-priority gaps
 
-1. Phase 11 — exact-deployment historical-state Action Planner production gate.
-2. Phase 12 — Verification Agent.
+1. Phase 12 — Verification Agent.
+2. Phase 13 — Living Spatial Intelligence UI rebuild/polish.
 3. Reliability, automated tests, security, and least-privilege database-role hardening.
 
 ## Locked decisions
@@ -1130,9 +1130,9 @@ Canonical production proof: `Knowledge/Technical/phase-9-real-history-proof.md`.
 - [x] Phase 6 — Environmental state history (**COMPLETE — immutable current/previous/by-ID/by-date retrieval + Memory timeline**)
 - [x] Phase 7 — Environmental Diff Engine v2 (**COMPLETE — deterministic semantic gate + real production three-change proof**)
 - [x] Phase 8 — Reality Diff UI (**COMPLETE — deployed before/after Operations experience + conservative presentation gate**)
-- [ ] Phase 9 — Spatial Memory experience (**ACTIVE — real-state canvas + object inspector implemented**)
-- [ ] Phase 10 — Ask the Building product layer
-- [ ] Phase 11 — Action Planner
+- [x] Phase 9 — Spatial Memory experience (**COMPLETE — real-state canvas + real Neon multi-state proof**)
+- [x] Phase 10 — Ask the Building product layer
+- [x] Phase 11 — Action Planner
 - [ ] Phase 12 — Verification Agent
 - [ ] Phase 13 — Living Spatial Intelligence UI rebuild/polish
 - [ ] Phase 14 — Demo scenario engineering
@@ -1240,7 +1240,7 @@ Production proof:
 Canonical record: `Knowledge/Technical/phase-10-ask-the-building.md`.
 
 
-## Phase 11 — ACTIVE
+## Phase 11 — COMPLETE
 
 Action Planner now turns a grounded environmental condition into a bounded **Recommended** action sequence without crossing into execution or verification.
 
@@ -1270,4 +1270,20 @@ The production proof deliberately targets immutable Warehouse State v2 (`state_9
 
 Canonical implementation record: `Knowledge/Technical/phase-11-action-planner.md`.
 
-Phase 11 remains active only until the exact deployed main commit passes the historical-state production Action Planner smoke.
+Phase 11 closed on exact deployed commit `8c3193e0a87e0974fc414edb9da2e76222a5d810`.
+
+Production proof:
+
+- Phase 11 Production Action Planner run `35717004333` — **SUCCESS**;
+- `phase11-action-plan-v1` confirmed from the deployed API;
+- persistence reported **Neon**;
+- real immutable Warehouse State v2 generated a four-step Recommended action plan;
+- the plan used 10 evidence references, 1 grounded condition, 1 grounded issue, and 2 grounded objects;
+- every action ID resolved inside the server-owned grounding envelope;
+- inferred-access / medium-issue authority kept action priority at medium or below;
+- the deterministic final step remained **Rescan to verify**;
+- no step claimed completed / resolved / verified physical work.
+
+The first deployed attempt timed out at the previous inference ceiling and was diagnosed rather than accepted. The follow-up exact deployment passed after inference-budget hardening with trust rules unchanged.
+
+Canonical record: `Knowledge/Technical/phase-11-action-planner.md`.
