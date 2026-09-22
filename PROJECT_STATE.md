@@ -14,7 +14,7 @@ Hackathon track: **Best Apps and Agents**.
 
 ## Current phase
 
-**Phase 12 — Verification Agent: ACTIVE / ORDINARY DOORWAY ACCESS HARDENED / POSITIVE PHYSICAL PASS NEXT**
+**Phase 12 — Verification Agent: ACTIVE / POSITIVE VISUAL + FALSE-RESOLUTION PROOFS PASS / REAL PHYSICAL PASS NEXT**
 
 ## Phase 3 — COMPLETE
 
@@ -1093,7 +1093,7 @@ Canonical production proof: `Knowledge/Technical/phase-9-real-history-proof.md`.
 
 ## Highest-priority gaps
 
-1. Phase 12 — one controlled positive physical Action Plan → rescan → `passed` verification proof.
+1. Phase 12 — one real physical Action Plan → actual change → rescan → `passed` verification proof.
 2. Phase 13 — Living Spatial Intelligence UI rebuild/polish.
 3. Reliability, automated tests, security, and least-privilege database-role hardening.
 
@@ -1365,3 +1365,25 @@ Current hardening adds a distinct ordinary-doorway access path without weakening
 - explicit evidence-backed `position.description` can now participate in placement reasoning.
 
 Historical states remain immutable. A fresh environment/scan is required after deployment to test this fix.
+
+
+### Phase 12 positive visual production proof — PASS
+
+Exact deployed runtime commit: `f35aea981ca7369599df53482bcad5c5a52cb3f3`.
+
+`Phase 12 Verification Test 4` now proves the production visual verifier can close a doorway obstruction from positive AFTER-image evidence:
+
+- State v1 `state_3313c389-fd60-451e-a176-743b0ede2e76` — **Doorway access obstructed**;
+- State v2 `state_4b82fef3-0785-4159-8562-24166f27b280` — same durable door re-observed;
+- Phase 12 Positive Visual Verification run `35736810754` — **SUCCESS**;
+- contract `phase12-visual-verification-v2`;
+- result **passed**;
+- 1 resolved / 0 remaining / 0 inconclusive / 0 new;
+- resolved confidence 1.0;
+- current visual evidence survived the server grounding gate.
+
+The warehouse false-resolution proof was rerun on the same v2 contract and remained **failed** as required (run `35736810593`, rerun **SUCCESS**).
+
+This proves both positive and negative verification behavior in production without weakening **Not re-observed is not resolved**.
+
+The Test 4 images were generated for functional testing. Phase 12 therefore remains ACTIVE. The only remaining exit gate is one real-world physical before/action/change/rescan sequence that returns **passed**.
