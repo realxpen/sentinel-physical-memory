@@ -62,7 +62,7 @@ console.log('VERIFICATION_RESPONSE', JSON.stringify({
   })),
 }))
 
-expect(payload.verificationContract === 'phase12-verification-v1', 'production must expose the Phase 12 verification contract')
+expect(payload.verificationContract === 'phase12-visual-verification-v2', 'production must expose the Phase 12 visual verification contract')
 expect(payload.persistence === 'neon', 'production verification must use Neon-backed memory')
 expect(payload.previousStateId === previous.id, 'verification must remain pinned to immutable State v2 as baseline')
 expect(payload.currentStateId === current.id, 'verification must compare against immutable State v3')
