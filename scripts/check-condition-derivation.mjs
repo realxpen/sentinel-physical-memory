@@ -105,8 +105,8 @@ try {
   ordinaryDoorway.objects[1].category = 'furniture'
   ordinaryDoorway.objects[1].description = 'gray chair'
   ordinaryDoorway.objects[1].position = { description: 'directly in front of the open office door' }
-  ordinaryDoorway.observations[1].label = 'gray chair'
-  ordinaryDoorway.observations[1].description = 'A gray chair is positioned directly in front of the open office door.'
+  ordinaryDoorway.observations[0].label = 'gray chair'
+  ordinaryDoorway.observations[0].description = 'A gray chair is positioned directly in front of the open office door.'
 
   const ordinaryDerived = deriveOperationalConditions(ordinaryDoorway, capturedAt)
   if (ordinaryDerived.derivedConditions.length !== 1) {
@@ -123,7 +123,7 @@ try {
 
   const ordinarySafe = structuredClone(ordinaryDoorway)
   ordinarySafe.objects[1].position = { description: 'beside the wall away from the doorway' }
-  ordinarySafe.observations[1].description = 'A gray chair is positioned beside the wall away from the doorway.'
+  ordinarySafe.observations[0].description = 'A gray chair is positioned beside the wall away from the doorway.'
   const ordinarySafeDerived = deriveOperationalConditions(ordinarySafe, capturedAt)
   if (ordinarySafeDerived.derivedConditions.length !== 0) {
     throw new Error('ordinary chair beside the doorway must not create an access condition')
