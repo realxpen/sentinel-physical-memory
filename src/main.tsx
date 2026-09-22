@@ -606,7 +606,7 @@ function App() {
         {memory && <section className="ask-building-context" aria-label="Ask the Building">
           <div className="ask-building-heading">
             <div>
-              <span className="eyebrow">ASK / CONTEXTUAL INTELLIGENCE</span>
+              <span className="eyebrow">ASK THE BUILDING / EVIDENCE-GROUNDED</span>
               <strong>Ask this place what it remembers.</strong>
               <small>The environment answers through remembered states, grounded relations, evidence and Reality Diff—not a detached chat transcript.</small>
             </div>
