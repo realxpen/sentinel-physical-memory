@@ -1,5 +1,6 @@
 import { createNebiusNemotronAdapter } from '../src/ai/nebius.js'
 import { ModelAdapterError } from '../src/ai/model.js'
+import type { ScanArtifact } from '../src/scan/types.js'
 import { VerificationAgentService, VerificationInputError } from '../src/verification/service.ts'
 import { getMemoryPersistenceMode, getRuntimeEnvironmentalMemoryRepository } from '../server/memory-repository.js'
 
@@ -8,8 +9,8 @@ type Response = { status(code: number): Response; json(body: unknown): void }
 
 const MAX_BODY_BYTES = 64 * 1024
 const MAX_IDS = 24
-const DEFAULT_REASONING_MODEL = 'nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B'
-const VERIFICATION_CONTRACT = 'phase12-verification-v1'
+const DEFAULT_VERIFICATION_MODEL = 'openbmb/MiniCPM-V-4_5'
+const VERIFICATION_CONTRACT = 'phase12-visual-verification-v2'
 
 export default async function handler(req: Request, res: Response) {
   if (req.method !== 'POST') {
@@ -37,8 +38,17 @@ export default async function handler(req: Request, res: Response) {
     const repository = getRuntimeEnvironmentalMemoryRepository()
     const adapter = createNebiusNemotronAdapter(apiKey, {
       baseUrl: process.env.NEBIUS_TOKEN_FACTORY_BASE_URL,
-      model: process.env.NEBIUS_NEMOTRON_REASONING_MODEL?.trim() || DEFAULT_REASONING_MODEL,
-      timeoutMs: 75_000,
+      model: process.env.NEBIUS_VERIFICATION_MODEL?.trim()
+        || process.env.NEBIUS_PERCEPTION_MODEL?.trim()
+        || DEFAULT_VERIFICATION_MODEL,
+      timeoutMs: 90_000,
+      artifactResolver: {
+        resolve: async (artifact: ScanArtifact) => ({
+          artifactId: artifact.artifactId,
+          mimeType: mimeTypeFromDataUrl(artifact.uri) || 'image/jpeg',
+          uri: artifact.uri,
+        }),
+      },
     })
     const result = await new VerificationAgentService(repository, adapter).verify(body)
 
@@ -101,6 +111,10 @@ function normalizedOrigin(value: string | undefined): string | undefined {
 function header(req: Request, name: string) {
   const value = req.headers?.[name]
   return Array.isArray(value) ? value[0] : value
+}
+function mimeTypeFromDataUrl(uri: string): string | undefined {
+  const match = uri.match(/^data:([^;,]+)[;,]/i)
+  return match?.[1]?.toLowerCase()
 }
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
