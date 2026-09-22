@@ -628,6 +628,159 @@ try {
   console.log('PASS  geometry audit requires obstacle -> door in_front_of evidence and rejects weak proximity')
   console.log('PASS  structured geometry relation enables derivation without weakening policy thresholds')
 
+
+  const ordinaryGeometryEnvironmentId = 'condition-audit-ordinary-doorway-geometry-test'
+  const ordinaryGeometrySourceId = 'source-condition-audit-ordinary-doorway-geometry'
+  const ordinaryGeometryPrompts = []
+  const ordinaryGeometryModel = {
+    provider: 'test-provider',
+    model: 'test-model',
+    async infer(request) {
+      ordinaryGeometryPrompts.push(request.prompt)
+      const isConditionAudit = request.prompt.includes('Condition audit for scan')
+      const isGeometryAudit = request.prompt.includes('Targeted access-geometry verification for scan')
+
+      if (isGeometryAudit) {
+        return {
+          sourceId: ordinaryGeometrySourceId,
+          observations: [{
+            id: 'ordinary-geometry-placement',
+            environmentId: ordinaryGeometryEnvironmentId,
+            sourceId: ordinaryGeometrySourceId,
+            modality: 'image',
+            capturedAt,
+            label: 'Conference Room chair',
+            description: 'The gray Conference Room chair is directly in front of the Conference Room door.',
+            confidence: 0.98,
+            basis: 'observed',
+            evidenceIds: ['evidence_0'],
+          }],
+          objects: [{
+            id: 'ordinary-geometry-door',
+            environmentId: ordinaryGeometryEnvironmentId,
+            category: 'door',
+            name: 'Conference Room door',
+            description: 'A wooden door with a black frame that is partially open.',
+            state: 'open',
+            confidence: 0.95,
+            firstSeenAt: capturedAt,
+            lastSeenAt: capturedAt,
+            evidenceIds: ['evidence_0'],
+          }, {
+            id: 'ordinary-geometry-chair',
+            environmentId: ordinaryGeometryEnvironmentId,
+            category: 'furniture',
+            name: 'Conference Room chair',
+            description: 'A gray upholstered chair with black metal legs and armrests.',
+            confidence: 0.95,
+            firstSeenAt: capturedAt,
+            lastSeenAt: capturedAt,
+            evidenceIds: ['evidence_0'],
+          }],
+          conditions: [],
+          relations: [{
+            id: 'ordinary-geometry-front',
+            environmentId: ordinaryGeometryEnvironmentId,
+            fromId: 'ordinary-geometry-chair',
+            toId: 'ordinary-geometry-door',
+            type: 'in_front_of',
+            confidence: 0.98,
+            evidenceIds: ['evidence_0'],
+          }],
+          evidence: [],
+        }
+      }
+
+      return {
+        sourceId: ordinaryGeometrySourceId,
+        observations: [],
+        objects: [{
+          id: isConditionAudit ? 'audit-ordinary-door' : 'scene-ordinary-door',
+          environmentId: ordinaryGeometryEnvironmentId,
+          category: 'door',
+          name: 'Conference Room door',
+          description: 'A wooden door with a black frame that is partially open.',
+          state: 'open',
+          confidence: 0.95,
+          firstSeenAt: capturedAt,
+          lastSeenAt: capturedAt,
+          evidenceIds: ['evidence_0'],
+        }, {
+          id: isConditionAudit ? 'audit-ordinary-chair' : 'scene-ordinary-chair',
+          environmentId: ordinaryGeometryEnvironmentId,
+          category: 'furniture',
+          name: 'Conference Room chair',
+          description: 'A gray upholstered chair with black metal legs and armrests.',
+          confidence: 0.95,
+          firstSeenAt: capturedAt,
+          lastSeenAt: capturedAt,
+          evidenceIds: ['evidence_0'],
+        }],
+        conditions: [{
+          id: isConditionAudit ? 'audit-ordinary-normal' : 'scene-ordinary-normal',
+          environmentId: ordinaryGeometryEnvironmentId,
+          kind: 'normal',
+          title: 'Office corridor appears normal',
+          description: 'No operational condition was asserted in the broad pass.',
+          status: 'present',
+          basis: 'observed',
+          confidence: 0.95,
+          objectIds: [],
+          evidenceIds: ['evidence_0'],
+          observedAt: capturedAt,
+        }],
+        relations: [],
+        evidence: [],
+      }
+    },
+  }
+
+  const ordinaryGeometryPipeline = new ScanPipeline({ model: ordinaryGeometryModel })
+  const ordinaryGeometryResult = await ordinaryGeometryPipeline.run({
+    environmentId: ordinaryGeometryEnvironmentId,
+    source: {
+      id: ordinaryGeometrySourceId,
+      environmentId: ordinaryGeometryEnvironmentId,
+      modality: 'image',
+      uri: 'local://ordinary-doorway-chair.jpg',
+      capturedAt,
+      metadata: { name: 'Ordinary Doorway Geometry Audit', environmentType: 'office' },
+    },
+    media: {
+      kind: 'image',
+      uri: 'data:image/jpeg;base64,AAA',
+      mimeType: 'image/jpeg',
+    },
+  })
+
+  if (ordinaryGeometryPrompts.length !== 3) {
+    throw new Error(`expected scene + condition audit + ordinary access geometry audit, got ${ordinaryGeometryPrompts.length}`)
+  }
+  if (!ordinaryGeometryPrompts[2].includes('Visible physical-obstruction candidates')) {
+    throw new Error('ordinary geometry audit must explicitly inspect physical-obstruction candidates')
+  }
+  if (!ordinaryGeometryPrompts[2].includes('do not call the doorway an emergency exit')) {
+    throw new Error('ordinary geometry audit must preserve the emergency-exit identity boundary')
+  }
+  const ordinaryAccessConditions = ordinaryGeometryResult.conditions.filter((item) => item.title === 'Doorway access obstructed')
+  if (ordinaryAccessConditions.length !== 1) {
+    throw new Error(`expected exactly one ordinary doorway access condition, got ${ordinaryAccessConditions.length}`)
+  }
+  if (ordinaryAccessConditions[0].basis !== 'inferred' || ordinaryAccessConditions[0].confidence < 0.85) {
+    throw new Error('ordinary doorway condition must remain strong inferred evidence, not direct observation')
+  }
+  if (ordinaryGeometryResult.state.issueIds.length !== 1) {
+    throw new Error('ordinary doorway obstruction should promote exactly one operational access issue')
+  }
+  if (!ordinaryGeometryResult.relations.some((item) => item.type === 'in_front_of')) {
+    throw new Error('ordinary geometry audit relation did not survive the scan pipeline')
+  }
+
+  console.log('PASS  ordinary chair + door without placement triggers one targeted access-geometry audit')
+  console.log('PASS  targeted audit grounds chair -> door in_front_of from current image evidence')
+  console.log('PASS  ordinary doorway obstruction derives exactly one inferred medium access issue')
+  console.log('PASS  ordinary geometry audit cannot silently relabel the doorway as an emergency exit')
+
   const completionEnvironmentId = 'condition-audit-exit-sign-completion-test'
   const completionSourceId = 'source-exit-sign-completion'
   const completionModel = {
