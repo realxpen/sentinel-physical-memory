@@ -14,7 +14,7 @@ Hackathon track: **Best Apps and Agents**.
 
 ## Current phase
 
-**Phase 12 — Verification Agent: ACTIVE / CLOSED-LOOP VERIFIER IMPLEMENTED / PRODUCTION FALSE-RESOLUTION GATE PENDING**
+**Phase 12 — Verification Agent: ACTIVE / PRODUCTION FALSE-RESOLUTION VERIFIED / POSITIVE PHYSICAL PASS NEXT**
 
 ## Phase 3 — COMPLETE
 
@@ -1093,7 +1093,7 @@ Canonical production proof: `Knowledge/Technical/phase-9-real-history-proof.md`.
 
 ## Highest-priority gaps
 
-1. Phase 12 — exact-deployment verification production gate + one positive physical passed proof.
+1. Phase 12 — one controlled positive physical Action Plan → rescan → `passed` verification proof.
 2. Phase 13 — Living Spatial Intelligence UI rebuild/polish.
 3. Reliability, automated tests, security, and least-privilege database-role hardening.
 
@@ -1331,7 +1331,19 @@ Canonical implementation record: `Knowledge/Technical/phase-12-verification-agen
 
 The existing real warehouse history contains an important negative proof candidate: State v2 has a grounded emergency-exit access condition, while State v3 dropped the operational condition/issue but still remembers the orange cart **in front of the door**. Phase 12 must classify that as unresolved rather than false-green.
 
-Phase 12 remains active until:
+Phase 12 production false-resolution proof passed on exact deployed commit `65fc72e0df14c1822dbf5c9206c0b27c922d13ec`.
 
-1. the exact deployed main commit passes the real warehouse false-resolution production gate; and
-2. one controlled physical rescan produces a genuine **passed** verification result, satisfying the source build-plan exit condition: `detected → action → changed → verified`.
+Production proof:
+
+- Phase 12 Production Verification run `35718994390` — **SUCCESS**;
+- `phase12-verification-v1` confirmed from the deployed API;
+- persistence reported **Neon**;
+- real Warehouse State v2 → State v3 returned **failed**, not a false Verified state;
+- baseline access condition: 0 resolved / 1 remaining / 0 inconclusive;
+- the remaining verdict cited 10 State v3 evidence references;
+- total verification grounding contained 20 evidence references;
+- the current immutable snapshot still grounded the orange cart **in front of the door**, so disappearance of the old issue / condition record was correctly rejected as proof of resolution.
+
+Canonical record: `Knowledge/Technical/phase-12-verification-agent.md`.
+
+Phase 12 remains active for exactly one source-defined exit gate: one controlled physical Action Plan → real environmental change → rescan → positive **passed** verification from current same-object / same-area evidence.

@@ -1,6 +1,6 @@
 # Phase 12 — Verification Agent
 
-Status: **ACTIVE / IMPLEMENTED / PRODUCTION + POSITIVE PHYSICAL EXIT GATES PENDING**
+Status: **ACTIVE / IMPLEMENTED / PRODUCTION FALSE-RESOLUTION VERIFIED / POSITIVE PHYSICAL EXIT GATE PENDING**
 
 ## Source goal
 
@@ -210,9 +210,47 @@ Expected result:
 
 This is a deliberately important negative production proof: it demonstrates that SENTINEL does not confuse perception omission with physical resolution.
 
+## Production proof — false-resolution defense PASS
+
+Phase 12's first real production verification gate passed on exact deployed commit:
+
+`65fc72e0df14c1822dbf5c9206c0b27c922d13ec`
+
+Production workflow:
+
+- **Phase 12 Production Verification**
+- run `35718994390`
+- result: **SUCCESS**
+- persistence: **Neon**
+- verification contract: **phase12-verification-v1**
+- environment: `env_warehouse_73266674`
+- previous immutable state: `state_9eef338f-2f7c-49f8-ac54-c8901f678d04` / State v2
+- current immutable state: `state_1dcd5d3e-735c-45fc-a6e6-4fcfacdb04d4` / State v3
+- aggregate result: **failed**
+- resolved baseline conditions: **0**
+- remaining baseline conditions: **1**
+- inconclusive baseline conditions: **0**
+- new non-normal conditions: **0**
+- verification grounding evidence: **20**
+- current evidence attached to the remaining verdict: **10**
+
+The baseline condition remained the durable State v2 inferred access condition **Emergency exit access obstructed**.
+
+State v3 no longer carried the old operational condition / issue record, but its current immutable snapshot still grounded the orange cart **in front of the door**. SENTINEL therefore returned `remaining` with confidence 1.0 instead of falsely declaring the condition resolved.
+
+This production result proves:
+
+- issue / condition disappearance is not treated as physical resolution;
+- the baseline condition identity remains stable across verification;
+- current-state evidence, not historical evidence alone, supports the definitive verdict;
+- server-owned obstruction geometry can override model optimism;
+- `failed` is a legitimate successful verification outcome when the physical problem remains.
+
+This closes the **negative trust-boundary production gate**. It does **not** close Phase 12 itself.
+
 ## Remaining Phase 12 exit gate
 
-The negative/false-resolution production gate proves the trust boundary, but the source exit condition also requires one positive physical closed-loop result.
+The production false-resolution proof is complete, but the source exit condition still requires one positive physical closed-loop result.
 
 To close Phase 12 completely, perform one controlled real rescan where:
 
