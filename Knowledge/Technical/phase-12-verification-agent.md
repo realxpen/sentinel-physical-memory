@@ -1,6 +1,6 @@
 # Phase 12 — Verification Agent
 
-Status: **ACTIVE / IMPLEMENTED / PRODUCTION FALSE-RESOLUTION VERIFIED / POSITIVE PHYSICAL EXIT GATE PENDING**
+Status: **ACTIVE / VISUAL POSITIVE + FALSE-RESOLUTION PROOFS PASS / REAL PHYSICAL EXIT GATE PENDING**
 
 ## Source goal
 
@@ -97,11 +97,11 @@ This override exists because the real Warehouse State v3 currently demonstrates 
 
 A model cannot override this server-owned physical contradiction.
 
-### Nemotron verification pass
+### Visual verification pass
 
-Only conditions not already decided deterministically are sent to Nemotron.
+Only conditions not already decided deterministically are sent to the verification model. Verification v2 uses the CURRENT rescan image through MiniCPM-V by default; the server still owns the final trust decision.
 
-Nemotron receives a compact verification context containing:
+The verification model receives the current rescan image(s) plus a compact verification context containing:
 
 - target baseline conditions;
 - current non-normal conditions;
@@ -191,7 +191,7 @@ Current physical objects referenced by Verification use a separate cyan Spatial 
 - the UI contains the verification surface and trust rule;
 - Action Plan → current/rescan verification wiring exists;
 - verification-related Spatial Memory highlighting exists;
-- the production API exposes `phase12-verification-v1`.
+- the production API exposes `phase12-visual-verification-v2`.
 
 ## Production gate
 
@@ -292,3 +292,49 @@ Current hardening adds a separate ordinary-doorway path:
 A qualifying ordinary scene now produces **Doorway access obstructed** — Inferred / Present / medium maximum operational issue.
 
 Historical test states are not rewritten. A fresh scan is required to exercise the fix.
+
+
+## Positive visual production proof — Test 4 PASS
+
+The user-visible **Verification inconclusive** result in `Phase 12 Verification Test 4` exposed a second trust-boundary gap: the verifier was text-only. State v2 had re-observed the same durable door, but there was no positive prose claim saying the doorway was visibly clear.
+
+SENTINEL did **not** weaken **Not re-observed is not resolved**. Verification v2 now attaches only CURRENT-state image sources to verification inference. A resolved verdict still has to survive server-owned confidence, evidence-ID, same-object/area, and continued-obstruction checks.
+
+Exact deployed runtime commit:
+
+`f35aea981ca7369599df53482bcad5c5a52cb3f3`
+
+Positive production workflow:
+
+- **Phase 12 Positive Visual Verification**
+- run `35736810754` — **SUCCESS**
+- persistence: **Neon**
+- contract: **phase12-visual-verification-v2**
+- environment: `env_phase-12-verification-test-4_53870785`
+- previous State v1: `state_3313c389-fd60-451e-a176-743b0ede2e76`
+- current State v2: `state_4b82fef3-0785-4159-8562-24166f27b280`
+- result: **passed**
+- resolved: **1**
+- remaining: **0**
+- inconclusive: **0**
+- new non-normal conditions: **0**
+- resolved confidence: **1.0**
+- same durable current door: `object_c7854cc6-4c0e-4185-b561-c0c2da555e3a`
+- current visual evidence survived grounding.
+
+The old warehouse false-resolution gate was then rerun on the same visual-verification contract:
+
+- **Phase 12 Production Verification**
+- run `35736810593` — rerun **SUCCESS**
+- result: **failed**
+- resolved: **0**
+- remaining: **1**
+- remaining confidence: **1.0**
+- current evidence on remaining verdict: **10**.
+
+So both directions now hold simultaneously:
+
+- visibly cleared doorway → **passed**;
+- still-grounded obstruction → **failed**.
+
+The Test 4 images were generated for controlled functional testing, so this does **not** close the final source-defined real-world physical exit gate. Phase 12 remains ACTIVE until one real physical condition is changed and a real rescan returns **passed**.
