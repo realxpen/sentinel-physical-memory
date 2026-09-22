@@ -69,6 +69,49 @@ export function deriveOperationalConditions(
     }
   }
 
+
+  // Ordinary doorway access is intentionally separate from emergency-egress reasoning.
+  // A grounded physical door may establish ordinary doorway identity, but an
+  // emergency-labelled door still requires independent exit evidence and may
+  // not silently fall back to this generic path.
+  for (const door of doors) {
+    if (findExitEvidenceForDoor(perception, door)) continue
+    if (EXIT_CUE.test(semanticText(door))) continue
+    if (door.evidenceIds.length === 0) continue
+
+    for (const obstacle of obstacles) {
+      if (obstacle.id === door.id) continue
+      const placementEvidence = findObstaclePlacementEvidence(perception, obstacle, door)
+      if (!placementEvidence) continue
+
+      const objectIds = [obstacle.id, door.id]
+      if (hasExistingAccessCondition(perception.conditions, objectIds)) continue
+
+      const confidence = boundedInferenceConfidence(placementEvidence.confidence, obstacle.confidence, door.confidence)
+      if (confidence < 0.85) continue
+
+      const evidenceIds = unique([
+        ...placementEvidence.evidenceIds,
+        ...obstacle.evidenceIds,
+        ...door.evidenceIds,
+      ])
+      if (evidenceIds.length === 0) continue
+
+      derivedConditions.push({
+        id: 'derived_access_' + safeId(obstacle.id) + '_' + safeId(door.id),
+        environmentId: door.environmentId,
+        kind: 'access',
+        title: 'Doorway access obstructed',
+        description: obstacle.name + ' is observed ' + placementEvidence.phrase + ' ' + door.name + ', obstructing access through the doorway.',
+        status: 'present',
+        basis: 'inferred',
+        confidence,
+        objectIds,
+        evidenceIds,
+        observedAt,
+      })
+    }
+  }
   if (derivedConditions.length === 0) return { result: perception, derivedConditions }
 
   return {
@@ -212,9 +255,9 @@ function colorAnchoredDoorAlias(value: string): string | undefined {
 }
 
 function semanticText(item: Observation | SpatialObject | EnvironmentalCondition): string {
-  if ('label' in item) return normalize(`${item.label} ${item.description}`)
-  if ('title' in item) return normalize(`${item.title} ${item.description}`)
-  return normalize(`${item.name} ${item.description ?? ''}`)
+  if ('label' in item) return normalize(item.label + ' ' + item.description)
+  if ('title' in item) return normalize(item.title + ' ' + item.description)
+  return normalize(item.name + ' ' + (item.description ?? '') + ' ' + (item.position?.description ?? ''))
 }
 
 function boundedInferenceConfidence(...values: number[]): number {
