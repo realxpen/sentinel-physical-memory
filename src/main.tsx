@@ -4,6 +4,7 @@ import './styles.css'
 import './integration.css'
 import './environment.css'
 import './history.css'
+import './phase13.css'
 import type { ActionPlanningResponse, AskBuildingResponse, Change, EnvironmentalCondition, EnvironmentalDiff, EnvironmentalMemory, EnvironmentalState, EnvironmentType, Observation, SpatialObject, VerificationResult } from './domain/sentinel'
 import type { EnvironmentalStateHistoryEntry, EnvironmentalStateHistoryRecord } from './memory/history'
 import { changesForPresentation, presentedChangeSummary } from './memory/change-presentation'
@@ -168,6 +169,13 @@ function App() {
   const verificationObjectIds = new Set(verification?.grounding.objects.filter((item) => item.stateIds.includes(verification.currentStateId)).map((item) => item.id) ?? [])
   const actionPlanBaselineState = actionPlan && memory ? memory.states.find((item) => item.id === actionPlan.plan.stateId) : undefined
   const currentMemoryState = memory?.environment.currentStateId ? memory.states.find((item) => item.id === memory.environment.currentStateId) : undefined
+  const currentMemoryImage = currentMemoryState && memory
+    ? memory.sources.find((source) => currentMemoryState.sourceIds.includes(source.id) && source.modality === 'image')?.uri
+    : undefined
+  const currentAttentionCount = currentSnapshot
+    ? currentSnapshot.conditions.filter((item) => item.kind !== 'normal' && item.status !== 'resolved').length + currentSnapshot.issues.filter((item) => item.status !== 'resolved').length
+    : 0
+  const currentStateLabel = currentMemoryState ? `State v${currentMemoryState.version}` : 'No state yet'
   const canVerifyActionPlan = Boolean(actionPlan && actionPlanBaselineState && currentMemoryState && currentMemoryState.version > actionPlanBaselineState.version)
   const overlayOpen = Boolean(selectedChange || historySelection || selectedSpatialObject || selectedObservation !== null || showEnvironmentDialog)
 
@@ -547,7 +555,7 @@ function App() {
   const observation = selectedObservation === null ? null : result?.observations[selectedObservation]
 
   return (
-    <main className={`app view-${view}${overlayOpen ? ' overlay-open' : ''}`}>
+    <main className={`app phase13-shell view-${view}${isWorking ? ' system-awake' : ''}${overlayOpen ? ' overlay-open' : ''}`}>
       <header className="topbar">
         <SentinelMark active={isWorking} />
         <div className="environment-status environment-switcher">
@@ -569,18 +577,38 @@ function App() {
       </nav>
 
       {view === 'memory' && <section className="memory-view">
-        <div className="hero-copy">
+        <div className="hero-copy memory-hero-copy">
           <div className="eyebrow">PHYSICAL MEMORY / {activeEnvironment.name.toUpperCase()}</div>
-          <h1>{memory ? 'This space remembers.' : 'Give this place a memory.'}</h1>
-          <p>{memory ? `SENTINEL holds ${memory.states.length} grounded environmental state${memory.states.length === 1 ? '' : 's'}, ${memory.objects.length} remembered objects, ${memory.conditions.length} condition${memory.conditions.length === 1 ? '' : 's'} and ${memory.issues.length} actionable issue${memory.issues.length === 1 ? '' : 's'} for ${activeEnvironment.name}.` : `${activeEnvironment.name} has no saved observation yet. Take a photo of the area or use a walkthrough video and SENTINEL will create its own independent environmental memory.`}</p>
+          <h1>{memory ? 'Your space remembers.' : 'Give this place a memory.'}</h1>
+          <p>{memory ? `SENTINEL holds ${memory.states.length} immutable environmental state${memory.states.length === 1 ? '' : 's'} for ${activeEnvironment.name}. The current scene, its grounded conditions and every supported change stay connected to evidence.` : `Walk through or photograph ${activeEnvironment.name} once. SENTINEL will remember what it sees and create a persistent physical-world memory.`}</p>
         </div>
+
+        <section className={memory ? 'memory-cinematic-hero remembered' : 'memory-cinematic-hero empty'} aria-label={memory ? 'Current environmental memory' : 'Create first environmental memory'}>
+          {currentMemoryImage && <img src={currentMemoryImage} alt={activeEnvironment.name + ' current remembered environment'} />}
+          <div className="memory-cinematic-shade" />
+          <div className="memory-cinematic-topline">
+            <span>{memory ? 'CURRENT MEMORY' : 'FIRST OBSERVATION'}</span>
+            <strong>{memory ? currentStateLabel : 'DORMANT'}</strong>
+          </div>
+          <div className="memory-cinematic-copy">
+            <span className="eyebrow">{memory ? (currentAttentionCount > 0 ? 'ATTENTION PRESENT' : 'ENVIRONMENT REMEMBERED') : 'SENTINEL / DORMANT'}</span>
+            <strong>{memory ? activeEnvironment.name : 'Nothing here has a memory yet.'}</strong>
+            <p>{memory ? (currentAttentionCount > 0 ? `${currentAttentionCount} grounded condition${currentAttentionCount === 1 ? '' : 's'} or issue${currentAttentionCount === 1 ? '' : 's'} currently deserve attention.` : 'The current remembered state has no grounded operational condition requiring attention.') : 'Observe the environment once. Objects, conditions, relationships and future changes will attach to this place.'}</p>
+          </div>
+          {memory ? <div className="memory-cinematic-footer">
+            <div><span>LAST REMEMBERED</span><strong>{currentMemoryState ? formatStateTimestamp(currentMemoryState.capturedAt) : 'Unknown'}</strong></div>
+            <div><span>OBJECTS</span><strong>{currentSnapshot?.objects.length ?? memory.objects.length}</strong></div>
+            <div><span>CONDITIONS</span><strong>{currentSnapshot?.conditions.filter((item) => item.kind !== 'normal').length ?? 0}</strong></div>
+            <button type="button" onClick={() => setView('observe')}>Observe again <b>↗</b></button>
+          </div> : <button className="memory-first-observe" type="button" onClick={() => setView('observe')}><span className="observe-orb"><i /></span><span><strong>Begin observation</strong><small>Create ${activeEnvironment.name} memory v1</small></span></button>}
+        </section>
 
         {memory && <section className="ask-building-context" aria-label="Ask the Building">
           <div className="ask-building-heading">
             <div>
-              <span className="eyebrow">ASK THE BUILDING / EVIDENCE-GROUNDED</span>
+              <span className="eyebrow">ASK / CONTEXTUAL INTELLIGENCE</span>
               <strong>Ask this place what it remembers.</strong>
-              <small>Questions reason over persisted Spatial Memory, immutable state history, grounded relations and Reality Diff—not a generic chat transcript.</small>
+              <small>The environment answers through remembered states, grounded relations, evidence and Reality Diff—not a detached chat transcript.</small>
             </div>
             <label className="ask-state-scope">
               <span>Reason from</span>
@@ -842,14 +870,14 @@ function App() {
       </section>}
 
       {view === 'observe' && <section className="observe-view">
-        <div className="observe-camera"><div className="camera-noise" /><div className="scan-line" /><div className="camera-topline"><SentinelMark active /><span>{isWorking ? status : `${activeEnvironment.name.toUpperCase()} / OBSERVATION MODE`}</span></div><div className="focus-frame focus-one"><span>Workspace</span></div><div className="focus-frame focus-two"><span>Evidence region</span></div><div className="observe-message"><span className="eyebrow">PHONE-FIRST OBSERVATION</span><h2>{isWorking ? status : memory ? `Photograph what changed in ${activeEnvironment.name}.` : `Create the first memory for ${activeEnvironment.name}.`}</h2><p>Take one clear photo or choose one from Photos. SENTINEL grounds visible evidence and updates only this location's persistent environmental state. Video remains optional for larger spaces.</p></div><div className="observe-capture-actions"><button className="capture-button" type="button" onClick={() => libraryInputRef.current?.click()} aria-label="Choose a photo from library"><span><i /></span><strong>{isWorking ? 'Observing' : memory ? 'Choose update photo' : 'Choose first photo'}</strong></button><div className="observe-secondary-actions"><button className="walkthrough-option" type="button" onClick={() => inputRef.current?.click()} disabled={isWorking}>Take photo</button><button className="walkthrough-option" type="button" onClick={() => videoInputRef.current?.click()} disabled={isWorking}>Choose video</button></div></div></div>
+        <div className={currentMemoryImage ? 'observe-camera has-memory-image' : 'observe-camera'} style={currentMemoryImage ? { backgroundImage: `linear-gradient(90deg, rgba(8,10,9,.94) 0%, rgba(8,10,9,.68) 44%, rgba(8,10,9,.3) 100%), url("${currentMemoryImage}")` } : undefined}><div className="camera-noise" /><div className="scan-line" /><div className="camera-topline"><SentinelMark active /><span>{isWorking ? status : `${activeEnvironment.name.toUpperCase()} / OBSERVATION MODE`}</span></div><div className="focus-frame focus-one"><span>Workspace</span></div><div className="focus-frame focus-two"><span>Evidence region</span></div><div className="observe-message"><span className="eyebrow">PHONE-FIRST OBSERVATION</span><h2>{isWorking ? status : memory ? `Photograph what changed in ${activeEnvironment.name}.` : `Create the first memory for ${activeEnvironment.name}.`}</h2><p>Take one clear photo or choose one from Photos. SENTINEL grounds visible evidence and updates only this location's persistent environmental state. Video remains optional for larger spaces.</p></div><div className="observe-capture-actions"><button className="capture-button" type="button" onClick={() => libraryInputRef.current?.click()} aria-label="Choose a photo from library"><span><i /></span><strong>{isWorking ? 'Observing' : memory ? 'Choose update photo' : 'Choose first photo'}</strong></button><div className="observe-secondary-actions"><button className="walkthrough-option" type="button" onClick={() => inputRef.current?.click()} disabled={isWorking}>Take photo</button><button className="walkthrough-option" type="button" onClick={() => videoInputRef.current?.click()} disabled={isWorking}>Choose video</button></div></div></div>
         {error && <div className="error" role="alert"><strong>Observation interrupted</strong><span>{error}</span></div>}
       </section>}
 
       {view === 'changes' && <section className="changes-view operations-diff">
         <div className="hero-copy compact operations-diff-hero">
-          <div className="eyebrow">FACILITY OPERATIONS / REALITY DIFF / {activeEnvironment.name.toUpperCase()}</div>
-          <h1>{latestDiff ? 'Operations update.' : 'What changed.'}</h1>
+          <div className="eyebrow">REALITY DIFF / {activeEnvironment.name.toUpperCase()}</div>
+          <h1>{latestDiff ? 'What changed.' : 'What changed.'}</h1>
           <p>{latestDiff ? `SENTINEL compared the previous remembered state with the current one and found ${presentedChanges.length} supported change${presentedChanges.length === 1 ? '' : 's'}. Review what needs attention, what physically changed, and what has been resolved.` : memory ? `Observe ${activeEnvironment.name} again. SENTINEL will compare the new grounded state with the one it remembers for this location.` : `${activeEnvironment.name} needs a first observation before Reality Diff can begin.`}</p>
         </div>
 
