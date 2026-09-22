@@ -94,6 +94,37 @@ try {
     throw new Error('generic exit sign above door wording must not choose between multiple visible doors')
   }
 
+  const ordinaryDoorway = structuredClone(base)
+  ordinaryDoorway.observations = ordinaryDoorway.observations.filter((item) => item.id !== 'obs_exit')
+  ordinaryDoorway.objects[0].name = 'open office door'
+  ordinaryDoorway.objects[0].description = 'open wooden door to a conference room'
+  ordinaryDoorway.objects[1].name = 'gray chair'
+  ordinaryDoorway.objects[1].category = 'furniture'
+  ordinaryDoorway.objects[1].description = 'gray chair'
+  ordinaryDoorway.objects[1].position = { description: 'directly in front of the open office door' }
+  ordinaryDoorway.observations[1].label = 'gray chair'
+  ordinaryDoorway.observations[1].description = 'A gray chair is positioned directly in front of the open office door.'
+
+  const ordinaryDerived = deriveOperationalConditions(ordinaryDoorway, capturedAt)
+  if (ordinaryDerived.derivedConditions.length !== 1) {
+    throw new Error('explicit grounded chair-in-front-of-door geometry should derive one ordinary doorway access condition')
+  }
+  const ordinaryCondition = ordinaryDerived.derivedConditions[0]
+  if (ordinaryCondition.title !== 'Doorway access obstructed' || ordinaryCondition.kind !== 'access' || ordinaryCondition.basis !== 'inferred') {
+    throw new Error('ordinary doorway obstruction must remain a distinct inferred access condition')
+  }
+  const ordinaryAssessment = assessCondition(ordinaryCondition)
+  if (!ordinaryAssessment.operational || ordinaryAssessment.issueType !== 'access' || ordinaryAssessment.severity !== 'medium') {
+    throw new Error('strong grounded ordinary doorway obstruction should become a medium access issue')
+  }
+
+  const ordinarySafe = structuredClone(ordinaryDoorway)
+  ordinarySafe.objects[1].position = { description: 'beside the wall away from the doorway' }
+  ordinarySafe.observations[1].description = 'A gray chair is positioned beside the wall away from the doorway.'
+  const ordinarySafeDerived = deriveOperationalConditions(ordinarySafe, capturedAt)
+  if (ordinarySafeDerived.derivedConditions.length !== 0) {
+    throw new Error('ordinary chair beside the doorway must not create an access condition')
+  }
   const safePlacement = structuredClone(base)
   safePlacement.observations[1].description = 'An orange pallet jack is parked beside the shelving.'
   safePlacement.objects[1].description = 'orange pallet jack beside the shelving'
@@ -144,6 +175,8 @@ try {
   console.log('PASS  derived condition preserves evidence and stays below source confidence')
   console.log('PASS  grounded exit sign above the only visible door preserves independent exit grounding')
   console.log('PASS  generic sign-above-door wording does not choose between multiple doors')
+  console.log('PASS  ordinary evidence-backed chair-in-front-of-door geometry derives a medium doorway access issue')
+  console.log('PASS  ordinary chair beside the doorway does not create an access issue')
   console.log('PASS  safe obstacle placement does not create an access condition')
   console.log('PASS  grounded obstacle -> door in_front_of relation supports derivation when text omits placement')
   console.log('PASS  reversed spatial direction does not derive an access obstruction')
