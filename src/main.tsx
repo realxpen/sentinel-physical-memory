@@ -4,7 +4,7 @@ import './styles.css'
 import './integration.css'
 import './environment.css'
 import './history.css'
-import type { ActionPlanningResponse, AskBuildingResponse, Change, EnvironmentalCondition, EnvironmentalDiff, EnvironmentalMemory, EnvironmentalState, EnvironmentType, Observation, SpatialObject } from './domain/sentinel'
+import type { ActionPlanningResponse, AskBuildingResponse, Change, EnvironmentalCondition, EnvironmentalDiff, EnvironmentalMemory, EnvironmentalState, EnvironmentType, Observation, SpatialObject, VerificationResult } from './domain/sentinel'
 import type { EnvironmentalStateHistoryEntry, EnvironmentalStateHistoryRecord } from './memory/history'
 import { changesForPresentation, presentedChangeSummary } from './memory/change-presentation'
 import { buildSpatialGroups, buildSpatialObjectDisplayNames, buildSpatialRelationEdges, describeSpatialRelations, focusSpatialGroups, spatialGroupForObject, spatialObjectSubtitle, spatialObjectTone } from './memory/spatial-memory'
@@ -94,6 +94,8 @@ function App() {
   const [answer, setAnswer] = useState<AskBuildingResponse | null>(null)
   const [actionPlan, setActionPlan] = useState<ActionPlanningResponse | null>(null)
   const [actionPlanStatus, setActionPlanStatus] = useState('')
+  const [verification, setVerification] = useState<VerificationResult | null>(null)
+  const [verificationStatus, setVerificationStatus] = useState('')
   const [history, setHistory] = useState<EnvironmentalStateHistoryEntry[]>([])
   const [historySelection, setHistorySelection] = useState<EnvironmentalStateHistoryRecord | null>(null)
   const [historyStatus, setHistoryStatus] = useState('')
@@ -163,6 +165,10 @@ function App() {
   const answerDiff = answerState && memory ? memory.diffs.find((item) => item.toStateId === answerState.id) : undefined
   const answerRelatedObjectIds = new Set(answer?.grounding?.objects.filter((item) => item.isCurrent).map((item) => item.id) ?? answer?.relatedObjectIds ?? [])
   const actionPlanObjectIds = new Set(actionPlan?.grounding.objects.filter((item) => item.isCurrent).map((item) => item.id) ?? [])
+  const verificationObjectIds = new Set(verification?.grounding.objects.filter((item) => item.stateIds.includes(verification.currentStateId)).map((item) => item.id) ?? [])
+  const actionPlanBaselineState = actionPlan && memory ? memory.states.find((item) => item.id === actionPlan.plan.stateId) : undefined
+  const currentMemoryState = memory?.environment.currentStateId ? memory.states.find((item) => item.id === memory.environment.currentStateId) : undefined
+  const canVerifyActionPlan = Boolean(actionPlan && actionPlanBaselineState && currentMemoryState && currentMemoryState.version > actionPlanBaselineState.version)
   const overlayOpen = Boolean(selectedChange || historySelection || selectedSpatialObject || selectedObservation !== null || showEnvironmentDialog)
 
   useEffect(() => {
@@ -180,6 +186,8 @@ function App() {
     setAnswer(null)
     setActionPlan(null)
     setActionPlanStatus('')
+    setVerification(null)
+    setVerificationStatus('')
     setAskStateId('current')
     setSelectedObservation(null)
     setHistory([])
@@ -253,6 +261,8 @@ function App() {
     setAnswer(null)
     setActionPlan(null)
     setActionPlanStatus('')
+    setVerification(null)
+    setVerificationStatus('')
     setSelectedSpatialAreaId('all')
     setView('memory')
   }
@@ -280,6 +290,8 @@ function App() {
     setError('')
     setResult(null)
     setAnswer(null)
+    setVerification(null)
+    setVerificationStatus('')
     setView('observe')
     setSelectedObservation(null)
     setSelectedChangeId(null)
@@ -314,7 +326,21 @@ function App() {
       setResult(payload)
       setMemory(payload.memory)
       setStatus(payload.diff ? `${payload.diff.changes.length} supported change(s) remembered` : `${activeEnvironment.name} is now remembered`)
-      setView(payload.diff ? 'changes' : 'memory')
+      if (actionPlan && actionPlan.plan.stateId !== payload.state.id) {
+        const baseline = payload.memory.states.find((item) => item.id === actionPlan.plan.stateId)
+        if (baseline && payload.state.version > baseline.version) {
+          void runVerification({
+            previousStateId: actionPlan.plan.stateId,
+            currentStateId: payload.state.id,
+            actionPlanId: actionPlan.plan.id,
+            conditionIds: actionPlan.grounding.conditions.map((item) => item.id),
+          })
+        } else {
+          setView(payload.diff ? 'changes' : 'memory')
+        }
+      } else {
+        setView(payload.diff ? 'changes' : 'memory')
+      }
     } catch (scanError) {
       setStatus('Observation interrupted')
       setError(scanError instanceof Error ? scanError.message : 'Unknown scan error')
@@ -325,6 +351,8 @@ function App() {
     setError('')
     setResult(null)
     setAnswer(null)
+    setVerification(null)
+    setVerificationStatus('')
     setView('observe')
     setSelectedObservation(null)
     setSelectedChangeId(null)
@@ -354,7 +382,21 @@ function App() {
       setResult(payload)
       setMemory(payload.memory)
       setStatus(payload.diff ? `${payload.diff.changes.length} supported change(s) remembered` : `${activeEnvironment.name} is now remembered`)
-      setView(payload.diff ? 'changes' : 'memory')
+      if (actionPlan && actionPlan.plan.stateId !== payload.state.id) {
+        const baseline = payload.memory.states.find((item) => item.id === actionPlan.plan.stateId)
+        if (baseline && payload.state.version > baseline.version) {
+          void runVerification({
+            previousStateId: actionPlan.plan.stateId,
+            currentStateId: payload.state.id,
+            actionPlanId: actionPlan.plan.id,
+            conditionIds: actionPlan.grounding.conditions.map((item) => item.id),
+          })
+        } else {
+          setView(payload.diff ? 'changes' : 'memory')
+        }
+      } else {
+        setView(payload.diff ? 'changes' : 'memory')
+      }
     } catch (scanError) {
       setStatus('Observation interrupted')
       setError(scanError instanceof Error ? scanError.message : 'Unknown scan error')
@@ -392,6 +434,32 @@ function App() {
     void inspectHistoricalState({ at: parsed.toISOString() })
   }
 
+  async function runVerification(options: { previousStateId: string; currentStateId: string; actionPlanId?: string; conditionIds?: string[] }) {
+    setVerification(null)
+    setVerificationStatus('Verifying the physical result against the new state…')
+    setView('memory')
+
+    try {
+      const response = await fetch('/api/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({
+          environmentId: activeEnvironment.id,
+          previousStateId: options.previousStateId,
+          currentStateId: options.currentStateId,
+          actionPlanId: options.actionPlanId,
+          conditionIds: options.conditionIds,
+        }),
+      })
+      const payload = await readApiResponse<VerificationResult & { message?: string }>(response, 'Verification failed')
+      if (!response.ok) throw new Error(payload.message ?? 'Verification failed')
+      setVerification(payload)
+      setVerificationStatus('')
+    } catch (verificationError) {
+      setVerificationStatus(verificationError instanceof Error ? verificationError.message : 'Unable to verify the physical result')
+    }
+  }
+
   async function runActionPlanner(options: ActionPlannerOptions = {}) {
     if (!memory) {
       setActionPlanStatus(`Observe ${activeEnvironment.name} first so SENTINEL has grounded conditions to plan from.`)
@@ -401,6 +469,8 @@ function App() {
     const stateId = options.stateId ?? resolvedAskStateId ?? memory.environment.currentStateId
     setActionPlan(null)
     setActionPlanStatus('Planning evidence-backed next steps…')
+    setVerification(null)
+    setVerificationStatus('')
     setView('memory')
 
     try {
@@ -442,6 +512,8 @@ function App() {
     setAnswer(null)
     setActionPlan(null)
     setActionPlanStatus('')
+    setVerification(null)
+    setVerificationStatus('')
     setView('memory')
     try {
       const response = await fetch('/api/ask-building', {
@@ -602,8 +674,58 @@ function App() {
             </article>)}
           </div>
           <div className="action-plan-footer">
-            <div><span>HUMAN CHECKPOINT</span><strong>Nothing here is marked completed or verified.</strong><p>Follow only the appropriate recommended steps, then rescan. Phase 12 will decide whether the physical condition actually changed.</p></div>
-            <button type="button" onClick={() => libraryInputRef.current?.click()}>Choose rescan photo ↗</button>
+            <div><span>HUMAN CHECKPOINT</span><strong>Nothing here is marked completed or verified.</strong><p>Follow only the appropriate recommended steps, then rescan. Phase 12 decides whether the physical condition actually changed.</p></div>
+            <div className="action-plan-footer-actions">
+              {canVerifyActionPlan && currentMemoryState && <button className="verify-current-button" type="button" disabled={Boolean(verificationStatus)} onClick={() => void runVerification({
+                previousStateId: actionPlan.plan.stateId,
+                currentStateId: currentMemoryState.id,
+                actionPlanId: actionPlan.plan.id,
+                conditionIds: actionPlan.grounding.conditions.map((item) => item.id),
+              })}>{verificationStatus ? 'Verifying…' : 'Verify against current state ↗'}</button>}
+              <button type="button" onClick={() => libraryInputRef.current?.click()}>Choose rescan photo ↗</button>
+            </div>
+          </div>
+        </section>}
+
+        {verificationStatus && <div className="verification-status" role="status">{verificationStatus}</div>}
+
+        {verification && <section className={'verification-panel status-' + verification.status} aria-label="Verification result" aria-live="polite">
+          <div className="verification-header">
+            <div>
+              <span className="eyebrow">VERIFICATION / PHYSICAL RESULT</span>
+              <strong>{verification.status === 'passed' ? 'Verified.' : verification.status === 'partial' ? 'Partially resolved.' : verification.status === 'failed' ? 'Not resolved.' : 'Verification inconclusive.'}</strong>
+              <small>State v{verification.grounding.previousState.version} → State v{verification.grounding.currentState.version}</small>
+            </div>
+            <button type="button" onClick={() => { setVerification(null); setVerificationStatus('') }} aria-label="Clear verification result">×</button>
+          </div>
+          <p className="verification-summary">{verification.summary}</p>
+          <div className="verification-metrics">
+            <span><strong>{verification.resolvedConditionIds.length}</strong> resolved</span>
+            <span><strong>{verification.remainingConditionIds.length}</strong> remaining</span>
+            <span><strong>{verification.inconclusiveConditionIds.length}</strong> inconclusive</span>
+            <span><strong>{verification.newConditionIds.length}</strong> new</span>
+            <span><strong>{verification.evidenceIds.length}</strong> evidence</span>
+          </div>
+          <div className="verification-verdicts">
+            {verification.verdicts.map((verdict, index) => {
+              const condition = verification.grounding.baselineConditions.find((item) => item.id === verdict.conditionId)
+              return <article className={'verification-verdict ' + verdict.status} key={verdict.conditionId}>
+                <div className="verification-verdict-index">{String(index + 1).padStart(2, '0')}</div>
+                <div>
+                  <div className="verification-verdict-meta"><span>{verdict.status}</span><span>{Math.round(verdict.confidence * 100)}%</span><span>{verdict.evidenceIds.length} current evidence</span></div>
+                  <h3>{condition?.title ?? 'Grounded condition'}</h3>
+                  <p>{verdict.reason}</p>
+                </div>
+              </article>
+            })}
+          </div>
+          {verification.grounding.currentConditions.length > 0 && <details className="verification-current-conditions">
+            <summary><span>Current non-normal conditions</span><strong>{verification.grounding.currentConditions.length} ↘</strong></summary>
+            <div>{verification.grounding.currentConditions.map((item) => <article key={item.id}><strong>{item.title}</strong><small>{item.kind} · {item.basis} · {Math.round(item.confidence * 100)}%</small><p>{item.description}</p></article>)}</div>
+          </details>}
+          <div className="verification-footer">
+            <div><span>TRUST RULE</span><strong>Not re-observed is not resolved.</strong><p>SENTINEL only returns Verified when positive current evidence supports the physical outcome. Otherwise it stays partial, failed, or inconclusive.</p></div>
+            <button type="button" onClick={() => setView('changes')}>Inspect Reality Diff ↗</button>
           </div>
         </section>}
 
@@ -646,7 +768,7 @@ function App() {
                   {group.objects.length === 0 ? <span className="spatial-room-empty">No grounded objects assigned to this area yet.</span> : group.objects.map((item) => {
                     const tone = spatialObjectTone(item, currentSnapshot)
                     const displayName = spatialObjectDisplayNames.get(item.id) ?? item.name
-                    const relationshipClass = selectedSpatialObjectId === item.id ? ' selected-spatial' : relatedSpatialObjectIds.has(item.id) ? ' related-spatial' : actionPlanObjectIds.has(item.id) ? ' action-related-spatial' : answerRelatedObjectIds.has(item.id) ? ' answer-related-spatial' : ''
+                    const relationshipClass = selectedSpatialObjectId === item.id ? ' selected-spatial' : relatedSpatialObjectIds.has(item.id) ? ' related-spatial' : verificationObjectIds.has(item.id) ? ' verification-related-spatial' : actionPlanObjectIds.has(item.id) ? ' action-related-spatial' : answerRelatedObjectIds.has(item.id) ? ' answer-related-spatial' : ''
                     return <button className={'spatial-object ' + tone + relationshipClass} type="button" key={item.id} onClick={() => inspectSpatialObject(item.id)} aria-label={'Inspect ' + displayName}>
                       <i />
                       <span><strong>{displayName}</strong><small>{spatialObjectSubtitle(item)}</small></span>

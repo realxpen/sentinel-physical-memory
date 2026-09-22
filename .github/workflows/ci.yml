@@ -54,5 +54,7 @@ jobs:
         run: npm run check:phase10-ask-building
       - name: Verify Phase 11 Action Planner
         run: npm run check:phase11-action-planner
+      - name: Verify Phase 12 Verification Agent
+        run: npm run check:phase12-verification
       - name: Build
         run: npm run build

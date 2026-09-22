@@ -1,4 +1,4 @@
-import type { ActionPlanningRequest, ActionPriority, AskBuildingRequest, AskBuildingResponse, PerceptionResult, TemporalChangeKind } from '../domain/sentinel'
+import type { ActionPlanningRequest, ActionPriority, AskBuildingRequest, AskBuildingResponse, PerceptionResult, TemporalChangeKind, VerificationConditionStatus, VerificationRequest } from '../domain/sentinel'
 import type { ScanArtifact } from '../scan/types'
 
 export type ModelRole = 'perception' | 'reasoning' | 'verification'
@@ -82,6 +82,27 @@ export interface ActionPlanningModelAdapter {
   readonly provider: string
   readonly model: string
   plan(request: ActionPlanningInferenceRequest): Promise<ActionPlanningDraft>
+}
+export interface VerificationDraftVerdict {
+  conditionId: string
+  status: VerificationConditionStatus
+  confidence: number
+  reason: string
+  evidenceIds: string[]
+  relatedObjectIds: string[]
+}
+export interface VerificationDraft {
+  verdicts: VerificationDraftVerdict[]
+}
+export interface VerificationInferenceRequest {
+  role: 'verification'
+  request: VerificationRequest
+  context: string
+}
+export interface VerificationModelAdapter {
+  readonly provider: string
+  readonly model: string
+  verifyConditions(request: VerificationInferenceRequest): Promise<VerificationDraft>
 }
 
 export interface ArtifactContent {

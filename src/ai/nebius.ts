@@ -15,6 +15,9 @@ import {
   type ReasoningModelAdapter,
   type TemporalVerificationRequest,
   type TemporalVerificationResult,
+  type VerificationDraft,
+  type VerificationInferenceRequest,
+  type VerificationModelAdapter,
 } from './model.js'
 
 const DEFAULT_BASE_URL = 'https://api.tokenfactory.us-central1.nebius.com/v1'
@@ -34,7 +37,7 @@ interface ChatCompletionResponse {
   choices?: Array<{ message?: { content?: string | Array<{ type?: string; text?: string }> } }>
 }
 
-export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapter, ActionPlanningModelAdapter {
+export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapter, ActionPlanningModelAdapter, VerificationModelAdapter {
   readonly provider = 'nebius-token-factory'
   readonly model: string
   private readonly apiKey: string
@@ -179,6 +182,60 @@ export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapte
     }
 
     return { goal: value.goal, rationale: value.rationale, steps }
+  }
+
+  async verifyConditions(request: VerificationInferenceRequest): Promise<VerificationDraft> {
+    const prompt = [
+      'Verify earlier physical-environment conditions against the CURRENT state using ONLY the supplied SENTINEL verification context.',
+      'Missing from the current condition list is NOT evidence of resolution.',
+      'resolved = positive current evidence from the same physical object/area shows the earlier condition is no longer present.',
+      'remaining = positive current evidence still supports the earlier condition.',
+      'inconclusive = the relevant object/area was not clearly re-observed or current evidence cannot distinguish resolved from remaining.',
+      'Use only CURRENT_EVIDENCE IDs and CURRENT_OBJECT IDs from the context.',
+      'Never infer resolution from an action plan, issue disappearance, generic normal wording, or lack of detection.',
+      'Keep each reason concise and factual.',
+      'Return ONLY JSON with shape: {"verdicts":[{"conditionId":"id","status":"resolved|remaining|inconclusive","confidence":0.0,"reason":"string","evidenceIds":["id"],"relatedObjectIds":["id"]}]}.',
+      'Verification context:',
+      request.context,
+    ].join('\n')
+
+    const response = await this.requestCompletion(
+      'You are SENTINEL Verification Agent. Be conservative: positive current evidence is required for resolved or remaining; otherwise return inconclusive.',
+      [{ type: 'text', text: prompt }],
+    )
+    return this.parseVerificationDraft(this.extractText(response))
+  }
+
+  private parseVerificationDraft(text: string): VerificationDraft {
+    let value: unknown
+    try {
+      const parsed = parseModelJson(text)
+      value = parsed.value
+      if (parsed.repaired) console.warn('SENTINEL_MODEL_JSON_REPAIRED', { model: this.model, kind: 'verification', chars: text.length })
+    } catch {
+      throw new ModelAdapterError({ code: 'INVALID_VERIFICATION_JSON', message: 'Nemotron returned invalid verification JSON', retryable: false })
+    }
+
+    if (!isRecord(value) || !Array.isArray(value.verdicts)) {
+      throw new ModelAdapterError({ code: 'INVALID_VERIFICATION_SCHEMA', message: 'Nemotron verification did not match the required schema', retryable: false })
+    }
+
+    const verdicts = value.verdicts.flatMap((raw): VerificationDraft['verdicts'] => {
+      if (!isRecord(raw) || typeof raw.conditionId !== 'string' || typeof raw.reason !== 'string') return []
+      const status = raw.status === 'resolved' || raw.status === 'remaining' || raw.status === 'inconclusive' ? raw.status : undefined
+      const confidence = typeof raw.confidence === 'number' ? raw.confidence : Number(raw.confidence)
+      if (!status || !Number.isFinite(confidence) || !isStringArray(raw.evidenceIds) || !isStringArray(raw.relatedObjectIds)) return []
+      return [{
+        conditionId: raw.conditionId,
+        status,
+        confidence: Math.max(0, Math.min(1, confidence)),
+        reason: raw.reason,
+        evidenceIds: raw.evidenceIds,
+        relatedObjectIds: raw.relatedObjectIds,
+      }]
+    })
+
+    return { verdicts }
   }
 
   private async requestCompletion(system: string, content: unknown): Promise<ChatCompletionResponse> {

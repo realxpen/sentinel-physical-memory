@@ -14,7 +14,7 @@ Hackathon track: **Best Apps and Agents**.
 
 ## Current phase
 
-**Phase 12 — Verification Agent: READY TO START / PHASE 11 COMPLETE**
+**Phase 12 — Verification Agent: ACTIVE / CLOSED-LOOP VERIFIER IMPLEMENTED / PRODUCTION FALSE-RESOLUTION GATE PENDING**
 
 ## Phase 3 — COMPLETE
 
@@ -1093,7 +1093,7 @@ Canonical production proof: `Knowledge/Technical/phase-9-real-history-proof.md`.
 
 ## Highest-priority gaps
 
-1. Phase 12 — Verification Agent.
+1. Phase 12 — exact-deployment verification production gate + one positive physical passed proof.
 2. Phase 13 — Living Spatial Intelligence UI rebuild/polish.
 3. Reliability, automated tests, security, and least-privilege database-role hardening.
 
@@ -1287,3 +1287,51 @@ Production proof:
 The first deployed attempt timed out at the previous inference ceiling and was diagnosed rather than accepted. The follow-up exact deployment passed after inference-budget hardening with trust rules unchanged.
 
 Canonical record: `Knowledge/Technical/phase-11-action-planner.md`.
+
+
+## Phase 12 — ACTIVE
+
+Verification Agent now closes the software loop:
+
+`Existing condition → Action Plan → user changes environment → rescan → new state → Reality Diff → Verification`.
+
+Implemented:
+
+- new `VerificationAgentService` over two immutable environmental states;
+- new `POST /api/verify` production contract;
+- source-defined statuses: `passed | partial | failed | inconclusive`;
+- source-defined condition outputs:
+  - `resolvedConditionIds`;
+  - `remainingConditionIds`;
+  - `newConditionIds`;
+  - plus explicit `inconclusiveConditionIds` so uncertainty is never hidden;
+- baseline condition IDs remain the durable referent even when provider condition IDs are source-scoped;
+- verification rejects same-state and reverse-time comparisons;
+- explicit condition IDs outside the baseline immutable snapshot fail closed;
+- current non-normal condition matches deterministically remain `remaining` or `inconclusive`;
+- missing current condition records are never treated as resolution;
+- access-obstruction verification has a server-owned continued-geometry override: if the same grounded object/door context is still blocked/in-front-of in the new state, the result stays `failed` even if the old issue disappeared;
+- Nemotron is used only for conditions that cannot be resolved deterministically from the structured current state;
+- a model may mark `resolved` only when it cites positive **current-state** evidence and the same physical object/area is re-observed;
+- unsupported model IDs are filtered through the server-owned current-state grounding scope;
+- weak or missing same-object evidence becomes `inconclusive`, not resolved;
+- overall status is derived server-side from per-condition verdicts and new conditions;
+- verification returns the persisted/derived Reality Diff alongside its verdict;
+- Action Plan → rescan automatically invokes verification in the product;
+- historical Action Plans can be manually verified against a later current state;
+- first-class Verification UI renders:
+  - **Verified.**
+  - **Partially resolved.**
+  - **Not resolved.**
+  - **Verification inconclusive.**
+- verification displays resolved / remaining / inconclusive / new counts, state transition, evidence count, per-condition rationale, current conditions, Reality Diff handoff and the trust rule **Not re-observed is not resolved**;
+- verification-related current physical objects illuminate separately in Spatial Memory.
+
+Canonical implementation record: `Knowledge/Technical/phase-12-verification-agent.md`.
+
+The existing real warehouse history contains an important negative proof candidate: State v2 has a grounded emergency-exit access condition, while State v3 dropped the operational condition/issue but still remembers the orange cart **in front of the door**. Phase 12 must classify that as unresolved rather than false-green.
+
+Phase 12 remains active until:
+
+1. the exact deployed main commit passes the real warehouse false-resolution production gate; and
+2. one controlled physical rescan produces a genuine **passed** verification result, satisfying the source build-plan exit condition: `detected → action → changed → verified`.

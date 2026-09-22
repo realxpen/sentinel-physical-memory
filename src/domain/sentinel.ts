@@ -88,7 +88,51 @@ export interface ActionPlan {
   rationale: string
   evidenceIds: ID[]
 }
-export interface VerificationResult { id: ID; environmentId: ID; actionPlanId?: ID; verifiedAt: ISODateTime; status: 'passed' | 'partial' | 'failed' | 'inconclusive'; resolvedIssueIds: ID[]; remainingIssueIds: ID[]; newIssueIds: ID[]; changes: Change[]; summary: string; evidenceIds: ID[] }
+export type VerificationStatus = 'passed' | 'partial' | 'failed' | 'inconclusive'
+export type VerificationConditionStatus = 'resolved' | 'remaining' | 'inconclusive'
+export interface VerificationConditionVerdict {
+  conditionId: ID
+  status: VerificationConditionStatus
+  confidence: Confidence
+  reason: string
+  currentConditionId?: ID
+  relatedObjectIds: ID[]
+  evidenceIds: ID[]
+}
+export interface VerificationRequest {
+  environmentId: ID
+  previousStateId: ID
+  currentStateId: ID
+  actionPlanId?: ID
+  conditionIds?: ID[]
+}
+export interface VerificationGrounding {
+  previousState: AskBuildingStateReference
+  currentState: AskBuildingStateReference
+  evidence: AskBuildingEvidenceReference[]
+  baselineConditions: ActionPlanConditionReference[]
+  currentConditions: ActionPlanConditionReference[]
+  objects: AskBuildingObjectReference[]
+  diffId?: ID
+}
+export interface VerificationResult {
+  id: ID
+  environmentId: ID
+  actionPlanId?: ID
+  previousStateId: ID
+  currentStateId: ID
+  verifiedAt: ISODateTime
+  status: VerificationStatus
+  resolvedConditionIds: ID[]
+  remainingConditionIds: ID[]
+  inconclusiveConditionIds: ID[]
+  newConditionIds: ID[]
+  verdicts: VerificationConditionVerdict[]
+  changes: Change[]
+  summary: string
+  evidenceIds: ID[]
+  grounding: VerificationGrounding
+}
 export interface ScanSource { id: ID; environmentId: ID; modality: ObservationModality; uri: string; capturedAt: ISODateTime; durationMs?: number; metadata?: Record<string, string | number | boolean> }
 export interface EnvironmentalMemory { environment: Environment; states: EnvironmentalState[]; snapshots: EnvironmentalStateSnapshot[]; objects: SpatialObject[]; conditions: EnvironmentalCondition[]; issues: Issue[]; observations: Observation[]; evidence: Evidence[]; relations: EnvironmentRelation[]; sources: ScanSource[]; diffs: EnvironmentalDiff[] }
 export interface AskBuildingRequest { environmentId: ID; question: string; stateId?: ID }
@@ -155,4 +199,3 @@ export interface VerifiedTemporalChange {
   currentState?: 'open' | 'closed'
   confidence: Confidence
 }
-export interface VerificationRequest { environmentId: ID; previousStateId: ID; currentStateId: ID; actionPlanId?: ID }

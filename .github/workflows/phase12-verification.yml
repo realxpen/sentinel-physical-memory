@@ -1,0 +1,41 @@
+name: Phase 12 Production Verification
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase12-verification.yml'
+      - 'api/verify.ts'
+      - 'src/verification/service.ts'
+      - 'src/verification/index.ts'
+      - 'src/ai/model.ts'
+      - 'src/ai/nebius.ts'
+      - 'src/domain/sentinel.ts'
+      - 'src/main.tsx'
+      - 'src/integration.css'
+      - 'scripts/check-phase12-verification.mjs'
+      - 'scripts/check-phase12-production-verification.mjs'
+      - 'package.json'
+      - 'vercel.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verification-production:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify real warehouse false-resolution defense
+        env:
+          SENTINEL_PRODUCTION_ORIGIN: https://sentinel-physical-memory.vercel.app
+          SENTINEL_PHASE12_ENVIRONMENT_ID: env_warehouse_73266674
+          SENTINEL_EXPECTED_DEPLOYMENT_COMMIT: ${{ github.sha }}
+        run: node ./scripts/check-phase12-production-verification.mjs

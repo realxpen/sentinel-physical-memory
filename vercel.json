@@ -5,6 +5,9 @@
     },
     "api/action-plan.ts": {
       "maxDuration": 120
+    },
+    "api/verify.ts": {
+      "maxDuration": 120
     }
   }
 }
