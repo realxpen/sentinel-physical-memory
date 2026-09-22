@@ -901,15 +901,6 @@ function shouldRunAccessGeometryAudit(result: PerceptionResult): boolean {
   )
 }
 
-function hasIndependentExitContext(result: PerceptionResult): boolean {
-  return [...result.observations, ...result.objects].some((item) => {
-    const text = 'label' in item
-      ? `${item.label} ${item.description}`
-      : `${item.name} ${item.description ?? ''}`
-    return /\b(?:emergency\s+)?exit\b/i.test(text) && /\b(?:sign|symbol)\b/i.test(text)
-  })
-}
-
 function accessGeometryCandidates(result: PerceptionResult): SpatialObject[] {
   return result.objects.filter((item) => {
     if (item.evidenceIds.length === 0) return false
