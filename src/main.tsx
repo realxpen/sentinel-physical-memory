@@ -173,7 +173,7 @@ function App() {
     ? memory.sources.find((source) => currentMemoryState.sourceIds.includes(source.id) && source.modality === 'image')?.uri
     : undefined
   const currentAttentionCount = currentSnapshot
-    ? currentSnapshot.conditions.filter((item) => item.kind !== 'normal' && item.status !== 'resolved').length + currentSnapshot.issues.filter((item) => item.status !== 'resolved').length
+    ? currentSnapshot.conditions.filter((item) => item.kind !== 'normal').length + currentSnapshot.issues.filter((item) => item.status !== 'resolved').length
     : 0
   const currentStateLabel = currentMemoryState ? `State v${currentMemoryState.version}` : 'No state yet'
   const canVerifyActionPlan = Boolean(actionPlan && actionPlanBaselineState && currentMemoryState && currentMemoryState.version > actionPlanBaselineState.version)
