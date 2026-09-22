@@ -401,7 +401,7 @@ export class ScanPipeline {
     }
 
     if (hasOperationalConditionCandidate(scene)) return scene
-    if (input.media.kind === 'image' && !shouldRunStillImageConditionAudit(scene)) return scene
+    if (input.media.kind === 'image' && !shouldRunStillImageConditionAudit(scene) && !shouldRunAccessGeometryAudit(scene)) return scene
 
     const sceneObjectSummary = scene.objects.length
       ? scene.objects.map((item) => `${item.name} (${item.category})`).join(', ')
