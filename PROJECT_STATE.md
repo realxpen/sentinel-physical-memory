@@ -14,7 +14,7 @@ Hackathon track: **Best Apps and Agents**.
 
 ## Current phase
 
-**Phase 12 — Verification Agent: ACTIVE / PRODUCTION FALSE-RESOLUTION VERIFIED / POSITIVE PHYSICAL PASS NEXT**
+**Phase 12 — Verification Agent: ACTIVE / ORDINARY DOORWAY ACCESS HARDENED / POSITIVE PHYSICAL PASS NEXT**
 
 ## Phase 3 — COMPLETE
 
@@ -1347,3 +1347,21 @@ Production proof:
 Canonical record: `Knowledge/Technical/phase-12-verification-agent.md`.
 
 Phase 12 remains active for exactly one source-defined exit gate: one controlled physical Action Plan → real environmental change → rescan → positive **passed** verification from current same-object / same-area evidence.
+
+### Phase 12 positive-pass unblocker — ordinary doorway access
+
+The first positive-pass test exposed a composition gap: SENTINEL visibly remembered a gray chair positioned in front of an open office door, but the deterministic condition layer only composed obstacle→door access conditions when independent emergency-exit identity existed.
+
+Current hardening adds a distinct ordinary-doorway access path without weakening emergency-exit rules:
+
+- explicit grounded obstacle→door placement is still required;
+- ordinary doorway result is **Doorway access obstructed**;
+- basis remains **Inferred**;
+- inferred threshold remains **0.85**;
+- issue severity remains capped at **medium**;
+- safe/beside placement remains non-operational;
+- an emergency-labelled door without independent exit evidence cannot fall back to the generic path;
+- emergency-exit obstruction still requires independent exit grounding;
+- explicit evidence-backed `position.description` can now participate in placement reasoning.
+
+Historical states remain immutable. A fresh environment/scan is required after deployment to test this fix.
