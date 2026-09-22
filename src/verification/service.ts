@@ -16,6 +16,7 @@ import type {
   VerificationStatus,
 } from '../domain/sentinel.js'
 import type { VerificationDraftVerdict, VerificationModelAdapter } from '../ai/model.js'
+import type { ScanArtifact } from '../scan/types.js'
 import { EnvironmentalDiffEngine } from '../memory/diff-engine.js'
 import type { EnvironmentalMemoryReader } from '../memory/repository.js'
 
@@ -147,6 +148,7 @@ export class VerificationAgentService {
         role: 'verification',
         request,
         context: buildVerificationContext(scope, pending.slice(0, MAX_MODEL_CONDITIONS)),
+        artifacts: verificationArtifactsForState(scope.memory, scope.currentState),
       })
       const byCondition = new Map(draft.verdicts.map((item) => [item.conditionId, item]))
 
@@ -322,7 +324,7 @@ function buildVerificationContext(scope: VerificationScope, pending: Environment
     'CURRENT OBSERVATIONS:',
     ...currentObservations.slice(0, 16).map((item) => `- OBSERVATION ${item.id}: ${item.label} | confidence=${item.confidence} | evidence=${stateLocalEvidenceIds(item.evidenceIds, scope.currentEvidence).join(',')} | ${item.description}`),
     'CURRENT EVIDENCE:',
-    ...scope.currentEvidence.slice(0, 20).map((item) => `- EVIDENCE ${item.id}: ${item.description}`),
+    ...scope.currentEvidence.slice(0, 20).map((item) => `- EVIDENCE ${item.id} | source=${item.sourceId}: ${item.description}`),
     'PERSISTED REALITY DIFF:',
     ...scope.diff.changes.slice(0, 20).map((item) => `- ${item.type} ${item.entityKind ?? 'unknown'} ${item.entityId ?? ''}: ${item.title} | ${item.description}`),
   ].join('\n')
@@ -456,6 +458,20 @@ function requireSnapshot(memory: EnvironmentalMemory, stateId: string): Environm
 function evidenceForState(memory: EnvironmentalMemory, state: EnvironmentalState): Evidence[] {
   const sources = new Set(state.sourceIds)
   return memory.evidence.filter((item) => sources.has(item.sourceId))
+}
+
+function verificationArtifactsForState(memory: EnvironmentalMemory, state: EnvironmentalState): ScanArtifact[] {
+  const sourceIds = new Set(state.sourceIds)
+  return memory.sources
+    .filter((source) => sourceIds.has(source.id))
+    .filter((source) => source.modality === 'image' && /^data:image\//i.test(source.uri))
+    .slice(0, 4)
+    .map((source) => ({
+      artifactId: `verification_${source.id}`,
+      frameId: source.id,
+      kind: 'frame' as const,
+      uri: source.uri,
+    }))
 }
 
 function stateLocalEvidenceIds(ids: string[], stateEvidence: Evidence[]): string[] {
