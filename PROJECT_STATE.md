@@ -14,7 +14,7 @@ Hackathon track: **Best Apps and Agents**.
 
 ## Current phase
 
-**Phase 13 — Living Spatial Intelligence UI: ACTIVE / DEPLOYED / VISUAL REVIEW PENDING / PHASE 12 REAL PHYSICAL PROOF DEFERRED**
+**Phase 14 — Demo Scenario Engineering: ACTIVE / PHASE 13 COMPLETE / PHASE 12 REAL PHYSICAL PROOF DEFERRED**
 
 ## Phase 3 — COMPLETE
 
@@ -1448,3 +1448,46 @@ Verified on that commit:
 Phase 13 remains ACTIVE only for direct production visual review. The current tool environment cannot honestly complete that visual gate because its browser connector is disconnected and fallback runtime has no external DNS.
 
 The deferred Phase 12 real physical-camera proof remains a separate open gate and is not waived by Phase 13.
+
+
+## Phase 13 — COMPLETE
+
+Human production visual review passed on 2026-09-23.
+
+Reviewed production surfaces:
+
+- Memory / remembered environment;
+- Observe / active dark intelligence state;
+- Spatial Memory object detail;
+- Changes / Reality Diff.
+
+The deployed product now satisfies the locked Living Spatial Intelligence direction: Memory / Observe / Changes remain primary, Ask stays contextual, environmental imagery is a major product surface, Reality Diff is the signature change experience, and the product reads as one coherent premium system rather than a generic dashboard.
+
+Minor demo-content concerns such as internal test environment naming and noisy change sets are intentionally owned by Phase 14 rather than reopening the Phase 13 visual system.
+
+## Phase 14 — ACTIVE
+
+Demo Scenario Engineering now owns the reproducible three-scan hackathon story.
+
+Implemented:
+
+- `src/demo/scenario.ts` demo-readiness assessment;
+- deterministic three-change + verification regression contract;
+- explicit uncertainty/noise budgets;
+- live persisted-memory rehearsal mode;
+- `npm run check:phase14-demo`;
+- `npm run check:phase14-live -- --environment-id=<id>`;
+- dedicated Phase 14 CI workflow;
+- canonical physical capture/rehearsal documentation.
+
+Current exit gate:
+
+- fresh Scan A baseline;
+- Scan B produces supported added exit obstruction + moved extinguisher + explicit resolved change;
+- no more than 2 uncertain changes and no more than 2 unrelated supported changes;
+- priority/action flow remains grounded;
+- Scan C positively re-observes the same exit context;
+- Verification Agent returns `passed` for Scan B → Scan C;
+- the complete scenario repeats without changing code or weakening trust rules.
+
+Canonical Phase 14 record: `Knowledge/Technical/phase-14-demo-scenario-engineering.md`.
