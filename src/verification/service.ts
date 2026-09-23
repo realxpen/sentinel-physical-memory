@@ -149,7 +149,7 @@ export class VerificationAgentService {
         role: 'verification',
         request,
         context: buildVerificationContext(scope, pending.slice(0, MAX_MODEL_CONDITIONS)),
-        artifacts: verificationArtifactsForState(scope.memory, scope.currentState),
+        artifacts: verificationArtifactsForComparison(scope.memory, scope.previousState, scope.currentState),
       })
       const byCondition = new Map(draft.verdicts.map((item) => [item.conditionId, item]))
 
@@ -505,18 +505,31 @@ function evidenceForState(memory: EnvironmentalMemory, state: EnvironmentalState
   return memory.evidence.filter((item) => sources.has(item.sourceId))
 }
 
-function verificationArtifactsForState(memory: EnvironmentalMemory, state: EnvironmentalState): ScanArtifact[] {
-  const sourceIds = new Set(state.sourceIds)
-  return memory.sources
-    .filter((source) => sourceIds.has(source.id))
-    .filter((source) => source.modality === 'image' && /^data:image\//i.test(source.uri))
-    .slice(0, 4)
-    .map((source) => ({
-      artifactId: `verification_${source.id}`,
-      frameId: source.id,
-      kind: 'frame' as const,
-      uri: source.uri,
-    }))
+function verificationArtifactsForComparison(
+  memory: EnvironmentalMemory,
+  previousState: EnvironmentalState,
+  currentState: EnvironmentalState,
+): ScanArtifact[] {
+  const artifactsFor = (state: EnvironmentalState, role: 'previous' | 'current') => {
+    const sourceIds = new Set(state.sourceIds)
+    return memory.sources
+      .filter((source) => sourceIds.has(source.id))
+      .filter((source) => source.modality === 'image' && /^data:image\//i.test(source.uri))
+      .slice(0, 3)
+      .map((source) => ({
+        artifactId: `verification_${role}_${source.id}`,
+        frameId: `verification_${role}_${source.id}`,
+        kind: 'frame' as const,
+        uri: source.uri,
+      }))
+  }
+
+  // Baseline images are sent first only to localize the exact physical area.
+  // Current images follow and remain the only admissible proof of resolution.
+  return [
+    ...artifactsFor(previousState, 'previous'),
+    ...artifactsFor(currentState, 'current'),
+  ]
 }
 
 function stateLocalEvidenceIds(ids: string[], stateEvidence: Evidence[]): string[] {
