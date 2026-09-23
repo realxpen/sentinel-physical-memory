@@ -186,11 +186,14 @@ export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapte
 
   async verifyConditions(request: VerificationInferenceRequest): Promise<VerificationDraft> {
     const prompt = [
-      'Verify earlier physical-environment conditions against the CURRENT state using ONLY the supplied SENTINEL verification context and CURRENT rescan image(s).',
-      'Every supplied image is from the CURRENT state. Use it as direct visual evidence only; do not assume anything from missing detections.',
+      'Verify earlier physical-environment conditions against the CURRENT state using the supplied SENTINEL verification context and comparison images.',
+      'Images whose FRAME_ID starts with "verification_previous_" are BASELINE localization references only. They may help you identify the exact physical object/area that contained the earlier condition, but they can NEVER prove resolution.',
+      'Images whose FRAME_ID starts with "verification_current_" are CURRENT-state images. Only these, together with CURRENT_EVIDENCE and CURRENT_OBJECTS, may support resolved or remaining.',
+      'Use the baseline image to localize where the earlier obstruction/damage/condition physically was, then inspect that exact location in the current image.',
       'Missing from the current condition list is NOT evidence of resolution.',
       'resolved = positive current visual evidence from the same physical object/area shows the earlier condition is no longer present.',
-      'For access obstruction, a visibly re-observed same doorway with the doorway path clearly unobstructed can support resolved even when the former obstacle is no longer visible.',
+      'For access obstruction, resolved may be supported when the baseline image localizes the former obstruction and the CURRENT image positively shows that same floor/doorway/path segment clear and traversable, anchored by a durable feature such as the same EXIT sign or exit door.',
+      'A clear path is positive geometry: the relevant current floor/doorway segment is visibly open with no object occupying or blocking it. Do not use mere non-detection of the old obstacle as proof.',
       'remaining = positive current visual evidence still supports the earlier condition.',
       'inconclusive = the relevant object/area was not clearly re-observed or current evidence cannot distinguish resolved from remaining.',
       'Use only CURRENT_EVIDENCE IDs and CURRENT_OBJECT IDs from the context. Link visual claims to the CURRENT_EVIDENCE ID whose source matches the supplied image source.',
