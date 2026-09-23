@@ -28,6 +28,7 @@ export class ScanPipeline {
   private readonly onProgress?: (progress: ScanProgress) => void
   private readonly model?: ModelAdapter
   private readonly memoryRepository: EnvironmentalMemoryRepository
+  private recoveredSceneProviderFailure = false
 
   constructor(deps: ScanPipelineDependencies = {}) {
     this.now = deps.now ?? (() => new Date())
@@ -38,6 +39,7 @@ export class ScanPipeline {
   }
 
   async run(input: ScanInput): Promise<ScanResult> {
+    this.recoveredSceneProviderFailure = false
     const scanId = this.id('scan')
     this.emit(scanId, 'queued', 0, 'Scan queued')
     this.validate(input)
@@ -358,6 +360,15 @@ export class ScanPipeline {
 
     let scene = await this.inferPerceptionPass('scene', scenePrompt, artifacts, frames, input)
 
+    // If the primary scene call only succeeded after a transient provider retry,
+    // persist that grounded scene immediately instead of spending the remaining
+    // Vercel execution budget on optional audits. A later observation can enrich
+    // state, but a recovered scene must not be lost to a second slow provider call.
+    if (this.recoveredSceneProviderFailure) {
+      console.warn('SENTINEL_SECONDARY_AUDITS_SKIPPED_AFTER_PROVIDER_RETRY', { scanId })
+      return scene
+    }
+
     // Still-photo state audit: open/closed is operationally important but the broad
     // scene pass can omit it. Re-inspect only visible openable objects whose state
     // is missing; this pass may confirm state but must not invent unseen objects.
@@ -588,12 +599,17 @@ export class ScanPipeline {
         return validatePerceptionForScan(grounded.result, input.environmentId, input.source.id)
       } catch (error) {
         lastError = error
-        if (attempt >= MAX_PERCEPTION_ATTEMPTS || !isRetryablePerceptionOutputError(error)) throw error
-        console.warn('SENTINEL_PERCEPTION_SCHEMA_RETRY', {
+        const outputRetry = isRetryablePerceptionOutputError(error)
+        const providerRetry = pass === 'scene' && isTransientPerceptionProviderError(error)
+        if (attempt >= MAX_PERCEPTION_ATTEMPTS || (!outputRetry && !providerRetry)) throw error
+
+        if (providerRetry) this.recoveredSceneProviderFailure = true
+        console.warn(providerRetry ? 'SENTINEL_PERCEPTION_PROVIDER_RETRY' : 'SENTINEL_PERCEPTION_SCHEMA_RETRY', {
           pass,
           attempt,
           nextAttempt: attempt + 1,
           code: errorCode(error),
+          retryKind: providerRetry ? 'provider-transient' : 'output-contract',
           message: error instanceof Error ? error.message : 'Unknown perception output error',
         })
       }
@@ -987,6 +1003,13 @@ function isRetryablePerceptionOutputError(error: unknown): boolean {
   if (error instanceof PerceptionValidationError) return true
   if (!(error instanceof ModelAdapterError)) return false
   return error.code === 'INVALID_MODEL_JSON' || error.code === 'INVALID_PERCEPTION_SCHEMA' || error.code === 'EMPTY_MODEL_RESPONSE'
+}
+
+function isTransientPerceptionProviderError(error: unknown): boolean {
+  if (!(error instanceof ModelAdapterError) || !error.retryable) return false
+  if (error.code === 'NEBIUS_TIMEOUT' || error.code === 'NEBIUS_REQUEST_FAILED') return true
+  if (error.code !== 'NEBIUS_HTTP_ERROR') return false
+  return error.status === 429 || (typeof error.status === 'number' && error.status >= 500)
 }
 
 function errorCode(error: unknown): string {
