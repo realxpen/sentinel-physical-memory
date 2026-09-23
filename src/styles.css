@@ -282,6 +282,11 @@ h1 { margin: 18px 0 22px; font-size: clamp(58px, 8.4vw, 128px); line-height: .88
 .operations-next-step > div { display: grid; grid-template-columns: 160px 1fr; gap: 18px; align-items: start; }
 .operations-next-step > div strong { max-width: 680px; font-size: 20px; line-height: 1.35; letter-spacing: -.03em; }
 .operations-next-step .wide-observe { margin-top: 20px; }
+.operations-next-actions { margin-top: 20px; display: grid !important; grid-template-columns: 1fr !important; gap: 10px !important; }
+.operations-next-actions .verify-current-button { min-height: 52px; padding: 0 18px; border: 1px solid rgba(91,255,138,.34); border-radius: 999px; background: rgba(91,255,138,.09); color: var(--green); font: inherit; font-size: 11px; font-weight: 850; letter-spacing: .04em; cursor: pointer; text-align: left; }
+.operations-next-actions .verify-current-button:disabled { opacity: .55; cursor: wait; }
+.operations-next-actions .wide-observe.compact { margin-top: 0; padding: 18px 4px; }
+.operations-next-actions .wide-observe.compact span:first-child { font-size: 20px; }
 
 .change-drawer-mark { display: flex; align-items: center; gap: 11px; margin-top: 22px; }
 .change-drawer-mark small { color: #7c887f; font-size: 10px; }

@@ -56,6 +56,8 @@ jobs:
         run: npm run check:phase11-action-planner
       - name: Verify Phase 12 Verification Agent
         run: npm run check:phase12-verification
+      - name: Verify direct prior-condition verification candidate
+        run: npm run check:prior-verification
       - name: Verify Phase 13 Living Spatial Intelligence UI
         run: npm run check:phase13-ui
       - name: Build

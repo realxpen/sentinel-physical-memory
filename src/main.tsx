@@ -12,6 +12,7 @@ import { buildSpatialGroups, buildSpatialObjectDisplayNames, buildSpatialRelatio
 import { createEnvironmentProfile, DEFAULT_ENVIRONMENT, ENVIRONMENT_TYPES, loadActiveEnvironmentId, loadEnvironmentDirectory, saveActiveEnvironmentId, saveEnvironmentDirectory, type EnvironmentProfile } from './environment/directory'
 import { ingestImageFile } from './scan/image-ingestion'
 import { ingestVideoFile } from './scan/video-ingestion'
+import { findPriorConditionVerificationCandidate } from './verification/candidate'
 
 interface ScanResponse {
   scanId: string
@@ -169,6 +170,9 @@ function App() {
   const verificationObjectIds = new Set(verification?.grounding.objects.filter((item) => item.stateIds.includes(verification.currentStateId)).map((item) => item.id) ?? [])
   const actionPlanBaselineState = actionPlan && memory ? memory.states.find((item) => item.id === actionPlan.plan.stateId) : undefined
   const currentMemoryState = memory?.environment.currentStateId ? memory.states.find((item) => item.id === memory.environment.currentStateId) : undefined
+  const priorConditionVerificationCandidate = memory && currentMemoryState
+    ? findPriorConditionVerificationCandidate(memory, currentMemoryState.id)
+    : undefined
   const currentMemoryImage = currentMemoryState && memory
     ? memory.sources.find((source) => currentMemoryState.sourceIds.includes(source.id) && source.modality === 'image')?.uri
     : undefined
@@ -930,8 +934,15 @@ function App() {
         </div> : <div className="change-list" aria-label="Environmental changes"><div className="preview-label">INTERACTION PREVIEW — NOT DETECTED EVENTS</div>{previewChanges.map((change) => <div className="change-row" key={change.type}><span className={`change-mark ${change.type.toLowerCase()}`}>{change.mark}</span><div><strong>{change.type}</strong><small>{change.detail}</small></div></div>)}</div>}
 
         <div className="operations-next-step">
-          <div><span className="eyebrow">NEXT OPERATION</span><strong>{latestDiff && attentionChanges.length > 0 ? 'Review what needs attention, then ask SENTINEL what should happen next.' : latestDiff && verificationChanges.length > 0 ? 'Verification is required before treating this as resolved. Re-observe the area and confirm the physical condition.' : latestDiff ? 'No urgent action is implied by the diff alone. Observe again when the physical state changes.' : 'Create a second state to unlock Reality Diff.'}</strong></div>
-          <button className="wide-observe" type="button" onClick={() => libraryInputRef.current?.click()}><span>Choose update photo</span><span>Select the next environmental state image ↗</span></button>
+          <div><span className="eyebrow">NEXT OPERATION</span><strong>{latestDiff && attentionChanges.length > 0 ? 'Review what needs attention, then ask SENTINEL what should happen next.' : latestDiff && verificationChanges.length > 0 ? 'Verification is required before treating this as resolved. Re-observe the area and confirm the physical condition.' : priorConditionVerificationCandidate ? `A prior condition from State v${priorConditionVerificationCandidate.previousState.version} is ready to verify against the current clear state.` : latestDiff ? 'No urgent action is implied by the diff alone. Observe again when the physical state changes.' : 'Create a second state to unlock Reality Diff.'}</strong></div>
+          {priorConditionVerificationCandidate ? <div className="operations-next-actions">
+            <button className="verify-current-button" type="button" disabled={Boolean(verificationStatus)} onClick={() => void runVerification({
+              previousStateId: priorConditionVerificationCandidate.previousState.id,
+              currentStateId: priorConditionVerificationCandidate.currentState.id,
+              conditionIds: priorConditionVerificationCandidate.conditions.map((item) => item.id),
+            })}>{verificationStatus ? 'Verifying…' : `Verify ${priorConditionVerificationCandidate.conditions.length} prior condition${priorConditionVerificationCandidate.conditions.length === 1 ? '' : 's'} ↗`}</button>
+            <button className="wide-observe compact" type="button" onClick={() => libraryInputRef.current?.click()}><span>Choose another photo</span><span>Only if the physical state changed again ↗</span></button>
+          </div> : <button className="wide-observe" type="button" onClick={() => libraryInputRef.current?.click()}><span>Choose update photo</span><span>Select the next environmental state image ↗</span></button>}
         </div>
       </section>}
 

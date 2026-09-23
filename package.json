@@ -36,7 +36,8 @@
     "check:phase12-verification": "node ./scripts/check-phase12-verification.mjs",
     "check:phase13-ui": "node ./scripts/check-phase13-living-ui.mjs",
     "check:phase14-demo": "node --experimental-strip-types ./scripts/check-phase14-demo-scenario.mjs",
-    "check:phase14-live": "node --experimental-strip-types ./scripts/check-phase14-demo-scenario.mjs --live"
+    "check:phase14-live": "node --experimental-strip-types ./scripts/check-phase14-demo-scenario.mjs --live",
+    "check:prior-verification": "node --experimental-strip-types ./scripts/check-direct-prior-verification.mjs"
   },
   "dependencies": {
     "@neondatabase/serverless": "latest",
