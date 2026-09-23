@@ -236,6 +236,50 @@ try {
     throw new Error('real salient bag addition must remain visible')
   }
 
+
+  const syntheticSceneNoise = engine.compare(
+    {
+      stateId: 'state_synth_1',
+      environmentId,
+      objects: [
+        object('knob_old', 'door knob', 'door'),
+        object('light_old', 'ceiling light', 'electrical'),
+        object('poster_old', 'motivational poster', 'signage'),
+        object('room_sign_old', 'conference room sign', 'signage'),
+        object('ext_old', 'fire extinguisher', 'safety', { position: { description: 'right of exit door' } }),
+      ],
+      conditions: [],
+      issues: [],
+      relations: [],
+    },
+    {
+      stateId: 'state_synth_2',
+      environmentId,
+      objects: [
+        object('handle_new', 'door handle', 'door'),
+        object('light_new', 'recessed light fixture', 'electrical'),
+        object('poster_new', 'framed poster', 'signage'),
+        object('room_sign_new', 'room sign', 'signage'),
+        object('ext_new', 'fire extinguisher', 'safety', { position: { description: 'left of conference room door' } }),
+        object('boxes_new', 'cardboard boxes', 'obstruction', { position: { description: 'in front of exit door' } }),
+      ],
+      conditions: [],
+      issues: [],
+      relations: [],
+    },
+  )
+
+  const synthTitles = syntheticSceneNoise.changes.map((change) => change.title)
+  if (synthTitles.some((title) => /door knob|door handle|ceiling light|recessed light|poster|room sign|conference room sign/i.test(title))) {
+    throw new Error(`synthetic-scene micro-inventory must not become Reality Diff cards: ${synthTitles.join(' | ')}`)
+  }
+  if (!synthTitles.includes('Moved: fire extinguisher')) {
+    throw new Error(`salience filtering must preserve moved extinguisher evidence: ${synthTitles.join(' | ')}`)
+  }
+  if (!synthTitles.includes('New: cardboard boxes')) {
+    throw new Error(`salience filtering must preserve new obstruction evidence: ${synthTitles.join(' | ')}`)
+  }
+
   const learnedStateOnly = engine.compare(
     {
       stateId: 'state_learned_1',
@@ -449,6 +493,7 @@ try {
   console.log('PASS  object movement can use grounded relationship-anchor changes')
   console.log('PASS  non-observation remains uncertain rather than removed/resolved')
   console.log('PASS  first-class condition transition semantics avoid duplicate issue noise')
+  console.log('PASS  door hardware, light fixtures, room labels, and decor stay out of raw Reality Diff while extinguisher/obstruction changes remain')
   console.log('PASS  generated state-pair diffs remain stored in environmental memory')
   console.log('SENTINEL PHASE 7 DIFF ENGINE V2 VERIFIED')
 } finally {
