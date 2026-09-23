@@ -1,4 +1,5 @@
 import type { Change } from '../domain/sentinel.js'
+import { isLowSalienceObjectChange } from './change-salience.js'
 
 /**
  * Historical diffs are immutable. This presentation projection prevents an
@@ -10,6 +11,10 @@ export function changesForPresentation(changes: Change[]): Change[] {
   const structuralVerification = new Map<string, Change[]>()
 
   for (const change of changes) {
+    // Historical diffs are immutable. Hide already-persisted raw inventory
+    // churn without mutating the underlying audit trail.
+    if (isLowSalienceObjectChange(change)) continue
+
     const key = structuralVerificationKey(change)
     if (!key) {
       presented.push(cloneChange(change))
