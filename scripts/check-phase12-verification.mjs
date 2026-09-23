@@ -14,6 +14,13 @@ try {
   expect(passed.artifactIds.join(',') === 'verification_source_current', 'verification must send only the current-state image artifact to the model')
   expect(passed.result.verdicts[0].evidenceIds.includes('e_current'), 'resolved verdict must retain current-state evidence')
 
+  const areaAnchor = await runAreaAnchorResolutionCase(VerificationAgentService)
+  expect(areaAnchor.result.status === 'passed', 'same access area anchor must allow positive resolution when the former obstacle is absent')
+  expect(areaAnchor.result.resolvedConditionIds.join(',') === 'condition_access_anchor', 'area-anchor verification must resolve the baseline access condition')
+  expect(areaAnchor.context.includes('CURRENT OBJECTS FROM THE SAME PHYSICAL/AREA CONTEXT:'), 'verification context must expose current area anchors')
+  expect(areaAnchor.context.includes('OBJECT exit-current: exit sign'), 'verification context must include the re-observed EXIT anchor')
+  expect(areaAnchor.result.verdicts[0].relatedObjectIds.includes('exit-current'), 'resolved verdict should retain the current area-anchor object id')
+
   const failed = await runFailedAccessCase(VerificationAgentService)
   expect(failed.result.status === 'failed', 'continued obstruction geometry must fail verification')
   expect(failed.result.remainingConditionIds.join(',') === 'condition_access', 'continued obstruction must remain tied to the baseline condition')
@@ -80,6 +87,7 @@ try {
   expect(source.includes('verificationArtifactsForState'), 'verification must attach current-state visual artifacts')
 
   console.log('PASS  positive current same-object evidence can verify a resolved condition')
+  console.log('PASS  a re-observed durable EXIT-area anchor can verify access resolution even when the former obstacle is absent and object IDs changed')
   console.log('PASS  continued obstruction geometry overrides condition/issue disappearance')
   console.log('PASS  mixed resolved + remaining conditions become partial')
   console.log('PASS  missing same-object evidence remains inconclusive')
@@ -120,6 +128,121 @@ async function runPassedCase(Service) {
     conditionIds: ['condition_access'],
   })
   return { result, modelCalls, artifactIds }
+}
+
+
+async function runAreaAnchorResolutionCase(Service) {
+  const environmentId = 'phase12-area-anchor'
+  const previous = {
+    ...state('state_anchor_v1', 1, '2026-09-22T11:00:00.000Z', ['source_anchor_prev']),
+    environmentId,
+  }
+  const current = {
+    ...state('state_anchor_v2', 2, '2026-09-22T11:10:00.000Z', ['source_anchor_current']),
+    environmentId,
+  }
+
+  const exitPrevious = {
+    ...object('exit-prev', 'signage', 'emergency exit sign', 'above the exit door', 'anchor_prev_e', previous.capturedAt),
+    environmentId,
+    description: 'Green emergency EXIT sign above the hallway exit door.',
+  }
+  const boxesPrevious = {
+    ...object('boxes-prev', 'obstruction', 'cardboard boxes', 'in the exit path', 'anchor_prev_e', previous.capturedAt),
+    environmentId,
+    description: 'Stacked cardboard boxes occupy the emergency exit access path.',
+  }
+  const exitCurrent = {
+    ...object('exit-current', 'signage', 'exit sign', 'above the exit door', 'anchor_current_e', current.capturedAt),
+    environmentId,
+    description: 'Green EXIT sign above the same hallway exit door.',
+  }
+
+  const condition = {
+    id: 'condition_access_anchor',
+    environmentId,
+    kind: 'access',
+    title: 'Emergency exit access obstructed',
+    description: 'Stacked cardboard boxes obstruct the emergency exit access path.',
+    status: 'present',
+    basis: 'observed',
+    confidence: 0.96,
+    objectIds: ['boxes-prev'],
+    evidenceIds: ['anchor_prev_e'],
+    observedAt: previous.capturedAt,
+  }
+
+  const memory = {
+    environment: {
+      id: environmentId,
+      name: 'Office walkway',
+      type: 'office',
+      createdAt: previous.capturedAt,
+      updatedAt: current.capturedAt,
+      currentStateId: current.id,
+      stateIds: [previous.id, current.id],
+      roomIds: [],
+      objectIds: ['exit-current'],
+      issueIds: [],
+    },
+    states: [previous, current],
+    snapshots: [
+      { stateId: previous.id, environmentId, objects: [exitPrevious, boxesPrevious], conditions: [condition], issues: [], relations: [] },
+      { stateId: current.id, environmentId, objects: [exitCurrent], conditions: [], issues: [], relations: [] },
+    ],
+    objects: [exitCurrent],
+    conditions: [],
+    issues: [],
+    observations: [{
+      id: 'anchor_obs_current',
+      environmentId,
+      sourceId: 'source_anchor_current',
+      modality: 'image',
+      capturedAt: current.capturedAt,
+      label: 'Clear exit hallway',
+      description: 'The emergency exit hallway and doorway are directly visible and the access path is clear of boxes.',
+      confidence: 0.98,
+      basis: 'observed',
+      evidenceIds: ['anchor_current_e'],
+    }],
+    evidence: [
+      evidence('anchor_prev_e', 'source_anchor_prev', previous.capturedAt, 'Previous obstructed exit-area evidence.'),
+      evidence('anchor_current_e', 'source_anchor_current', current.capturedAt, 'Current clear exit-area evidence.'),
+    ],
+    relations: [],
+    sources: [
+      { id: 'source_anchor_prev', environmentId, modality: 'image', uri: 'data:image/jpeg;base64,anchor-prev', capturedAt: previous.capturedAt },
+      { id: 'source_anchor_current', environmentId, modality: 'image', uri: 'data:image/jpeg;base64,anchor-current', capturedAt: current.capturedAt },
+    ],
+    diffs: [],
+  }
+
+  let context = ''
+  const model = {
+    provider: 'test',
+    model: 'test',
+    async verifyConditions(request) {
+      context = request.context
+      return {
+        verdicts: [{
+          conditionId: 'condition_access_anchor',
+          status: 'resolved',
+          confidence: 0.97,
+          reason: 'The same emergency-exit area is re-observed via the EXIT sign, and the current access path is visibly clear.',
+          evidenceIds: ['anchor_current_e'],
+          relatedObjectIds: ['exit-current'],
+        }],
+      }
+    },
+  }
+
+  const result = await new Service({ get: async () => memory }, model).verify({
+    environmentId,
+    previousStateId: previous.id,
+    currentStateId: current.id,
+    conditionIds: ['condition_access_anchor'],
+  })
+  return { result, context }
 }
 
 async function runFailedAccessCase(Service) {
