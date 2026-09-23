@@ -12,6 +12,7 @@ import {
   objectsSemanticallyMatch,
   semanticObjectIdentityKey,
 } from './object-identity.js'
+import { isLowSalienceInventoryObject } from './change-salience.js'
 
 export interface EnvironmentalSnapshot {
   stateId: string
@@ -95,7 +96,7 @@ export class EnvironmentalDiffEngine implements DiffEngine {
 
       if (!previous) {
         if (hasUnresolvedFamilyCounterpart(current, normalizedFrom.objects)) continue
-        if (isLowSalienceInventoryNoise(current)) continue
+        if (isLowSalienceInventoryObject(current)) continue
         changes.push(this.change(
           normalizedFrom,
           normalizedTo,
@@ -109,6 +110,12 @@ export class EnvironmentalDiffEngine implements DiffEngine {
         ))
         continue
       }
+
+      // Low-salience inventory remains available in Spatial Memory, but raw
+      // object-level churn for hardware/decor/fixtures is not a material
+      // environmental change. Grounded conditions/issues about those objects
+      // still flow through the condition/issue sections below.
+      if (isLowSalienceInventoryObject(current) || isLowSalienceInventoryObject(previous)) continue
 
       const removed = explicitlyRemoved(current) && !explicitlyRemoved(previous)
       if (removed) {
@@ -171,7 +178,7 @@ export class EnvironmentalDiffEngine implements DiffEngine {
       if (matchedPrevious.has(previousIndex)) continue
       if (hasUnresolvedFamilyCounterpart(previous, normalizedTo.objects)) continue
       if (isExplicitlyReobservedInCurrentDescriptions(previous, normalizedTo.objects)) continue
-      if (isLowSalienceInventoryNoise(previous)) continue
+      if (isLowSalienceInventoryObject(previous)) continue
       changes.push(this.change(
         normalizedFrom,
         normalizedTo,
@@ -682,18 +689,6 @@ function isExplicitlyReobservedInCurrentDescriptions(previous: SpatialObject, cu
     if (/\b(?:no|without|missing|absent)\s*$/.test(before)) return false
     return true
   })
-}
-
-function isLowSalienceInventoryNoise(item: SpatialObject): boolean {
-  const name = normalize(item.name)
-  // These surfaces, decor items, and shelf/desk contents are useful context in
-  // memory but are too detection-sensitive to become facility-operation
-  // add/remove cards from one ordinary observation alone. Operational
-  // conditions about them (damage, spill, obstruction, etc.) still remain.
-  if (/^(?:(?:white|painted|brick|concrete|interior|exterior) )?wall$/.test(name)) return true
-  if (/^(?:(?:wooden|wood|tile|tiled|concrete|vinyl|laminate|hardwood|carpeted) )?floor$/.test(name)) return true
-  if (/^(?:(?:white|painted|drop|suspended) )?ceiling$/.test(name)) return true
-  return /^(?:cup|mug|pen holder|pencil holder|light switch|switch plate|picture|picture frame|wall picture|framed picture|wall art|books|book|globe|wicker basket|basket|potted plant|plant|rug|area rug|carpet)$/.test(name)
 }
 
 function explicitlyRemoved(item: SpatialObject): boolean {
