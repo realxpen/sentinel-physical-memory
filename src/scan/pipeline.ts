@@ -612,7 +612,7 @@ export class ScanPipeline {
   }
 
   private async inferPerceptionPass(
-    pass: 'scene' | 'state-audit' | 'condition-audit' | 'identity-audit' | 'access-geometry-audit',
+    pass: 'scene' | 'state-audit' | 'condition-audit' | 'identity-audit' | 'access-geometry-audit' | 'operational-change-audit',
     prompt: string,
     artifacts: ScanArtifact[],
     frames: ScanFrame[],
@@ -850,7 +850,7 @@ function mergeOperationalChangeAudit(
         ...existing,
         ...(existing.position ? {} : candidate.position ? { position: candidate.position } : {}),
         ...(existing.state ? {} : candidate.state ? { state: candidate.state } : {}),
-        evidenceIds: unique([...existing.evidenceIds, ...candidate.evidenceIds]),
+        evidenceIds: [...new Set([...existing.evidenceIds, ...candidate.evidenceIds])],
         confidence: Math.max(existing.confidence, candidate.confidence),
       }
       mergedObjects[sceneIndex] = next
