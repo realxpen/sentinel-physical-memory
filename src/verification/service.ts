@@ -18,6 +18,7 @@ import type {
 import type { VerificationDraftVerdict, VerificationModelAdapter } from '../ai/model.js'
 import type { ScanArtifact } from '../scan/types.js'
 import { EnvironmentalDiffEngine } from '../memory/diff-engine.js'
+import { matchObjectsConservatively } from '../memory/object-identity.js'
 import type { EnvironmentalMemoryReader } from '../memory/repository.js'
 
 const RESOLVED_MIN_CONFIDENCE = 0.75
@@ -203,8 +204,8 @@ function validateModelVerdict(
   const currentObjects = new Set(scope.currentSnapshot.objects.map((item) => item.id))
   const evidenceIds = unique(raw.evidenceIds.filter((id) => currentEvidenceIds.has(id)))
   const relatedObjectIds = unique(raw.relatedObjectIds.filter((id) => currentObjects.has(id)))
-  const baselineObjectIds = new Set(condition.objectIds)
-  const samePhysicalContext = condition.objectIds.length === 0 || relatedObjectIds.some((id) => baselineObjectIds.has(id))
+  const allowedContextIds = currentContextObjectIds(condition, scope)
+  const samePhysicalContext = condition.objectIds.length === 0 || relatedObjectIds.some((id) => allowedContextIds.has(id))
   const confidence = clamp01(raw.confidence)
 
   if (raw.status === 'resolved') {
@@ -255,6 +256,48 @@ function validateModelVerdict(
   )
 }
 
+
+function currentContextObjectIds(
+  condition: EnvironmentalCondition,
+  scope: VerificationScope,
+): Set<string> {
+  const allowed = new Set<string>()
+  const baselineIds = new Set(condition.objectIds)
+
+  for (const current of scope.currentSnapshot.objects) {
+    if (baselineIds.has(current.id)) allowed.add(current.id)
+  }
+
+  const matches = matchObjectsConservatively(scope.previousSnapshot.objects, scope.currentSnapshot.objects)
+  for (const [currentIndex, previousIndex] of matches.entries()) {
+    const previous = scope.previousSnapshot.objects[previousIndex]
+    const current = scope.currentSnapshot.objects[currentIndex]
+    if (!previous || !current) continue
+
+    if (baselineIds.has(previous.id)) {
+      allowed.add(current.id)
+      continue
+    }
+
+    if (isAccessAreaAnchor(condition, previous) && isAccessAreaAnchor(condition, current)) {
+      allowed.add(current.id)
+    }
+  }
+
+  return allowed
+}
+
+function isAccessAreaAnchor(condition: EnvironmentalCondition, item: SpatialObject): boolean {
+  if (condition.kind !== 'access') return false
+  if (!/\b(?:exit|egress|access|door|doorway|hallway|walkway|corridor|passage|path)\b/i.test(`${condition.title} ${condition.description}`)) return false
+
+  const text = `${item.name} ${item.description ?? ''} ${item.position?.description ?? ''}`
+  if (item.category === 'door') return /\b(?:exit|emergency|door|doorway)\b/i.test(text)
+  if (item.category === 'signage') return /\b(?:exit|egress|emergency)\b/i.test(text)
+  if (item.category === 'room') return /\b(?:hallway|walkway|corridor|passage|exit|egress)\b/i.test(text)
+  return false
+}
+
 function deterministicContinuedSupport(
   condition: EnvironmentalCondition,
   scope: VerificationScope,
@@ -297,7 +340,8 @@ function deterministicContinuedSupport(
 function buildVerificationContext(scope: VerificationScope, pending: EnvironmentalCondition[]): string {
   const currentEvidenceIds = new Set(scope.currentEvidence.map((item) => item.id))
   const targetObjectIds = new Set(pending.flatMap((item) => item.objectIds))
-  const currentObjects = scope.currentSnapshot.objects.filter((item) => targetObjectIds.has(item.id))
+  const currentContextIds = new Set(pending.flatMap((condition) => [...currentContextObjectIds(condition, scope)]))
+  const currentObjects = scope.currentSnapshot.objects.filter((item) => targetObjectIds.has(item.id) || currentContextIds.has(item.id))
   const currentObservations = scope.memory.observations.filter((item) =>
     scope.currentState.sourceIds.includes(item.sourceId)
       && (item.evidenceIds.some((id) => currentEvidenceIds.has(id)) || !targetObjectIds.size),
@@ -311,6 +355,7 @@ function buildVerificationContext(scope: VerificationScope, pending: Environment
     '- Verify the earlier condition against the CURRENT state only.',
     '- Missing from the current condition list is NOT evidence of resolution.',
     '- resolved requires positive current evidence from the same physical object/area showing the earlier condition is no longer present.',
+    '- For access obstruction, a durable current area anchor (for example the same EXIT sign or exit door) may establish the same physical area even when the former obstacle itself is absent.',
     '- remaining requires positive current evidence that the earlier condition is still present.',
     '- inconclusive when the relevant object/area was not clearly re-observed or the evidence does not distinguish resolved from remaining.',
     '- Cite only CURRENT_EVIDENCE IDs and CURRENT_OBJECT IDs supplied below.',
@@ -319,7 +364,7 @@ function buildVerificationContext(scope: VerificationScope, pending: Environment
     ...pending.map((item) => `- CONDITION ${item.id}: ${item.title} | kind=${item.kind} | basis=${item.basis} | confidence=${item.confidence} | objects=${item.objectIds.join(',')} | ${item.description}`),
     'CURRENT NON-NORMAL CONDITIONS:',
     ...scope.currentConditions.map((item) => `- CONDITION ${item.id}: ${item.title} | kind=${item.kind} | status=${item.status} | confidence=${item.confidence} | objects=${item.objectIds.join(',')} | evidence=${stateLocalEvidenceIds(item.evidenceIds, scope.currentEvidence).join(',')} | ${item.description}`),
-    'CURRENT OBJECTS FROM THE SAME PHYSICAL CONTEXT:',
+    'CURRENT OBJECTS FROM THE SAME PHYSICAL/AREA CONTEXT:',
     ...currentObjects.map((item) => `- OBJECT ${item.id}: ${item.name} | category=${item.category} | state=${item.state ?? 'unknown'} | position=${item.position?.description ?? 'unknown'} | description=${item.description ?? 'none'} | evidence=${stateLocalEvidenceIds(item.evidenceIds, scope.currentEvidence).join(',')}`),
     'CURRENT OBSERVATIONS:',
     ...currentObservations.slice(0, 16).map((item) => `- OBSERVATION ${item.id}: ${item.label} | confidence=${item.confidence} | evidence=${stateLocalEvidenceIds(item.evidenceIds, scope.currentEvidence).join(',')} | ${item.description}`),
