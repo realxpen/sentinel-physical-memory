@@ -5,7 +5,7 @@ import { ScanPipeline } from '../src/scan/pipeline.js'
 import { getMemoryPersistenceMode, getRuntimeEnvironmentalMemoryRepository } from '../server/memory-repository.js'
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown }
-type Response = { status(code: number): Response; json(body: unknown): void }
+type Response = { status(code: number): Response; json(body: unknown): void; setHeader?(name: string, value: string): void }
 
 const MAX_BODY_BYTES = 4 * 1024 * 1024
 const MAX_VIDEO_FRAMES = 12
@@ -17,9 +17,12 @@ const MAX_FRAME_DATA_URL_BYTES = 700 * 1024
 const ALLOWED_IMAGE_MIME = new Set(['image/jpeg', 'image/png', 'image/webp'])
 const ALLOWED_VIDEO_MIME = new Set(['video/mp4', 'video/webm', 'video/quicktime', 'video/x-m4v'])
 const DEFAULT_PERCEPTION_MODEL = 'openbmb/MiniCPM-V-4_5'
-const DEFAULT_PERCEPTION_TIMEOUT_MS = 120_000
+// /api/scan has a 180s function budget. A scene perception call may retry once
+// on a transient provider timeout/5xx, so each provider attempt is deliberately
+// capped below half the function budget to leave time for grounding + Neon save.
+const DEFAULT_PERCEPTION_TIMEOUT_MS = 70_000
 const MIN_PERCEPTION_TIMEOUT_MS = 30_000
-const MAX_PERCEPTION_TIMEOUT_MS = 180_000
+const MAX_PERCEPTION_TIMEOUT_MS = 75_000
 
 class ScanRequestError extends Error {
   readonly status: number
@@ -118,6 +121,9 @@ export default async function handler(req: Request, res: Response) {
       const timedOut = /timeout/i.test(error.code) || /timed out/i.test(error.message)
       const status = timedOut ? 504 : 502
       console.error('SENTINEL_SCAN_PROVIDER_FAILED', summarizeError(error))
+      // The server has already exhausted its bounded provider retry. The browser
+      // should only retry platform/network failures that never reached this handler.
+      res.setHeader?.('X-Sentinel-Server-Retry', 'exhausted')
       return res.status(status).json({
         error: timedOut ? 'PERCEPTION_TIMEOUT' : 'PERCEPTION_PROVIDER_FAILED',
         message: timedOut

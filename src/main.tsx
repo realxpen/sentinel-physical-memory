@@ -1278,7 +1278,8 @@ async function postScanWithRetry(payload: unknown, onRetry?: () => void): Promis
         body,
       })
 
-      if (attempt === 0 && [502, 503, 504].includes(response.status)) {
+      const serverRetryExhausted = response.headers.get('x-sentinel-server-retry') === 'exhausted'
+      if (attempt === 0 && [502, 503, 504].includes(response.status) && !serverRetryExhausted) {
         onRetry?.()
         await delay(900)
         continue
