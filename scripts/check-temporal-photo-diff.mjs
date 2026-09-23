@@ -65,6 +65,7 @@ try {
           object('door-scene', 'door', 'white door', current ? 'center back of room' : 'center of back wall', 'white door with silver handle', current ? 'closed' : undefined),
           object('closet-scene', 'furniture', 'closet', 'right of bookshelf', 'white closet with two doors', current ? 'open' : undefined),
           object('chair-scene', 'furniture', 'office chair', current ? 'center of room' : 'in front of desk', 'black mesh office chair with wheels'),
+          object('extinguisher-scene', 'safety', 'fire extinguisher', current ? 'left wall beside conference room door' : 'right wall below safety poster', 'red portable fire extinguisher'),
           object('globe-scene', 'other', 'globe', current ? 'on bookshelf' : 'on shelf', 'small globe'),
           object('books-scene', 'document', 'books', current ? 'on bookshelf' : 'on shelf', 'books'),
           object('pen-scene', 'furniture', 'pen holder', 'on desk', 'pen holder'),
@@ -92,6 +93,9 @@ try {
       }
       if (candidate.currentObjectName === 'office chair') {
         return { changes: [{ candidateKey: candidate.key, kind: 'moved', confidence: 0.96 }] }
+      }
+      if (candidate.currentObjectName === 'fire extinguisher') {
+        return { changes: [{ candidateKey: candidate.key, kind: 'moved', confidence: 0.97 }] }
       }
       if (candidate.currentObjectName === 'closet') {
         // Simulate a high-confidence provider mistake caused by confusing the
@@ -129,7 +133,7 @@ try {
   if (!second.diff) throw new Error('update scan must create a diff')
 
   const titles = second.diff.changes.map((change) => change.title)
-  const expected = ['Changed: white door', 'Moved: office chair', 'New: duffle bag']
+  const expected = ['Changed: white door', 'Moved: office chair', 'Moved: fire extinguisher', 'New: duffle bag']
   for (const title of expected) {
     if (!titles.includes(title)) throw new Error(`missing supported temporal change: ${title}; got ${titles.join(' | ')}`)
   }
@@ -144,8 +148,8 @@ try {
     }
   }
 
-  if (!temporalCandidatesSeen.includes('white door') || !temporalCandidatesSeen.includes('office chair') || !temporalCandidatesSeen.includes('closet')) {
-    throw new Error(`expected door/chair/closet candidate-scoped checks, saw ${temporalCandidatesSeen.join(', ')}`)
+  if (!temporalCandidatesSeen.includes('white door') || !temporalCandidatesSeen.includes('office chair') || !temporalCandidatesSeen.includes('fire extinguisher') || !temporalCandidatesSeen.includes('closet')) {
+    throw new Error(`expected door/chair/extinguisher/closet candidate-scoped checks, saw ${temporalCandidatesSeen.join(', ')}`)
   }
   if (temporalCandidatesSeen.includes('pen holder') || temporalCandidatesSeen.includes('globe') || temporalCandidatesSeen.includes('books')) {
     throw new Error(`low-salience objects must not consume temporal verification calls: ${temporalCandidatesSeen.join(', ')}`)
@@ -171,8 +175,9 @@ try {
   console.log('PASS  false nearby-door→closet state transfer is rejected')
   console.log('PASS  unverified single-photo openable states are discarded')
   console.log('PASS  free-form photo movement requires paired verification')
+  console.log('PASS  portable fire extinguisher movement is eligible for paired temporal verification')
   console.log('PASS  structural surfaces and low-salience decor do not become operational diff cards')
-  console.log('PASS  exact output is white door changed + office chair moved + duffle bag added')
+  console.log('PASS  exact output is white door changed + office chair moved + fire extinguisher moved + duffle bag added')
   console.log('SENTINEL TEMPORAL PHOTO DIFF VERIFIED')
 } finally {
   await vite.close()
