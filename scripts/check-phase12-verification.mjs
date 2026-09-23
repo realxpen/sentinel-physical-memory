@@ -11,7 +11,7 @@ try {
   expect(passed.result.resolvedConditionIds.join(',') === 'condition_access', 'passed verification should resolve the baseline condition ID')
   expect(passed.result.remainingConditionIds.length === 0, 'passed verification must have no remaining target condition')
   expect(passed.modelCalls === 1, 'resolved case should call the model once for the missing prior condition')
-  expect(passed.artifactIds.join(',') === 'verification_source_current', 'verification must send only the current-state image artifact to the model')
+  expect(passed.artifactIds.join(',') === 'verification_previous_source_prev,verification_current_source_current', 'verification must send baseline localization first and current proof second')
   expect(passed.result.verdicts[0].evidenceIds.includes('e_current'), 'resolved verdict must retain current-state evidence')
 
   const areaAnchor = await runAreaAnchorResolutionCase(VerificationAgentService)
@@ -66,11 +66,12 @@ try {
   }
   expect(rejectedReverse, 'verification must reject same/reversed temporal state order')
 
-  const [main, css, api, source] = await Promise.all([
+  const [main, css, api, source, nebius] = await Promise.all([
     readFile(new URL('../src/main.tsx', import.meta.url), 'utf8'),
     readFile(new URL('../src/integration.css', import.meta.url), 'utf8'),
     readFile(new URL('../api/verify.ts', import.meta.url), 'utf8'),
     readFile(new URL('../src/verification/service.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../src/ai/nebius.ts', import.meta.url), 'utf8'),
   ])
 
   expect(main.includes('VERIFICATION / PHYSICAL RESULT'), 'Phase 12 result surface is missing')
@@ -84,8 +85,12 @@ try {
   expect(api.includes("from '../src/verification/service.ts'"), 'production API must explicitly bundle the Phase 12 service')
   expect(source.includes('Missing from the current condition list is NOT evidence of resolution.'), 'model context must reject absence-as-resolution')
   expect(source.includes('deterministicContinuedSupport'), 'server-owned continued-support override is missing')
-  expect(source.includes('verificationArtifactsForState'), 'verification must attach current-state visual artifacts')
+  expect(source.includes('verificationArtifactsForComparison'), 'verification must attach baseline localization and current-state visual artifacts')
+  expect(nebius.includes('verification_previous_'), 'verification prompt must label baseline localization images')
+  expect(nebius.includes('verification_current_'), 'verification prompt must label current proof images')
+  expect(nebius.includes('clear and traversable'), 'verification prompt must define positive access-clearance geometry')
 
+  console.log('PASS  verification receives baseline localization + current proof images in deterministic order')
   console.log('PASS  positive current same-object evidence can verify a resolved condition')
   console.log('PASS  a re-observed durable EXIT-area anchor can verify access resolution even when the former obstacle is absent and object IDs changed')
   console.log('PASS  continued obstruction geometry overrides condition/issue disappearance')
