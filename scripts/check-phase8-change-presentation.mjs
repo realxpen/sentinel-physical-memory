@@ -29,13 +29,12 @@ try {
     },
   ])
 
-  if (presented.length !== 3) throw new Error(`expected 3 presented changes, got ${presented.length}`)
-  const wall = presented.find((item) => /white wall/i.test(item.title))
-  if (!wall || wall.evidenceIds.length !== 3) throw new Error('duplicate wall card must retain the union of evidence references')
+  if (presented.length !== 2) throw new Error(`expected 2 material presented changes, got ${presented.length}`)
+  if (presented.some((item) => /white wall/i.test(item.title))) throw new Error('raw structural-surface churn must be hidden from Reality Diff presentation')
   if (!presented.some((item) => item.title === 'Not re-observed: closet door')) throw new Error('distinct closet-door uncertainty must remain visible')
   if (!presented.some((item) => item.title === 'New: green bag')) throw new Error('real green-bag addition must remain visible')
   const summary = presentedChangeSummary(presented)
-  if (summary !== '3 environmental change(s): 1 added, 2 uncertain.') throw new Error(`unexpected presented summary: ${summary}`)
+  if (summary !== '2 environmental change(s): 1 added, 1 uncertain.') throw new Error(`unexpected presented summary: ${summary}`)
 
 
   const historicalNoise = changesForPresentation([
@@ -81,11 +80,11 @@ try {
     change('left_wall', 'Not re-observed: white wall', 'wall_left', ['e_left']),
     change('right_wall', 'Not re-observed: white wall', 'wall_right', ['e_right']),
   ])
-  if (distinctWalls.length !== 2) throw new Error('same-named surfaces with independent evidence must remain separate')
+  if (distinctWalls.length !== 0) throw new Error('historical raw structural-surface churn must be hidden even when independently grounded')
 
-  console.log('PASS  persisted duplicate structural verification cards render once')
-  console.log('PASS  evidence is unioned while distinct and real changes remain visible')
-  console.log('PASS  independently grounded same-named surfaces remain separate')
+  console.log('PASS  persisted raw structural-surface churn is hidden from Reality Diff presentation')
+  console.log('PASS  distinct operational object changes remain visible')
+  console.log('PASS  independently grounded structural surfaces remain in immutable history but not headline diff cards')
   console.log('PASS  historical micro-inventory churn is filtered without hiding obstruction or extinguisher changes')
   console.log('SENTINEL PHASE 8 CHANGE PRESENTATION VERIFIED')
 } finally {
