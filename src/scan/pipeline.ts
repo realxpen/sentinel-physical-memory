@@ -781,7 +781,7 @@ function temporalStateCandidateAllowed(item: SpatialObject): boolean {
 
 function temporalMovementCandidateAllowed(item: SpatialObject): boolean {
   const name = normalizeTemporalName(item.name)
-  return /\b(?:chair|stool|bench|cart|trolley|pallet jack|hand truck|dolly|wheelchair|ladder|box|crate|bin|barrier|cone|toolbox|bag|suitcase|equipment case)\b/.test(name)
+  return /\b(?:chair|stool|bench|cart|trolley|pallet jack|hand truck|dolly|wheelchair|ladder|box|crate|bin|barrier|cone|toolbox|bag|suitcase|equipment case|fire extinguisher|extinguisher)\b/.test(name)
 }
 
 function isCompositeOpenable(item: SpatialObject): boolean {
