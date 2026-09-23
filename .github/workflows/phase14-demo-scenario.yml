@@ -1,0 +1,22 @@
+name: Phase 14 Demo Scenario
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  demo-scenario:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Verify canonical demo scenario contract
+        run: npm run check:phase14-demo
+      - name: Verify production build
+        run: npm run build
