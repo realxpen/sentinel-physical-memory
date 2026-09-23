@@ -369,6 +369,59 @@ export class ScanPipeline {
       return scene
     }
 
+    // Update-photo change audit: the broad scene pass is intentionally general and
+    // can occasionally miss a visually obvious operational object in a later state
+    // (for example newly introduced boxes or a re-positioned extinguisher). Re-read
+    // the CURRENT image only and recover high-salience current objects/anchors. Prior
+    // memory is naming context, never evidence, and recovered objects still require
+    // trusted current-frame grounding + high confidence.
+    if (input.media.kind === 'image' && priorObjects.length > 0) {
+      const priorOperationalAnchors = priorObjects
+        .filter(isOperationalChangeAuditObject)
+        .slice(0, 20)
+        .map((item) => `${item.name} (${item.category})`)
+        .join(', ')
+      const currentSceneObjects = scene.objects
+        .filter(isOperationalChangeAuditObject)
+        .map((item) => `${item.name} (${item.category})`)
+        .join(', ')
+
+      const changeAuditPrompt = [
+        `Operational change recovery audit for scan ${scanId} in environment ${input.environmentId}.`,
+        `The scan source id is ${input.source.id}.`,
+        `The trusted scan capturedAt is ${input.source.capturedAt}.`,
+        `Current scene pass already found these operationally relevant objects: ${currentSceneObjects || 'none'}.`,
+        `Previously remembered operational names (NAMING CONTEXT ONLY, NOT EVIDENCE): ${priorOperationalAnchors || 'none'}.`,
+        'Inspect the supplied CURRENT still image independently. Recover only directly visible, operationally salient physical objects that the broad scene pass may have missed or under-described.',
+        'Prioritize boxes/cartons/packages, fire extinguishers, movable chairs/carts/trolleys, doors, exit signage, barriers, ladders, equipment cases, and objects occupying a walkway/doorway/exit path.',
+        'Re-observe a previously named anchor only when that physical object is directly visible in the CURRENT image. Never infer presence from prior memory.',
+        'For each recovered object, use a stable whole-object name and a concise semantic physical position when directly visible, such as "left wall beside Conference Room sign" or "in front of exit door".',
+        'If a box/carton/furniture/equipment item is visibly in front of/across/blocking a door, doorway, exit, or walking path, emit the direct placement in its description/position and a grounded spatial relation when visually defensible.',
+        'If a fire extinguisher is visible, call it "fire extinguisher" rather than generic equipment.',
+        'Do not enumerate walls, floors, ceilings, decor, plants, tiny desk items, door hardware, or other low-salience inventory in this audit.',
+        'Do not claim an object is new, moved, removed, resolved, or changed. This pass describes CURRENT visible state only; SENTINEL compares states later.',
+        'Omit anything ambiguous. Do not use filenames, metadata, prior memory, or expected demo changes as evidence.',
+        'Reference only exact supplied FRAME_ID values in evidenceIds. Return the full SENTINEL PerceptionResult JSON schema.',
+      ].join('\n')
+
+      try {
+        const changeAudit = await this.inferPerceptionPass('operational-change-audit', changeAuditPrompt, artifacts, frames, input)
+        const recovered = mergeOperationalChangeAudit(scene, changeAudit)
+        scene = recovered.scene
+        console.warn('SENTINEL_OPERATIONAL_CHANGE_AUDIT_COMPLETED', {
+          scanId,
+          recovered: recovered.added.map((item) => ({ name: item.name, category: item.category, confidence: item.confidence })),
+          enriched: recovered.enriched.map((item) => ({ name: item.name, category: item.category, confidence: item.confidence })),
+        })
+      } catch (error) {
+        console.warn('SENTINEL_OPERATIONAL_CHANGE_AUDIT_SKIPPED', {
+          scanId,
+          code: errorCode(error),
+          message: error instanceof Error ? error.message : 'Unknown operational change audit failure',
+        })
+      }
+    }
+
     // Still-photo state audit: open/closed is operationally important but the broad
     // scene pass can omit it. Re-inspect only visible openable objects whose state
     // is missing; this pass may confirm state but must not invent unseen objects.
@@ -756,6 +809,103 @@ function pruneNegativeAuditObservations(result: PerceptionResult): PerceptionRes
   // intentionally not persisted: it is a common source of repetitive "normal"
   // inventory narration and does not add operational truth.
   return { ...result, observations: [] }
+}
+
+
+const OPERATIONAL_CHANGE_AUDIT_TERMS = /\b(?:box|boxes|carton|package|fire extinguisher|extinguisher|chair|stool|bench|cart|trolley|pallet jack|hand truck|dolly|wheelchair|ladder|barrier|cone|toolbox|bag|suitcase|equipment case|door|doorway|exit|egress|walkway|walking path|passage|aisle|obstruction|blocking|blocked|obstructing|obstructed)\b/i
+
+function isOperationalChangeAuditObject(item: SpatialObject): boolean {
+  if (item.confidence < 0.9) return false
+  if (item.category === 'obstruction' || item.category === 'safety' || item.category === 'door') return true
+  const text = `${item.name} ${item.description ?? ''}`
+  return OPERATIONAL_CHANGE_AUDIT_TERMS.test(text)
+}
+
+function mergeOperationalChangeAudit(
+  scene: PerceptionResult,
+  audit: PerceptionResult,
+): { scene: PerceptionResult; added: SpatialObject[]; enriched: SpatialObject[] } {
+  const matches = matchObjectsConservatively(scene.objects, audit.objects)
+  const idMap = new Map<string, string>()
+  const added: SpatialObject[] = []
+  const enriched: SpatialObject[] = []
+  const mergedObjects = scene.objects.map((item) => ({ ...item, evidenceIds: [...item.evidenceIds] }))
+
+  for (const [auditIndex, candidate] of audit.objects.entries()) {
+    if (!isOperationalChangeAuditObject(candidate)) continue
+
+    let sceneIndex = matches.get(auditIndex)
+    if (sceneIndex === undefined) {
+      const candidateName = normalizeTemporalName(candidate.name)
+      const exact = mergedObjects
+        .map((item, index) => ({ item, index }))
+        .filter(({ item }) => normalizeTemporalName(item.name) === candidateName)
+      if (exact.length === 1) sceneIndex = exact[0].index
+    }
+
+    if (sceneIndex !== undefined) {
+      const existing = mergedObjects[sceneIndex]
+      idMap.set(candidate.id, existing.id)
+      const next: SpatialObject = {
+        ...existing,
+        ...(existing.position ? {} : candidate.position ? { position: candidate.position } : {}),
+        ...(existing.state ? {} : candidate.state ? { state: candidate.state } : {}),
+        evidenceIds: unique([...existing.evidenceIds, ...candidate.evidenceIds]),
+        confidence: Math.max(existing.confidence, candidate.confidence),
+      }
+      mergedObjects[sceneIndex] = next
+      enriched.push(next)
+      continue
+    }
+
+    const nextId = `change_audit_${candidate.id}`
+    idMap.set(candidate.id, nextId)
+    const next = { ...candidate, id: nextId }
+    mergedObjects.push(next)
+    added.push(next)
+  }
+
+  const mappedObservationText = audit.observations.filter((item) =>
+    item.confidence >= 0.9 && OPERATIONAL_CHANGE_AUDIT_TERMS.test(`${item.label} ${item.description}`),
+  ).map((item) => ({ ...item, id: `change_audit_${item.id}` }))
+
+  const mappedConditions = audit.conditions.flatMap((item) => {
+    if (item.confidence < 0.85 || !OPERATIONAL_CHANGE_AUDIT_TERMS.test(`${item.title} ${item.description}`)) return []
+    const objectIds = item.objectIds.map((id) => idMap.get(id)).filter((id): id is string => Boolean(id))
+    if (item.objectIds.length > 0 && objectIds.length !== item.objectIds.length) return []
+    return [{ ...item, id: `change_audit_${item.id}`, objectIds }]
+  })
+
+  const knownIds = new Set(mergedObjects.map((item) => item.id))
+  const mappedRelations = audit.relations.flatMap((item) => {
+    const fromId = idMap.get(item.fromId)
+    const toId = idMap.get(item.toId)
+    if (!fromId || !toId || !knownIds.has(fromId) || !knownIds.has(toId)) return []
+    return [{ ...item, id: `change_audit_${item.id}`, fromId, toId }]
+  })
+
+  const existingConditionKeys = new Set(scene.conditions.map((item) =>
+    `${normalizeSemanticText(item.title)}::${[...item.objectIds].sort().join('|')}`,
+  ))
+  const newConditions = mappedConditions.filter((item) => {
+    const key = `${normalizeSemanticText(item.title)}::${[...item.objectIds].sort().join('|')}`
+    if (existingConditionKeys.has(key)) return false
+    existingConditionKeys.add(key)
+    return true
+  })
+
+  return {
+    scene: {
+      ...scene,
+      observations: uniqueById([...scene.observations, ...mappedObservationText]),
+      objects: mergedObjects,
+      conditions: uniqueById([...scene.conditions, ...newConditions]),
+      relations: uniqueById([...scene.relations, ...mappedRelations]),
+      evidence: uniqueById([...scene.evidence, ...audit.evidence]),
+    },
+    added,
+    enriched,
+  }
 }
 
 function normalizeTemporalName(value: string): string {
