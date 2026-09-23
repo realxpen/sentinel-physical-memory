@@ -18,7 +18,7 @@ try {
   expect(areaAnchor.result.status === 'passed', 'same access area anchor must allow positive resolution when the former obstacle is absent')
   expect(areaAnchor.result.resolvedConditionIds.join(',') === 'condition_access_anchor', 'area-anchor verification must resolve the baseline access condition')
   expect(areaAnchor.context.includes('CURRENT OBJECTS FROM THE SAME PHYSICAL/AREA CONTEXT:'), 'verification context must expose current area anchors')
-  expect(areaAnchor.context.includes('emergency exit sign'), 'verification context must include the re-observed EXIT anchor')
+  expect(areaAnchor.context.includes('OBJECT exit-current: exit sign'), 'verification context must include the re-observed EXIT anchor')
   expect(areaAnchor.result.verdicts[0].relatedObjectIds.includes('exit-current'), 'resolved verdict should retain the current area-anchor object id')
 
   const failed = await runFailedAccessCase(VerificationAgentService)
