@@ -43,6 +43,65 @@ try {
         }
       }
 
+      if (prompt.includes('Operational change recovery audit')) {
+        return {
+          sourceId,
+          observations: [{
+            id: 'change-audit-box-observation',
+            environmentId,
+            sourceId,
+            modality: 'image',
+            capturedAt,
+            label: 'cardboard boxes',
+            description: 'Three cardboard boxes are directly visible in the hallway.',
+            confidence: 0.99,
+            basis: 'observed',
+            evidenceIds: [frameId],
+          }],
+          objects: [
+            {
+              id: 'change-audit-extinguisher',
+              environmentId,
+              category: 'safety',
+              name: 'fire extinguisher',
+              description: 'Red portable fire extinguisher.',
+              position: { description: 'left wall beside conference room door' },
+              confidence: 0.99,
+              firstSeenAt: capturedAt,
+              lastSeenAt: capturedAt,
+              evidenceIds: [frameId],
+            },
+            {
+              id: 'change-audit-boxes',
+              environmentId,
+              category: 'obstruction',
+              name: 'cardboard boxes',
+              description: 'Three stacked cardboard boxes in the hallway.',
+              position: { description: 'in front of right-side doorway' },
+              confidence: 0.99,
+              firstSeenAt: capturedAt,
+              lastSeenAt: capturedAt,
+              evidenceIds: [frameId],
+            },
+            {
+              id: 'change-audit-chair',
+              environmentId,
+              category: 'furniture',
+              name: 'office chair',
+              description: 'Black mesh office chair with wheels.',
+              position: { description: 'center of room' },
+              confidence: 0.97,
+              firstSeenAt: capturedAt,
+              lastSeenAt: capturedAt,
+              evidenceIds: [frameId],
+            },
+          ],
+          conditions: [],
+          relations: [],
+          evidence: [],
+        }
+      }
+
       if (prompt.includes('Condition audit for scan')) {
         return { sourceId, observations: [], objects: [], conditions: [], relations: [], evidence: [] }
       }
@@ -65,7 +124,7 @@ try {
           object('door-scene', 'door', 'white door', current ? 'center back of room' : 'center of back wall', 'white door with silver handle', current ? 'closed' : undefined),
           object('closet-scene', 'furniture', 'closet', 'right of bookshelf', 'white closet with two doors', current ? 'open' : undefined),
           object('chair-scene', 'furniture', 'office chair', current ? 'center of room' : 'in front of desk', 'black mesh office chair with wheels'),
-          object('extinguisher-scene', 'safety', 'fire extinguisher', current ? 'left wall beside conference room door' : 'right wall below safety poster', 'red portable fire extinguisher'),
+          ...(!current ? [object('extinguisher-scene', 'safety', 'fire extinguisher', 'right wall below safety poster', 'red portable fire extinguisher')] : []),
           object('globe-scene', 'other', 'globe', current ? 'on bookshelf' : 'on shelf', 'small globe'),
           object('books-scene', 'document', 'books', current ? 'on bookshelf' : 'on shelf', 'books'),
           object('pen-scene', 'furniture', 'pen holder', 'on desk', 'pen holder'),
@@ -133,7 +192,7 @@ try {
   if (!second.diff) throw new Error('update scan must create a diff')
 
   const titles = second.diff.changes.map((change) => change.title)
-  const expected = ['Changed: white door', 'Moved: office chair', 'Moved: fire extinguisher', 'New: duffle bag']
+  const expected = ['Changed: white door', 'Moved: office chair', 'Moved: fire extinguisher', 'New: duffle bag', 'New: cardboard boxes']
   for (const title of expected) {
     if (!titles.includes(title)) throw new Error(`missing supported temporal change: ${title}; got ${titles.join(' | ')}`)
   }
@@ -176,8 +235,10 @@ try {
   console.log('PASS  unverified single-photo openable states are discarded')
   console.log('PASS  free-form photo movement requires paired verification')
   console.log('PASS  portable fire extinguisher movement is eligible for paired temporal verification')
+  console.log('PASS  update-photo recovery audit restores a missed extinguisher and obvious new cardboard boxes from current evidence')
+  console.log('PASS  recovery audit merges an already-seen chair instead of duplicating it')
   console.log('PASS  structural surfaces and low-salience decor do not become operational diff cards')
-  console.log('PASS  exact output is white door changed + office chair moved + fire extinguisher moved + duffle bag added')
+  console.log('PASS  exact output is white door changed + office chair moved + fire extinguisher moved + duffle bag added + cardboard boxes added')
   console.log('SENTINEL TEMPORAL PHOTO DIFF VERIFIED')
 } finally {
   await vite.close()
