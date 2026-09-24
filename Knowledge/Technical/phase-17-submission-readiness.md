@@ -1,6 +1,6 @@
 # Phase 17 — Submission Readiness
 
-Status: **ACTIVE — repository package implemented / external YouTube link pending**
+Status: **COMPLETE — repository/judge package passed exact-main production readiness; YouTube recording handed to Phase 18**
 
 ## Goal
 
@@ -84,6 +84,20 @@ The production workflow waits for the exact deployed main commit and checks:
 
 ## Exit condition
 
-Repository-side Phase 17 readiness closes when deterministic CI and exact-main judge-readiness production workflow pass.
+Repository-side Phase 17 readiness closed on exact main commit `ed70f7b69c9c8aefedb40b300ce05bef1699cbf3`.
 
-The complete official submission cannot be marked finished until Phase 18 produces a public YouTube demo under three minutes and its link is inserted into `SUBMISSION.md`.
+Production proof:
+
+- **Phase 17 Production Judge Readiness** run `35992186998` — **SUCCESS**;
+- repository verified public;
+- GitHub detected the MIT license;
+- public production app responded without judge credentials;
+- exact deployed commit matched main;
+- Neon + Nebius runtime configuration was healthy;
+- Token Factory + NVIDIA reasoning model were visible in non-secret health diagnostics.
+
+The first production-readiness run failed only because the harness issued a second health request during edge propagation after already seeing the exact deployment. PR #32 fixed the proof harness to reuse the exact matching health response; no product behavior was changed.
+
+Phase 17 is **COMPLETE**.
+
+The official submission still cannot be finalized until Phase 18 produces the public YouTube demo under three minutes and its link is inserted into `SUBMISSION.md`.
