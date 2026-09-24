@@ -1666,3 +1666,22 @@ Locked source requirements:
 - English submission materials.
 
 Repository preparation starts with a complete README, architecture diagram, judge testing guide, demo instructions, submission copy, and an executable submission-readiness gate.
+
+
+### Phase 17 repository package — IMPLEMENTED
+
+Judge-facing package now includes:
+
+- rebuilt README with product story, architecture, actual NVIDIA/Nebius roles, setup, testing, demo, limitations and future direction;
+- Mermaid architecture and inference/trust-boundary diagrams;
+- no-login judge testing guide;
+- canonical three-scan demo rehearsal;
+- Devpost-ready submission draft including inspiration, build, challenges, accomplishments, NVIDIA/Nebius usage and feedback;
+- explicit significant-update/origin statement;
+- submission checklist with external YouTube dependency left visibly open;
+- deterministic `check:phase17-submission` gate;
+- exact-main `Phase 17 Production Judge Readiness` workflow for public repo/license/demo/runtime verification.
+
+Canonical record: `Knowledge/Technical/phase-17-submission-readiness.md`.
+
+Remaining Phase 17 dependency after merge: exact-main production judge-readiness must pass. The public YouTube demo itself is intentionally handed to Phase 18 and must not be fabricated.
