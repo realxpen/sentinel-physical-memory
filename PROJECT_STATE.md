@@ -1,6 +1,6 @@
 # SENTINEL Project State
 
-Last updated: 2026-09-22
+Last updated: 2026-09-24
 
 ## North star
 
@@ -14,7 +14,7 @@ Hackathon track: **Best Apps and Agents**.
 
 ## Current phase
 
-**Phase 14 — Demo Scenario Engineering: ACTIVE / PHASE 13 COMPLETE / PHASE 12 REAL PHYSICAL PROOF DEFERRED**
+**Phase 15 — Reliability and Guardrails: ACTIVE / PHASES 12–14 COMPLETE / DUPLICATE-CONDITION HARDENING IN PROGRESS**
 
 ## Phase 3 — COMPLETE
 
@@ -1133,10 +1133,10 @@ Canonical production proof: `Knowledge/Technical/phase-9-real-history-proof.md`.
 - [x] Phase 9 — Spatial Memory experience (**COMPLETE — real-state canvas + real Neon multi-state proof**)
 - [x] Phase 10 — Ask the Building product layer
 - [x] Phase 11 — Action Planner
-- [ ] Phase 12 — Verification Agent
-- [ ] Phase 13 — Living Spatial Intelligence UI rebuild/polish
-- [ ] Phase 14 — Demo scenario engineering
-- [ ] Phase 15 — Reliability and guardrails
+- [x] Phase 12 — Verification Agent (**COMPLETE — positive + negative production verification and real closed-loop replay passed**)
+- [x] Phase 13 — Living Spatial Intelligence UI rebuild/polish (**COMPLETE — human production visual review passed**)
+- [x] Phase 14 — Demo scenario engineering (**COMPLETE — deployed Scan A/B/C closed-loop replay reached Verified repeatedly**)
+- [ ] Phase 15 — Reliability and guardrails (**ACTIVE — Slice 1 duplicate condition/verdict hardening**)
 - [ ] Phase 16 — Nebius/NVIDIA architecture hardening
 - [ ] Phase 17 — Submission readiness
 - [ ] Phase 18 — Final demo polish
@@ -1289,7 +1289,7 @@ The first deployed attempt timed out at the previous inference ceiling and was d
 Canonical record: `Knowledge/Technical/phase-11-action-planner.md`.
 
 
-## Phase 12 — ACTIVE
+## Phase 12 — COMPLETE
 
 Verification Agent now closes the software loop:
 
@@ -1465,7 +1465,7 @@ The deployed product now satisfies the locked Living Spatial Intelligence direct
 
 Minor demo-content concerns such as internal test environment naming and noisy change sets are intentionally owned by Phase 14 rather than reopening the Phase 13 visual system.
 
-## Phase 14 — ACTIVE
+## Phase 14 — COMPLETE
 
 Demo Scenario Engineering now owns the reproducible three-scan hackathon story.
 
@@ -1491,3 +1491,78 @@ Current exit gate:
 - the complete scenario repeats without changing code or weakening trust rules.
 
 Canonical Phase 14 record: `Knowledge/Technical/phase-14-demo-scenario-engineering.md`.
+
+
+### Phase 12 final real closed-loop proof — PASS
+
+The deferred real physical-world verification gate is now closed.
+
+On deployed production, the office-walkway scenario completed the full loop:
+
+`baseline → obstruction detected → obstruction cleared → re-observation → Verification Agent → Verified`.
+
+The positive result used paired previous/current visual localization while preserving the core trust rule **Not re-observed is not resolved**. The current clear EXIT area supplied positive visual evidence, and verification returned a resolved access condition with no remaining or inconclusive target condition in the first successful real replay.
+
+Phase 12 is therefore **COMPLETE**.
+
+### Phase 14 repeatability closure — PASS / reliability debt handed to Phase 15
+
+A fresh deployed replay repeated the same controlled office scenario without changing the verification trust policy and again reached **Verified** after the obstruction was cleared.
+
+The replay also exposed two reliability-quality issues rather than a failure of the core loop:
+
+- extra low-value object-change noise can still appear in the Scan B Reality Diff under provider identity drift;
+- one physical access condition was represented by duplicate semantic condition records, which produced duplicate resolved verdict rows.
+
+Those are now Phase 15 reliability/guardrail defects. They do not reopen the closed-loop product capability proven by Phase 14.
+
+Phase 14 is therefore **COMPLETE** and Phase 15 owns the remaining repeatability/noise hardening.
+
+## Phase 15 — ACTIVE
+
+Canonical record: `Knowledge/Technical/phase-15-reliability-guardrails.md`.
+
+Goal:
+
+**Every major failure path recovers safely or fails closed with a readable result. SENTINEL must never fabricate a smoother answer.**
+
+### Slice 1 — duplicate condition / duplicate verdict hardening
+
+Started on 2026-09-24.
+
+Implemented on the Phase 15 branch:
+
+- semantic verification projection for duplicate historical conditions;
+- duplicates collapse only when title/kind/status agree **and** direct object/evidence grounding overlaps;
+- immutable historical snapshots remain untouched;
+- direct prior-condition discovery uses the same deduped projection;
+- one physical condition produces one verification candidate and one user-facing verdict;
+- same-status duplicate model verdicts collapse deterministically;
+- contradictory duplicate model verdicts fail closed to one `inconclusive` result;
+- Phase 12 regression now reproduces the duplicate-condition behavior exposed by the final Phase 14 replay;
+- new `check:phase15-reliability` gate verifies that every locked Phase 15 failure path is represented in the reliability matrix;
+- CI now runs the Phase 15 reliability gate.
+
+### Reliability matrix status
+
+Already covered by existing deterministic gates or production proofs:
+
+- zero grounded semantic output;
+- poor/dark and duplicate-heavy video;
+- transient perception timeout/retry;
+- invalid provider JSON/schema;
+- unknown/missing evidence references;
+- reasoning references outside the grounding envelope;
+- structured scan identity mismatch;
+- Neon persistence across reload/cold start;
+- safe no-material-change presentation.
+
+Still requiring dedicated Phase 15 route/browser assertions:
+
+- unknown/missing prior state and incomplete snapshot behavior across every affected API;
+- huge request body handling across all inference routes;
+- deterministic browser network-failure behavior;
+- wrong/unknown environment handling beyond scan source mismatch;
+- consistent user-facing fallback language across Ask / Action / Verification / Scan.
+
+Next Phase 15 slice: build those route/browser failure assertions and normalize their user-facing error contract.
