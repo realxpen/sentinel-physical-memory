@@ -271,7 +271,6 @@ function App() {
     setActionPlanStatus('')
     setVerification(null)
     setVerificationStatus('')
-    setSelectedSpatialAreaId('all')
     setView('memory')
   }
 
