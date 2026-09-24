@@ -746,7 +746,7 @@ function App() {
               : 'No remembered environmental state yet.'}</p>
           </div>
           {memory && currentSnapshot ? <div className="memory-environment-metrics">
-            <div><span>Remembered</span><strong>{memoryObjectRows.length}</strong><small>meaningful object groups</small></div>
+            <div><span>Remembered</span><strong>{memoryObjectRows.length}</strong><small>object groups</small></div>
             <div><span>Relations</span><strong>{currentSnapshot.relations.length}</strong><small>grounded links</small></div>
             <div><span>History</span><strong>{memory.states.length}</strong><small>immutable state{memory.states.length === 1 ? '' : 's'}</small></div>
           </div> : <div className="memory-environment-empty-copy">Your first observation will create State v1 and unlock history, Reality Diff and grounded Ask.</div>}
