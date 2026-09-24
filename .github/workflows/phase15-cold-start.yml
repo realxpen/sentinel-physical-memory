@@ -1,0 +1,35 @@
+name: Phase 15 Production Cold Start
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase15-cold-start.yml'
+      - 'api/memory.ts'
+      - 'api/states.ts'
+      - 'src/reliability/api-client.ts'
+      - 'scripts/check-phase15-production-cold-start.mjs'
+      - 'Knowledge/Technical/phase-15-reliability-guardrails.md'
+      - 'PROJECT_STATE.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cold-start:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify production cold-start memory restoration
+        env:
+          SENTINEL_PRODUCTION_ORIGIN: https://sentinel-physical-memory.vercel.app
+          SENTINEL_PHASE15_COLD_START_ENVIRONMENT_ID: env_warehouse_73266674
+          SENTINEL_EXPECTED_DEPLOYMENT_COMMIT: ${{ github.sha }}
+        run: node ./scripts/check-phase15-production-cold-start.mjs
