@@ -1,6 +1,6 @@
 # Phase 15 — Reliability and Guardrails
 
-Status: **ACTIVE — Slice 1 implemented**
+Status: **ACTIVE — Slices 1–2 implemented**
 
 Goal: prevent demo failure and unsafe overclaiming. Every major failure path must either recover safely or fail closed with a useful user-facing message. SENTINEL must never fabricate a smoother result.
 
@@ -20,6 +20,25 @@ Implemented:
 - contradictory model verdicts for one condition fail closed to one **inconclusive** result;
 - one physical condition therefore produces one user-facing verification verdict.
 
+## Slice 2 — Route, snapshot, and browser failure contracts
+
+Implemented:
+
+- Ask / Action Plan / Verification now distinguish unknown environments, missing states, and incomplete immutable snapshots with stable status/code pairs;
+- Ask and Action Plan no longer reconstruct missing historical snapshots from today's mutable canonical records;
+- Verification reports missing state as `404 STATE_NOT_FOUND` and missing immutable snapshot as `409 HISTORICAL_SNAPSHOT_UNAVAILABLE`;
+- malformed request bodies now return structured `400 INVALID_REQUEST` instead of becoming opaque 500s;
+- all inference routes enforce their request-size budget before any model call;
+- memory restoration distinguishes invalid queries from persistence/read failure;
+- the browser now uses one shared response parser for Memory / History / Scan / Ask / Action Plan / Verification;
+- network interruption never exposes raw browser/provider error text and always states that no result was confirmed;
+- HTML / malformed upstream failures are converted to stable product language rather than leaking a server page;
+- memory restoration failure is no longer silently presented as a new empty location.
+
+Deterministic gate:
+
+`npm run check:phase15-routes`
+
 ## Reliability matrix
 
 | Failure path | Expected behavior | Current deterministic coverage | Phase 15 state |
@@ -30,20 +49,20 @@ Implemented:
 | Model timeout / transient provider failure | Bounded retry, then structured 502/504 without duplicate state | `check:perception-retry`, `api/scan.ts` | Covered; production replay still monitored |
 | Invalid provider JSON/schema | Repair/normalize only when deterministic; otherwise retry/fail closed | `check:perception-retry`, `check:provider-boundary` | Covered |
 | Missing/unknown evidence references | Drop unsupported references; never present fabricated grounding | `check:provider-boundary`, `check:phase10-ask-building` | Covered |
-| Missing prior/current state | Reject verification/history request with explicit input error | `check:phase12-verification` + state/snapshot guards | Covered; Phase 15 adds dedicated matrix assertion next |
+| Missing prior/current state | Reject reasoning/history request with explicit typed error | `check:phase12-verification`, `check:phase15-routes` | **Covered in Slice 2** |
 | No material changes | Render stable-state outcome; do not invent a change | Phase 8 presentation + deployed UI | Covered; dedicated Phase 15 assertion next |
-| Wrong environment/source identity | Reject mismatched scan identity / unknown memory | `api/scan.ts` environment mismatch guard | Covered in code; dedicated route test pending |
-| Reload / cold start | Restore Neon-authoritative memory; no browser-carried authority | Phase 3 Neon production proof | Covered; dedicated Phase 15 replay pending |
-| Incomplete immutable memory/snapshot | Fail closed instead of synthesizing missing history | verification state/snapshot guards | Covered; dedicated assertion next |
+| Wrong environment/source identity | Reject mismatched scan identity / unknown memory | `api/scan.ts`, typed service guards, `check:phase15-routes` | **Covered in Slice 2** |
+| Reload / cold start | Restore Neon-authoritative memory; surface read failure instead of pretending memory is empty | Phase 3 Neon proof + shared browser failure contract | **Covered; production cold-start replay still useful** |
+| Incomplete immutable memory/snapshot | Fail closed instead of synthesizing missing history | Ask / Action / Verification + `check:phase15-routes` | **Covered in Slice 2** |
 | Reasoning references non-existent evidence | Filter references and cap unsupported confidence | `check:phase10-ask-building` | Covered |
-| Huge request body | Reject before inference with 413 safety budget | `api/scan.ts`, `api/verify.ts` | Implemented; dedicated route test pending |
-| Network failure | Retry only safe scan transport cases; surface readable failure | `postScanWithRetry` + defensive API response parsing | Implemented; deterministic browser-network test pending |
+| Huge request body | Reject before inference with 413 safety budget | all inference routes + `check:phase15-routes` | **Covered in Slice 2** |
+| Network failure | Retry only idempotent scan transport; other operations report no result confirmed | shared browser failure contract + `check:phase15-routes` | **Covered in Slice 2** |
 | Duplicate semantic condition | One physical problem → one verification candidate/verdict | Phase 12 regression + semantic projection | **Covered in Slice 1** |
 | Conflicting duplicate model verdicts | Fail closed to one inconclusive verdict | Phase 12 regression | **Covered in Slice 1** |
 
 ## Exit condition
 
-Phase 15 closes only when every row above has a deterministic test or production proof and the product exposes a graceful fallback instead of an opaque crash, false-green state, or fabricated answer.
+Phase 15 closes only when every row above has a deterministic test or production proof and the product exposes a graceful fallback instead of an opaque crash, false-green state, or fabricated answer. Remaining work after Slice 2 is primarily no-material-change assertion hardening, cold-start production replay, and end-to-end fallback consistency validation.
 
 Canonical fallback language:
 
