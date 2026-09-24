@@ -26,7 +26,7 @@ try {
   expect(duplicateBaseline.result.verdicts.length === 1, 'duplicate semantic baseline conditions must produce one verdict')
   expect(duplicateBaseline.result.resolvedConditionIds.length === 1, 'duplicate semantic baseline conditions must produce one resolved condition id')
   expect(duplicateBaseline.result.grounding.baselineConditions.length === 1, 'grounding envelope must expose one canonical baseline condition')
-  expect((duplicateBaseline.context.match(/Emergency exit access obstructed/g) || []).length === 1, 'model verification context must contain the duplicate physical condition once')
+  expect((duplicateBaseline.context.match(/^- CONDITION .*Emergency exit access obstructed/gm) || []).length === 1, 'model baseline-condition section must contain the duplicate physical condition once')
 
   const conflictingVerdicts = await runConflictingDuplicateVerdictCase(VerificationAgentService)
   expect(conflictingVerdicts.status === 'inconclusive', 'conflicting duplicate model verdicts must fail closed')
