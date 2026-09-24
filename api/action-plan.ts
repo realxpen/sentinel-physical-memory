@@ -31,7 +31,7 @@ export default async function handler(req: Request, res: Response) {
   try {
     const rawSize = Buffer.byteLength(JSON.stringify(req.body ?? {}), 'utf8')
     if (rawSize > MAX_BODY_BYTES) {
-      return res.status(413).json({ error: 'PAYLOAD_TOO_LARGE', message: 'Action-plan request exceeds 64 KB' })
+      return res.status(413).json({ error: 'PAYLOAD_TOO_LARGE', message: 'Action-plan request exceeds the 64 KB SENTINEL safety budget.' })
     }
 
     const body = parseBody(req.body)
@@ -54,7 +54,7 @@ export default async function handler(req: Request, res: Response) {
     })
   } catch (error) {
     if (error instanceof ActionPlannerInputError) {
-      return res.status(error.status).json({ error: 'ACTION_PLAN_NOT_GROUNDED', message: error.message })
+      return res.status(error.status).json({ error: error.code, message: error.message })
     }
 
     const message = error instanceof Error ? error.message : 'Unknown action planner error'
@@ -73,7 +73,7 @@ export default async function handler(req: Request, res: Response) {
 }
 
 function parseBody(value: unknown) {
-  if (!isRecord(value)) throw new ActionPlannerInputError('Request body must be a JSON object')
+  if (!isRecord(value)) throw new ActionPlannerInputError('Request body must be a JSON object', 400, 'INVALID_REQUEST')
   return {
     environmentId: requiredString(value.environmentId, 'environmentId'),
     stateId: optionalString(value.stateId),
@@ -85,7 +85,7 @@ function parseBody(value: unknown) {
 }
 
 function requiredString(value: unknown, path: string): string {
-  if (typeof value !== 'string' || !value.trim()) throw new ActionPlannerInputError(`${path} must be a non-empty string`)
+  if (typeof value !== 'string' || !value.trim()) throw new ActionPlannerInputError(`${path} must be a non-empty string`, 400, 'INVALID_REQUEST')
   return value.trim()
 }
 function optionalString(value: unknown): string | undefined {
@@ -94,13 +94,13 @@ function optionalString(value: unknown): string | undefined {
 function optionalLimitedString(value: unknown, path: string, max: number): string | undefined {
   if (value === undefined || value === null) return undefined
   const result = requiredString(value, path)
-  if (result.length > max) throw new ActionPlannerInputError(`${path} must be ${max} characters or fewer`)
+  if (result.length > max) throw new ActionPlannerInputError(`${path} must be ${max} characters or fewer`, 400, 'INVALID_REQUEST')
   return result
 }
 function optionalStringArray(value: unknown, path: string): string[] | undefined {
   if (value === undefined || value === null) return undefined
   if (!Array.isArray(value) || value.length > MAX_IDS || !value.every((item) => typeof item === 'string' && item.trim())) {
-    throw new ActionPlannerInputError(`${path} must contain at most ${MAX_IDS} non-empty string IDs`)
+    throw new ActionPlannerInputError(`${path} must contain at most ${MAX_IDS} non-empty string IDs`, 400, 'INVALID_REQUEST')
   }
   return [...new Set(value.map((item) => item.trim()))]
 }
