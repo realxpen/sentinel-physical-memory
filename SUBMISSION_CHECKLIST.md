@@ -18,6 +18,10 @@
 - [x] Significant-update/origin statement
 - [x] Nebius/NVIDIA feedback drafted
 - [x] English submission copy drafted
+- [x] Final 2:58 video timeline locked
+- [x] Voiceover / shot list prepared
+- [x] YouTube title + description prepared
+- [x] Recording/edit/upload checklist prepared
 
 ## External submission items
 
