@@ -64,5 +64,7 @@ jobs:
         run: npm run check:phase15-reliability
       - name: Verify Phase 15 route and browser failures
         run: npm run check:phase15-routes
+      - name: Verify Phase 15 stable-state and fallback consistency
+        run: npm run check:phase15-stability
       - name: Build
         run: npm run build
