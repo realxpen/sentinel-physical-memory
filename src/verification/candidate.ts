@@ -4,6 +4,7 @@ import type {
   EnvironmentalState,
   EnvironmentalStateSnapshot,
 } from '../domain/sentinel.js'
+import { dedupeVerificationConditions } from './condition-equivalence.js'
 
 export interface PriorConditionVerificationCandidate {
   previousState: EnvironmentalState
@@ -27,10 +28,12 @@ export function findPriorConditionVerificationCandidate(
     const previousSnapshot = memory.snapshots.find((item) => item.stateId === previousState.id)
     if (!previousSnapshot) continue
 
-    const candidates = previousSnapshot.conditions.filter((condition) =>
-      condition.kind !== 'normal' &&
-      condition.status === 'present' &&
-      !conditionStillPresent(condition, currentSnapshot),
+    const candidates = dedupeVerificationConditions(
+      previousSnapshot.conditions.filter((condition) =>
+        condition.kind !== 'normal' &&
+        condition.status === 'present' &&
+        !conditionStillPresent(condition, currentSnapshot),
+      ),
     )
 
     if (candidates.length === 0) continue

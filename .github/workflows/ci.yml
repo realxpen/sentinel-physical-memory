@@ -60,5 +60,7 @@ jobs:
         run: npm run check:prior-verification
       - name: Verify Phase 13 Living Spatial Intelligence UI
         run: npm run check:phase13-ui
+      - name: Verify Phase 15 reliability guardrails
+        run: npm run check:phase15-reliability
       - name: Build
         run: npm run build
