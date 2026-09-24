@@ -903,3 +903,224 @@
     transition-duration: .001ms !important;
   }
 }
+
+
+/* Canonical Memory hierarchy — one concise environment summary, one state timeline,
+   one remembered-object surface. The retired dark spatial inventory remains in the
+   domain layer only; it no longer duplicates the human-facing Memory UI. */
+.phase13-shell .memory-environment-summary {
+  width: min(1040px, 100%);
+  margin: 48px auto 0;
+  display: grid;
+  grid-template-columns: minmax(220px, 1.1fr) minmax(320px, 1.45fr) auto;
+  gap: 28px;
+  align-items: center;
+  padding: 24px 0;
+  border-top: 1px solid rgba(17,21,16,.10);
+  border-bottom: 1px solid rgba(17,21,16,.10);
+}
+.phase13-shell .memory-environment-copy { min-width: 0; }
+.phase13-shell .memory-environment-copy h2 {
+  margin: 7px 0 5px;
+  overflow: hidden;
+  font-size: clamp(25px, 2.7vw, 38px);
+  line-height: .98;
+  letter-spacing: -.05em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.phase13-shell .memory-environment-copy p,
+.phase13-shell .memory-environment-empty-copy {
+  margin: 0;
+  color: #7a847c;
+  font-size: 10px;
+  line-height: 1.5;
+}
+.phase13-shell .memory-environment-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0,1fr));
+  border-left: 1px solid rgba(17,21,16,.08);
+}
+.phase13-shell .memory-environment-metrics > div {
+  min-width: 0;
+  padding: 3px 18px;
+  border-right: 1px solid rgba(17,21,16,.08);
+}
+.phase13-shell .memory-environment-metrics span,
+.phase13-shell .memory-environment-metrics strong,
+.phase13-shell .memory-environment-metrics small { display: block; }
+.phase13-shell .memory-environment-metrics span {
+  color: #8a938c;
+  font-size: 7px;
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.phase13-shell .memory-environment-metrics strong {
+  margin-top: 4px;
+  font-size: 22px;
+  letter-spacing: -.04em;
+}
+.phase13-shell .memory-environment-metrics small {
+  margin-top: 2px;
+  overflow: hidden;
+  color: #858e87;
+  font-size: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.phase13-shell .memory-environment-actions {
+  display: grid;
+  gap: 7px;
+  justify-items: stretch;
+}
+.phase13-shell .memory-environment-actions button {
+  min-height: 34px;
+  padding: 0 13px;
+  border: 1px solid rgba(17,21,16,.10);
+  border-radius: 999px;
+  background: transparent;
+  color: #555f57;
+  font: inherit;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .05em;
+  white-space: nowrap;
+}
+.phase13-shell .memory-environment-actions button:hover {
+  border-color: rgba(11,168,97,.24);
+  background: rgba(91,255,138,.055);
+}
+.phase13-shell .memory-environment-actions button.primary {
+  border-color: #111510;
+  background: #111510;
+  color: #f4f4ef;
+}
+.phase13-shell .memory-environment-diff {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 170px minmax(0,1fr);
+  gap: 16px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(17,21,16,.07);
+}
+.phase13-shell .memory-environment-diff span {
+  color: #929a94;
+  font-size: 7px;
+  font-weight: 800;
+  letter-spacing: .11em;
+  text-transform: uppercase;
+}
+.phase13-shell .memory-environment-diff strong {
+  overflow: hidden;
+  color: #4d574f;
+  font-size: 10px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.phase13-shell .current-memory-section {
+  width: min(1040px, 100%);
+  margin: 0 auto;
+  padding-top: 54px;
+}
+.phase13-shell .current-memory-heading {
+  align-items: end;
+}
+.phase13-shell .current-memory-heading > div > p {
+  max-width: 620px;
+  margin: 10px 0 0;
+  color: #7d877f;
+  font-size: 10px;
+  line-height: 1.5;
+}
+.phase13-shell .current-memory-section .section-heading h2 {
+  font-size: clamp(42px, 5vw, 66px);
+}
+.phase13-shell .memory-object-row {
+  grid-template-columns: 54px minmax(0,1fr) 120px 62px 26px;
+  min-height: 82px;
+  gap: 18px;
+  padding: 15px 0;
+}
+.phase13-shell .memory-object-row .observation-copy strong {
+  font-size: 16px;
+}
+.phase13-shell .memory-object-row .observation-copy small {
+  max-width: 650px;
+  margin-top: 5px;
+  overflow: hidden;
+  font-size: 10px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.phase13-shell .memory-object-category {
+  overflow: hidden;
+  color: #8a938c;
+  font-size: 7px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.phase13-shell .memory-object-row.low-salience {
+  opacity: .64;
+}
+.phase13-shell .memory-object-row.low-salience:hover {
+  opacity: 1;
+}
+.phase13-shell .current-memory-section .observation-expand {
+  margin-top: 20px;
+}
+
+@media (max-width: 900px) {
+  .phase13-shell .memory-environment-summary {
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+  .phase13-shell .memory-environment-metrics {
+    border-left: 0;
+  }
+  .phase13-shell .memory-environment-metrics > div:first-child { padding-left: 0; }
+  .phase13-shell .memory-environment-actions {
+    grid-template-columns: 1fr 1fr;
+  }
+  .phase13-shell .memory-environment-diff {
+    grid-template-columns: 1fr;
+    gap: 5px;
+  }
+}
+
+@media (max-width: 650px) {
+  .phase13-shell .memory-environment-summary {
+    margin-top: 34px;
+    padding-block: 20px;
+  }
+  .phase13-shell .memory-environment-metrics {
+    grid-template-columns: repeat(3, minmax(0,1fr));
+  }
+  .phase13-shell .memory-environment-metrics > div {
+    padding-inline: 10px;
+  }
+  .phase13-shell .memory-environment-actions {
+    grid-template-columns: 1fr;
+  }
+  .phase13-shell .current-memory-section {
+    padding-top: 42px;
+  }
+  .phase13-shell .memory-object-row {
+    grid-template-columns: 30px minmax(0,1fr) 46px;
+    gap: 10px;
+    min-height: 72px;
+  }
+  .phase13-shell .memory-object-category,
+  .phase13-shell .memory-object-row .arrow {
+    display: none;
+  }
+  .phase13-shell .memory-object-row .observation-copy small {
+    white-space: normal;
+  }
+}

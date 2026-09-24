@@ -46,7 +46,8 @@
     "check:phase16-production": "node ./scripts/check-phase16-production-nebius.mjs",
     "check:phase17-submission": "node ./scripts/check-phase17-submission-readiness.mjs",
     "check:phase17-production": "node ./scripts/check-phase17-production-readiness.mjs",
-    "check:phase18-demo": "node ./scripts/check-phase18-demo-package.mjs"
+    "check:phase18-demo": "node ./scripts/check-phase18-demo-package.mjs",
+    "check:memory-ui": "node --experimental-strip-types ./scripts/check-memory-canonical-ui.mjs"
   },
   "dependencies": {
     "@neondatabase/serverless": "latest",

@@ -18,7 +18,9 @@ expect(main.includes('<em>Memory</em>') && main.includes('<em>Observe</em>') && 
 expect(main.includes('<small>Memory</small>') && main.includes('<small>Observe</small>') && main.includes('<small>Changes</small>'), 'mobile shell must preserve Memory / Observe / Changes')
 
 for (const surface of [
-  'spatial-memory-stage',
+  'memory-environment-summary',
+  'current-memory-section',
+  'spatial-object-drawer',
   'evidence-drawer',
   'phase10-answer',
   'reality-compare',
@@ -29,6 +31,8 @@ for (const surface of [
   expect(main.includes(surface), `Phase 13 must preserve the existing ${surface} product surface`)
 }
 
+expect(!main.includes('environment-stage spatial-memory-stage'), 'Memory must not render the retired duplicate dark spatial inventory')
+expect(main.indexOf('history-section') < main.indexOf('current-memory-section'), 'State history must precede the canonical current-object list')
 expect(!/\bDashboard\b/.test(main), 'Phase 13 must not reintroduce generic dashboard language')
 expect(phase13.includes('Quiet. Alive. Precise.'), 'Phase 13 CSS must document the locked design personality')
 expect(phase13.includes('.phase13-shell.view-memory::before'), 'Memory state must have its own light-state atmosphere')
@@ -44,7 +48,7 @@ expect(styles.includes('--green: #5bff8a') && styles.includes('--paper: #f4f4ef'
 console.log('PASS  one premium shell preserves Memory / Observe / Changes + persistent Ask')
 console.log('PASS  Memory promotes the real environmental capture into the hero')
 console.log('PASS  dark live state and light memory state remain distinct')
-console.log('PASS  Spatial Memory, object detail, Ask, Reality Diff, timeline, Action Plan and Verification remain first-class')
+console.log('PASS  one concise Memory summary, State History, current object detail, Ask, Reality Diff, Action Plan and Verification remain first-class')
 console.log('PASS  desktop navigation becomes a minimal spatial rail while mobile stays three-tab')
 console.log('PASS  Phase 13 avoids generic dashboard language and respects reduced motion')
 console.log('SENTINEL PHASE 13 LIVING SPATIAL INTELLIGENCE UI VERIFIED')

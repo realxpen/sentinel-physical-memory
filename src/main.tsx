@@ -8,7 +8,8 @@ import './phase13.css'
 import type { ActionPlanningResponse, AskBuildingResponse, Change, EnvironmentalCondition, EnvironmentalDiff, EnvironmentalMemory, EnvironmentalState, EnvironmentType, Observation, SpatialObject, VerificationResult } from './domain/sentinel'
 import type { EnvironmentalStateHistoryEntry, EnvironmentalStateHistoryRecord } from './memory/history'
 import { changesForPresentation, presentedChangeSummary } from './memory/change-presentation'
-import { buildSpatialGroups, buildSpatialObjectDisplayNames, buildSpatialRelationEdges, describeSpatialRelations, focusSpatialGroups, spatialGroupForObject, spatialObjectSubtitle, spatialObjectTone } from './memory/spatial-memory'
+import { buildSpatialObjectDisplayNames, buildSpatialRelationEdges, describeSpatialRelations } from './memory/spatial-memory'
+import { buildMemoryObjectRows, primaryMemoryObjectRows } from './memory/memory-presentation'
 import { createEnvironmentProfile, DEFAULT_ENVIRONMENT, ENVIRONMENT_TYPES, loadActiveEnvironmentId, loadEnvironmentDirectory, saveActiveEnvironmentId, saveEnvironmentDirectory, type EnvironmentProfile } from './environment/directory'
 import { ingestImageFile } from './scan/image-ingestion'
 import { ingestVideoFile } from './scan/video-ingestion'
@@ -90,7 +91,6 @@ function App() {
   const [memory, setMemory] = useState<EnvironmentalMemory | null>(null)
   const [error, setError] = useState('')
   const [view, setView] = useState<View>('memory')
-  const [selectedObservation, setSelectedObservation] = useState<number | null>(null)
   const [question, setQuestion] = useState('')
   const [askStatus, setAskStatus] = useState('')
   const [askStateId, setAskStateId] = useState<string>('current')
@@ -105,8 +105,7 @@ function App() {
   const [historyAt, setHistoryAt] = useState('')
   const [selectedChangeId, setSelectedChangeId] = useState<string | null>(null)
   const [selectedSpatialObjectId, setSelectedSpatialObjectId] = useState<string | null>(null)
-  const [selectedSpatialAreaId, setSelectedSpatialAreaId] = useState<string>('all')
-  const [showAllObservations, setShowAllObservations] = useState(false)
+  const [showAllMemoryObjects, setShowAllMemoryObjects] = useState(false)
 
   const activeEnvironment = environments.find((item) => item.id === activeEnvironmentId) ?? environments[0] ?? DEFAULT_ENVIRONMENT
   const isWorking = status.startsWith('Observing') || status.startsWith('Understanding') || status.startsWith('Remembering')
@@ -117,8 +116,6 @@ function App() {
   const physicalChanges = presentedChanges.filter((change) => changeBucket(change) === 'physical')
   const resolvedChanges = presentedChanges.filter((change) => changeBucket(change) === 'resolved')
   const verificationChanges = presentedChanges.filter((change) => changeBucket(change) === 'verification')
-  const displayObservations = (result?.observations ?? []).filter(isDisplayableObservation)
-  const visibleObservations = showAllObservations ? displayObservations : displayObservations.slice(0, 14)
   const previousDiffState = latestDiff ? memory?.states.find((state) => state.id === latestDiff.fromStateId) : undefined
   const currentDiffState = latestDiff ? memory?.states.find((state) => state.id === latestDiff.toStateId) : undefined
   const previousDiffImage = previousDiffState ? memory?.sources.find((source) => previousDiffState.sourceIds.includes(source.id) && source.modality === 'image')?.uri : undefined
@@ -126,11 +123,11 @@ function App() {
   const currentSnapshot = memory?.environment.currentStateId
     ? memory.snapshots.find((snapshot) => snapshot.stateId === memory.environment.currentStateId)
     : undefined
-  const spatialGroups = currentSnapshot ? buildSpatialGroups(currentSnapshot, activeEnvironment.name) : []
   const spatialObjectDisplayNames = currentSnapshot ? buildSpatialObjectDisplayNames(currentSnapshot) : new Map<string, string>()
-  const normalizedSpatialAreaId = selectedSpatialAreaId === 'all' || spatialGroups.some((group) => group.id === selectedSpatialAreaId) ? selectedSpatialAreaId : 'all'
-  const focusedSpatialGroups = focusSpatialGroups(spatialGroups, normalizedSpatialAreaId)
-  const hasGroundedSpatialAreas = spatialGroups.some((group) => group.kind === 'room')
+  const memoryObjectRows = currentSnapshot ? buildMemoryObjectRows(currentSnapshot.objects) : []
+  const primaryMemoryRows = primaryMemoryObjectRows(memoryObjectRows)
+  const visibleMemoryObjectRows = showAllMemoryObjects ? memoryObjectRows : primaryMemoryRows
+  const hiddenMemoryObjectCount = Math.max(0, memoryObjectRows.length - primaryMemoryRows.length)
   const selectedSpatialObject = selectedSpatialObjectId && currentSnapshot
     ? currentSnapshot.objects.find((item) => item.id === selectedSpatialObjectId) ?? null
     : null
@@ -149,7 +146,6 @@ function App() {
   const selectedSpatialRelationEdges = selectedSpatialObject && currentSnapshot
     ? buildSpatialRelationEdges(selectedSpatialObject, currentSnapshot, spatialObjectDisplayNames)
     : []
-  const relatedSpatialObjectIds = new Set(selectedSpatialRelationEdges.map((edge) => edge.otherId))
   const selectedSpatialTimeline = selectedSpatialObject && memory
     ? buildSpatialObjectTimeline(memory, selectedSpatialObject.id)
     : []
@@ -166,9 +162,6 @@ function App() {
   })() : undefined)
   const answerPreviousState = answerState && memory ? memory.states.find((item) => item.version === answerState.version - 1) : undefined
   const answerDiff = answerState && memory ? memory.diffs.find((item) => item.toStateId === answerState.id) : undefined
-  const answerRelatedObjectIds = new Set(answer?.grounding?.objects.filter((item) => item.isCurrent).map((item) => item.id) ?? answer?.relatedObjectIds ?? [])
-  const actionPlanObjectIds = new Set(actionPlan?.grounding.objects.filter((item) => item.isCurrent).map((item) => item.id) ?? [])
-  const verificationObjectIds = new Set(verification?.grounding.objects.filter((item) => item.stateIds.includes(verification.currentStateId)).map((item) => item.id) ?? [])
   const actionPlanBaselineState = actionPlan && memory ? memory.states.find((item) => item.id === actionPlan.plan.stateId) : undefined
   const currentMemoryState = memory?.environment.currentStateId ? memory.states.find((item) => item.id === memory.environment.currentStateId) : undefined
   const priorConditionVerificationCandidate = memory && currentMemoryState
@@ -182,7 +175,7 @@ function App() {
     : 0
   const currentStateLabel = currentMemoryState ? `State v${currentMemoryState.version}` : 'No state yet'
   const canVerifyActionPlan = Boolean(actionPlan && actionPlanBaselineState && currentMemoryState && currentMemoryState.version > actionPlanBaselineState.version)
-  const overlayOpen = Boolean(selectedChange || historySelection || selectedSpatialObject || selectedObservation !== null || showEnvironmentDialog)
+  const overlayOpen = Boolean(selectedChange || historySelection || selectedSpatialObject || showEnvironmentDialog)
 
   useEffect(() => {
     saveEnvironmentDirectory(environments)
@@ -202,15 +195,13 @@ function App() {
     setVerification(null)
     setVerificationStatus('')
     setAskStateId('current')
-    setSelectedObservation(null)
     setHistory([])
     setHistorySelection(null)
     setHistoryStatus('')
     setHistoryAt('')
     setSelectedChangeId(null)
     setSelectedSpatialObjectId(null)
-    setSelectedSpatialAreaId('all')
-    setShowAllObservations(false)
+    setShowAllMemoryObjects(false)
     setError('')
     setStatus(`Loading ${activeEnvironment.name} memory`)
 
@@ -277,14 +268,11 @@ function App() {
     setActionPlanStatus('')
     setVerification(null)
     setVerificationStatus('')
-    setSelectedSpatialAreaId('all')
     setView('memory')
   }
 
   function inspectSpatialObject(objectId: string) {
     setSelectedSpatialObjectId(objectId)
-    const groupId = spatialGroupForObject(spatialGroups, objectId)
-    if (groupId) setSelectedSpatialAreaId(groupId)
   }
 
   function addEnvironment(event: FormEvent<HTMLFormElement>) {
@@ -307,9 +295,8 @@ function App() {
     setVerification(null)
     setVerificationStatus('')
     setView('observe')
-    setSelectedObservation(null)
     setSelectedChangeId(null)
-    setShowAllObservations(false)
+    setShowAllMemoryObjects(false)
 
     try {
       setStatus('Observing · preparing photo evidence')
@@ -367,7 +354,6 @@ function App() {
     setVerification(null)
     setVerificationStatus('')
     setView('observe')
-    setSelectedObservation(null)
     setSelectedChangeId(null)
 
     try {
@@ -538,11 +524,6 @@ function App() {
         void runActionPlanner({ stateId: payload.stateId, goal: trimmed })
       }
 
-      const currentRelated = payload.grounding?.objects.filter((item) => item.isCurrent) ?? []
-      if (currentRelated.length === 1) {
-        const groupId = spatialGroupForObject(spatialGroups, currentRelated[0].id)
-        if (groupId) setSelectedSpatialAreaId(groupId)
-      }
     } catch (askError) {
       setAskStatus(askError instanceof Error ? askError.message : 'Unable to ask SENTINEL')
     }
@@ -552,8 +533,6 @@ function App() {
     event.preventDefault()
     void runAskBuilding(question)
   }
-
-  const observation = selectedObservation === null ? null : result?.observations[selectedObservation]
 
   return (
     <main className={`app phase13-shell view-${view}${isWorking ? ' system-awake' : ''}${overlayOpen ? ' overlay-open' : ''}`}>
@@ -758,69 +737,27 @@ function App() {
           </div>
         </section>}
 
-        <div className="environment-stage spatial-memory-stage" aria-label={activeEnvironment.name + ' environmental memory canvas'}>
-          <div className="ambient-orb orb-one" /><div className="ambient-orb orb-two" /><div className="stage-grid" />
-          {memory && currentSnapshot ? <>
-            <div className="spatial-stage-header">
-              <div>
-                <span className="eyebrow">SPATIAL MEMORY / LIVE STATE</span>
-                <strong>{activeEnvironment.name}</strong>
-                <small>{currentSnapshot.objects.length} remembered objects · {currentSnapshot.relations.length} grounded relation{currentSnapshot.relations.length === 1 ? '' : 's'}</small>
-              </div>
-              <span>STATE v{memory.states.find((item) => item.id === currentSnapshot.stateId)?.version ?? memory.states.length}</span>
-            </div>
-            {hasGroundedSpatialAreas ? <div className="spatial-area-navigation" aria-label="Spatial area navigation">
-              <span>BUILDING</span>
-              <div>
-                <button className={normalizedSpatialAreaId === 'all' ? 'active' : ''} type="button" aria-current={normalizedSpatialAreaId === 'all' ? 'true' : undefined} onClick={() => setSelectedSpatialAreaId('all')}>
-                  <strong>{activeEnvironment.name}</strong><small>{currentSnapshot.objects.length} objects</small>
-                </button>
-                {spatialGroups.map((group) => <button className={normalizedSpatialAreaId === group.id ? 'active' : ''} type="button" aria-current={normalizedSpatialAreaId === group.id ? 'true' : undefined} key={group.id} onClick={() => setSelectedSpatialAreaId(group.id)}>
-                  <strong>{group.name}</strong><small>{group.kind === 'room' ? 'area' : 'unassigned'} · {group.objects.length}</small>
-                </button>)}
-              </div>
-            </div> : <div className="spatial-area-fallback">
-              <span>ENVIRONMENT-LEVEL MEMORY</span>
-              <strong>No grounded room structure is being claimed.</strong>
-              <small>SENTINEL is showing the observed space exactly as persisted.</small>
-            </div>}
-            <div className={'spatial-room-grid ' + (normalizedSpatialAreaId === 'all' ? 'building-view' : 'area-focused')}>
-              {focusedSpatialGroups.map((group) => <section className={normalizedSpatialAreaId === group.id ? 'spatial-room focused' : 'spatial-room'} key={group.id}>
-                <div className="spatial-room-heading">
-                  <div><span>{group.name}</span><small>{group.kind === 'room' ? 'remembered area' : 'observed space'}</small></div>
-                  <div className="spatial-room-actions">
-                    <strong>{group.objects.length}</strong>
-                    {hasGroundedSpatialAreas && normalizedSpatialAreaId !== group.id && <button type="button" onClick={() => setSelectedSpatialAreaId(group.id)}>Focus ↗</button>}
-                  </div>
-                </div>
-                <div className="spatial-object-cloud">
-                  {group.objects.length === 0 ? <span className="spatial-room-empty">No grounded objects assigned to this area yet.</span> : group.objects.map((item) => {
-                    const tone = spatialObjectTone(item, currentSnapshot)
-                    const displayName = spatialObjectDisplayNames.get(item.id) ?? item.name
-                    const relationshipClass = selectedSpatialObjectId === item.id ? ' selected-spatial' : relatedSpatialObjectIds.has(item.id) ? ' related-spatial' : verificationObjectIds.has(item.id) ? ' verification-related-spatial' : actionPlanObjectIds.has(item.id) ? ' action-related-spatial' : answerRelatedObjectIds.has(item.id) ? ' answer-related-spatial' : ''
-                    return <button className={'spatial-object ' + tone + relationshipClass} type="button" key={item.id} onClick={() => inspectSpatialObject(item.id)} aria-label={'Inspect ' + displayName}>
-                      <i />
-                      <span><strong>{displayName}</strong><small>{spatialObjectSubtitle(item)}</small></span>
-                      <em>{Math.round(item.confidence * 100)}%</em>
-                    </button>
-                  })}
-                </div>
-              </section>)}
-            </div>
-          </> : <div className="spatial-empty-state">
-            <span className="eyebrow">SPATIAL MEMORY</span>
-            <strong>Nothing has been grounded here yet.</strong>
-            <p>Your first observation will turn this canvas into a live map of remembered objects, areas and relationships.</p>
-          </div>}
-          <div className="stage-caption"><span>{memory ? 'LIVE SPATIAL MEMORY' : 'MEMORY CANVAS'}</span><strong>{memory ? memory.evidence.length + ' evidence records across ' + memory.states.length + ' state(s)' : 'No state exists yet for ' + activeEnvironment.name}</strong></div>
-        </div>
+        <section className={memory ? 'memory-environment-summary remembered' : 'memory-environment-summary empty'} aria-label={activeEnvironment.name + ' memory summary'}>
+          <div className="memory-environment-copy">
+            <span className="eyebrow">ENVIRONMENT MEMORY</span>
+            <h2>{activeEnvironment.name}</h2>
+            <p>{memory && currentMemoryState
+              ? `${currentStateLabel} · last remembered ${formatStateTimestamp(currentMemoryState.capturedAt)}`
+              : 'No remembered environmental state yet.'}</p>
+          </div>
+          {memory && currentSnapshot ? <div className="memory-environment-metrics">
+            <div><span>Remembered</span><strong>{memoryObjectRows.length}</strong><small>object groups</small></div>
+            <div><span>Relations</span><strong>{currentSnapshot.relations.length}</strong><small>grounded links</small></div>
+            <div><span>History</span><strong>{memory.states.length}</strong><small>immutable state{memory.states.length === 1 ? '' : 's'}</small></div>
+          </div> : <div className="memory-environment-empty-copy">Your first observation will create State v1 and unlock history, Reality Diff and grounded Ask.</div>}
+          <div className="memory-environment-actions">
+            {memory && <button type="button" onClick={() => document.getElementById('state-history')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>View state history ↓</button>}
+            <button className="primary" type="button" onClick={() => libraryInputRef.current?.click()}>{memory ? 'Choose update photo ↗' : 'Choose first photo ↗'}</button>
+          </div>
+          {memory && <div className="memory-environment-diff"><span>Since the previous state</span><strong>{latestDiff ? latestDiff.summary : 'No comparison yet'}</strong></div>}
+        </section>
 
-        <div className="memory-summary">
-          <div><span>Since you were last here</span><strong>{latestDiff ? latestDiff.summary : memory ? 'No comparison yet' : 'No previous state yet'}</strong></div>
-          <button className="observe-cta" type="button" onClick={() => libraryInputRef.current?.click()}><span className="observe-orb"><i /></span><span><strong>{memory ? 'Choose update photo' : 'Choose first photo'}</strong><small>{memory ? `Select an image for the next ${activeEnvironment.name} state` : `Select an image to create ${activeEnvironment.name} memory v1`}</small></span></button>
-        </div>
-
-        {memory && <section className="history-section" aria-label="Environmental state history">
+        {memory && <section className="history-section" id="state-history" aria-label="Environmental state history">
           <div className="section-heading history-heading">
             <div>
               <span className="eyebrow">TIME / IMMUTABLE MEMORY</span>
@@ -860,13 +797,32 @@ function App() {
           </div>
         </section>}
 
-        {result && <section className="evidence-section">
-          <div className="section-heading"><div><span className="eyebrow">EVIDENCE / CURRENT STATE</span><h2>What SENTINEL observed.</h2></div><span className="scan-id">{result.scanId}</span></div>
-          <div className="observation-list">{displayObservations.length === 0 ? <div className="empty-observation">No material grounded observations were returned for this scan.</div> : visibleObservations.map((item) => {
-            const index = result.observations.indexOf(item)
-            return <button className="observation-row" type="button" key={item.id} onClick={() => setSelectedObservation(index)}><span className="observation-index">{String(index + 1).padStart(2, '0')}</span><span className="observation-copy"><strong>{item.label}</strong><small>{item.description}</small></span><span className="observation-confidence">{Math.round(item.confidence * 100)}%</span><span className="arrow">↗</span></button>
-          })}</div>
-          {displayObservations.length > 14 && <button className="observation-expand" type="button" onClick={() => setShowAllObservations((value) => !value)}>{showAllObservations ? 'Show less evidence' : `Show all ${displayObservations.length} observations`}</button>}
+        {memory && currentSnapshot && <section className="evidence-section current-memory-section" aria-label="Current remembered objects">
+          <div className="section-heading current-memory-heading">
+            <div>
+              <span className="eyebrow">CURRENT STATE / REMEMBERED OBJECTS</span>
+              <h2>What SENTINEL observed.</h2>
+              <p>Meaningful objects are surfaced first. Structural details remain available without dominating the memory view.</p>
+            </div>
+            <span className="scan-id">{currentStateLabel}</span>
+          </div>
+          <div className="observation-list memory-object-list">
+            {visibleMemoryObjectRows.length === 0
+              ? <div className="empty-observation">No meaningful remembered objects are being surfaced by default for this state.</div>
+              : visibleMemoryObjectRows.map((row, index) => <button className={row.lowSalience ? 'observation-row memory-object-row low-salience' : 'observation-row memory-object-row'} type="button" key={row.object.id} onClick={() => inspectSpatialObject(row.object.id)}>
+                <span className="observation-index">{String(index + 1).padStart(2, '0')}</span>
+                <span className="observation-copy">
+                  <strong>{row.object.name}</strong>
+                  <small>{row.count > 1 ? `${row.count} similar grounded records · ` : ''}{row.object.description ?? row.object.position?.description ?? row.object.category}</small>
+                </span>
+                <span className="memory-object-category">{row.object.category}</span>
+                <span className="observation-confidence">{Math.round(row.object.confidence * 100)}%</span>
+                <span className="arrow">↗</span>
+              </button>)}
+          </div>
+          {hiddenMemoryObjectCount > 0 && <button className="observation-expand" type="button" onClick={() => setShowAllMemoryObjects((value) => !value)}>
+            {showAllMemoryObjects ? 'Show meaningful objects only' : `Show all ${memoryObjectRows.length} remembered objects`}
+          </button>}
         </section>}
       </section>}
 
@@ -1124,8 +1080,6 @@ function App() {
         </aside>
       </div>}
 
-      {observation && <div className="drawer-backdrop" role="presentation" onClick={() => setSelectedObservation(null)}><aside className="evidence-drawer" role="dialog" aria-modal="true" aria-label={`${observation.label} evidence`} onClick={(event) => event.stopPropagation()}><button className="drawer-close" type="button" onClick={() => setSelectedObservation(null)}>×</button><span className="eyebrow">OBSERVED / EVIDENCE-BACKED</span><h2>{observation.label}</h2><p>{observation.description}</p><Confidence value={observation.confidence} /><div className="evidence-rule" /><div className="evidence-note"><span>What this means</span><strong>SENTINEL stores this as an observation, not a professional diagnosis.</strong><p>Interpretation and recommended action remain separate from what the visual evidence directly supports.</p></div></aside></div>}
-
       {showEnvironmentDialog && <div className="drawer-backdrop location-backdrop" role="presentation" onClick={() => setShowEnvironmentDialog(false)}><form className="location-dialog" onSubmit={addEnvironment} onClick={(event) => event.stopPropagation()}><button className="drawer-close" type="button" onClick={() => setShowEnvironmentDialog(false)}>×</button><span className="eyebrow">NEW PHYSICAL MEMORY</span><h2>Add another location.</h2><p>Each location gets its own environment ID, scans, state history, Reality Diffs and questions. Scanning a new location will not overwrite {activeEnvironment.name}.</p><label><span>Location name</span><input autoFocus value={newEnvironmentName} onChange={(event) => setNewEnvironmentName(event.target.value)} placeholder="e.g. Head Office, Warehouse A" maxLength={80} /></label><label><span>Space type</span><select value={newEnvironmentType} onChange={(event) => setNewEnvironmentType(event.target.value as EnvironmentType)}>{ENVIRONMENT_TYPES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label><div className="location-actions"><button type="button" onClick={() => setShowEnvironmentDialog(false)}>Cancel</button><button className="location-create" type="submit" disabled={!newEnvironmentName.trim()}>Create location</button></div></form></div>}
 
       <form className={`ask-bar ${answer ? 'has-answer' : ''}`} role="search" onSubmit={askBuilding}>
@@ -1310,15 +1264,6 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms))
 }
 
-function isDisplayableObservation(item: Observation): boolean {
-  const text = `${item.label} ${item.description}`.toLowerCase()
-  return !(
-    /^\s*(?:no|none)\b/.test(text) ||
-    /\bno visible\b/.test(text) ||
-    /\bno signs? of\b/.test(text) ||
-    /\bno evidence of\b/.test(text)
-  )
-}
 
 function formatStateTimestamp(value: string): string {
   const date = new Date(value)
