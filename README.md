@@ -361,6 +361,9 @@ Beyond the hackathon MVP:
 - [Demo scenario](docs/DEMO_SCENARIO.md)
 - [Devpost submission draft](SUBMISSION.md)
 - [Submission checklist](SUBMISSION_CHECKLIST.md)
+- [Final 2:58 demo script](docs/FINAL_DEMO_VIDEO.md)
+- [Recording checklist](docs/RECORDING_CHECKLIST.md)
+- [YouTube upload copy](docs/YOUTUBE_COPY.md)
 - [Project state](PROJECT_STATE.md)
 
 ## License
