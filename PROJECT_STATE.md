@@ -14,7 +14,7 @@ Hackathon track: **Best Apps and Agents**.
 
 ## Current phase
 
-**Phase 17 — Submission Readiness: ACTIVE / PHASE 16 COMPLETE**
+**Phase 18 — Final Demo Polish: ACTIVE / PHASE 17 COMPLETE**
 
 ## Phase 3 — COMPLETE
 
@@ -1138,8 +1138,8 @@ Canonical production proof: `Knowledge/Technical/phase-9-real-history-proof.md`.
 - [x] Phase 14 — Demo scenario engineering (**COMPLETE — deployed Scan A/B/C closed-loop replay reached Verified repeatedly**)
 - [x] Phase 15 — Reliability and guardrails (**COMPLETE — deterministic guardrails + production cold-start proof passed**)
 - [x] Phase 16 — Nebius/NVIDIA architecture hardening (**COMPLETE — exact-main Token Factory + NVIDIA runtime proof passed**)
-- [ ] Phase 17 — Submission readiness (**ACTIVE — judge-facing repository + submission package**)
-- [ ] Phase 18 — Final demo polish
+- [x] Phase 17 — Submission readiness (**COMPLETE — exact-main public judge-readiness proof passed**)
+- [ ] Phase 18 — Final demo polish (**ACTIVE — recording choreography + final video package**)
 
 ## Current exit check
 
@@ -1685,3 +1685,23 @@ Judge-facing package now includes:
 Canonical record: `Knowledge/Technical/phase-17-submission-readiness.md`.
 
 Remaining Phase 17 dependency after merge: exact-main production judge-readiness must pass. The public YouTube demo itself is intentionally handed to Phase 18 and must not be fabricated.
+
+
+### Phase 17 production closure — PASS
+
+Exact main commit: `ed70f7b69c9c8aefedb40b300ce05bef1699cbf3`.
+
+- Phase 17 Production Judge Readiness run `35992186998` — **SUCCESS**;
+- repository public + MIT detected;
+- public no-login demo reachable;
+- exact deployment live;
+- Neon + Nebius configured;
+- Token Factory + NVIDIA reasoning model visible.
+
+Phase 17 is **COMPLETE**.
+
+## Phase 18 — ACTIVE
+
+Final Demo Polish now owns the last external submission dependency: record, edit, upload and link a public YouTube video under three minutes.
+
+The product itself should not be destabilized for cosmetic demo tricks. Phase 18 will lock a timed shot list, narration, capture checklist, and final pre-submit validation around the already-proven production flow.
