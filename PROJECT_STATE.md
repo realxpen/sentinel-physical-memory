@@ -1587,3 +1587,19 @@ Next Slice 3 target:
 - cold-start / reload production replay on current main;
 - consistent fallback rendering across visible Scan / Ask / Action / Verification surfaces;
 - final Phase 15 reliability matrix closure.
+
+
+### Phase 15 Slice 3 — stable-state and reload closure gate
+
+Implemented:
+
+- deterministic no-material-change proof for materially equivalent snapshots;
+- canonical stable-state summary remains **No material environmental changes detected.**;
+- stable normal memory cannot manufacture verification work;
+- Scan / Ask / Action Plan / Verification all use the shared browser failure parser;
+- new exact-main production cold-start workflow validates independent no-cache Memory + State History reads against Neon;
+- production proof compares a read-only persisted-memory fingerprint across independent reload reads.
+
+Deterministic Slice 3 gate: `npm run check:phase15-stability`.
+
+Phase 15 now has one remaining exit gate: merge this slice and pass the exact deployed-main **Phase 15 Production Cold Start** workflow.
