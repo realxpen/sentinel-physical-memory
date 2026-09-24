@@ -216,9 +216,8 @@ function App() {
 
     async function restoreEnvironmentalMemory() {
       try {
-        const response = await fetch(`/api/memory?environmentId=${encodeURIComponent(activeEnvironment.id)}`, { headers: { Accept: 'application/json' } })
-        const payload = await readApiResponse<MemoryResponse>(response, 'Unable to restore environmental memory')
-        if (!response.ok) throw new Error(payload.message ?? 'Unable to restore environmental memory')
+        const response = await fetchSentinel(`/api/memory?environmentId=${encodeURIComponent(activeEnvironment.id)}`, { headers: { Accept: 'application/json' } }, 'memory')
+        const payload = await readSentinelApiResponse<MemoryResponse>(response, 'memory')
         if (cancelled) return
         if (payload.memory) {
           setMemory(payload.memory)
@@ -226,8 +225,11 @@ function App() {
         } else {
           setStatus(`Ready to observe ${activeEnvironment.name}`)
         }
-      } catch {
-        if (!cancelled) setStatus(`Ready to observe ${activeEnvironment.name}`)
+      } catch (memoryError) {
+        if (!cancelled) {
+          setStatus(`Unable to restore ${activeEnvironment.name} memory`)
+          setError(memoryError instanceof Error ? memoryError.message : 'SENTINEL could not restore this location safely.')
+        }
       }
     }
 
@@ -248,9 +250,8 @@ function App() {
 
     async function restoreStateHistory() {
       try {
-        const response = await fetch(`/api/states?environmentId=${encodeURIComponent(memory!.environment.id)}`, { headers: { Accept: 'application/json' } })
-        const payload = await readApiResponse<StateHistoryResponse>(response, 'Unable to restore environmental state history')
-        if (!response.ok) throw new Error(payload.message ?? 'Unable to restore environmental state history')
+        const response = await fetchSentinel(`/api/states?environmentId=${encodeURIComponent(memory!.environment.id)}`, { headers: { Accept: 'application/json' } }, 'history')
+        const payload = await readSentinelApiResponse<StateHistoryResponse>(response, 'history')
         if (cancelled) return
         setHistory(payload.states)
         setHistoryStatus('')
@@ -389,8 +390,7 @@ function App() {
       const response = await postScanWithRetry(scanPayload, () => setStatus('Reconnecting · retrying observation safely'))
 
       setStatus('Remembering · grounding observations')
-      const payload = await readApiResponse<ScanResponse & { error?: string; message?: string }>(response, 'Observation request failed')
-      if (!response.ok) throw new Error(payload.message ?? payload.error ?? `Scan request failed (${response.status})`)
+      const payload = await readSentinelApiResponse<ScanResponse>(response, 'observation')
       setResult(payload)
       setMemory(payload.memory)
       setStatus(payload.diff ? `${payload.diff.changes.length} supported change(s) remembered` : `${activeEnvironment.name} is now remembered`)
