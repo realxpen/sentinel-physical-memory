@@ -1705,3 +1705,22 @@ Phase 17 is **COMPLETE**.
 Final Demo Polish now owns the last external submission dependency: record, edit, upload and link a public YouTube video under three minutes.
 
 The product itself should not be destabilized for cosmetic demo tricks. Phase 18 will lock a timed shot list, narration, capture checklist, and final pre-submit validation around the already-proven production flow.
+
+
+### Phase 18 repository demo package — IMPLEMENTED
+
+Locked:
+
+- 178-second / 2:58 machine-readable demo timeline;
+- shot-by-shot product sequence;
+- complete voiceover script;
+- raw capture and editing strategy;
+- 100% browser zoom / readable 16:9 capture requirement;
+- brief Nebius Token Factory + NVIDIA Nemotron proof;
+- final YouTube title / description / thumbnail copy;
+- pre-record / edit / upload checklist;
+- deterministic `check:phase18-demo` CI gate.
+
+No demo-only product behavior was added. The already-proven production flow remains the source of truth.
+
+Remaining Phase 18 gate is external and human: record/edit the video, upload it publicly to YouTube, verify duration/playback, and insert the real URL into `SUBMISSION.md`.
