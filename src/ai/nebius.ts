@@ -24,6 +24,19 @@ const DEFAULT_BASE_URL = 'https://api.tokenfactory.us-central1.nebius.com/v1'
 const LEGACY_GLOBAL_BASE_URL = 'https://api.tokenfactory.nebius.com/v1'
 const DEFAULT_MODEL = 'nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B'
 
+export type NebiusInferenceRole = 'perception' | 'temporal-verification' | 'reasoning' | 'action' | 'verification'
+
+export interface NebiusInferenceTrace {
+  provider: 'nebius-token-factory'
+  model: string
+  role: NebiusInferenceRole
+  latencyMs: number
+  outcome: 'success' | 'error'
+  completedAt: string
+  httpStatus?: number
+  errorCode?: string
+}
+
 interface NebiusAdapterOptions {
   apiKey: string
   baseUrl?: string
@@ -31,6 +44,7 @@ interface NebiusAdapterOptions {
   fetchImpl?: typeof fetch
   artifactResolver?: ArtifactResolver
   timeoutMs?: number
+  onTrace?: (trace: NebiusInferenceTrace) => void
 }
 
 interface ChatCompletionResponse {
@@ -45,6 +59,7 @@ export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapte
   private readonly fetchImpl: typeof fetch
   private readonly artifactResolver?: ArtifactResolver
   private readonly timeoutMs: number
+  private readonly onTrace?: (trace: NebiusInferenceTrace) => void
 
   constructor(options: NebiusAdapterOptions) {
     const apiKey = options.apiKey.trim()
@@ -55,11 +70,12 @@ export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapte
     this.fetchImpl = options.fetchImpl ?? fetch
     this.artifactResolver = options.artifactResolver
     this.timeoutMs = options.timeoutMs ?? 60_000
+    this.onTrace = options.onTrace
   }
 
   async infer(request: ModelInferenceRequest): Promise<PerceptionResult> {
     const content = await this.buildContent(request.prompt, request.artifacts)
-    const response = await this.requestCompletion(this.systemPrompt(request.role), content)
+    const response = await this.requestCompletion(this.systemPrompt(request.role), content, 'perception')
     return this.parsePerceptionResult(this.extractText(response), request)
   }
 
@@ -97,6 +113,7 @@ export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapte
     const response = await this.requestCompletion(
       'You are SENTINEL temporal verification. Compare two physical-environment images conservatively and return only the requested JSON.',
       content,
+      'temporal-verification',
     )
     return this.parseTemporalVerification(this.extractText(response), request)
   }
@@ -121,6 +138,7 @@ export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapte
     const response = await this.requestCompletion(
       'You are SENTINEL, an evidence-grounded physical-environment reasoning agent.',
       [{ type: 'text', text: prompt }],
+      'reasoning',
     )
     return this.parseReasoningResult(this.extractText(response), request)
   }
@@ -143,6 +161,7 @@ export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapte
     const response = await this.requestCompletion(
       'You are SENTINEL Action Planner. Produce only safe, evidence-grounded recommended actions for the selected physical-environment state.',
       [{ type: 'text', text: prompt }],
+      'action',
     )
     return this.parseActionPlanningDraft(this.extractText(response))
   }
@@ -208,6 +227,7 @@ export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapte
     const response = await this.requestCompletion(
       'You are SENTINEL Verification Agent. Inspect the supplied CURRENT rescan image(s) conservatively. Positive visual evidence is required for resolved or remaining; otherwise return inconclusive.',
       content,
+      'verification',
     )
     return this.parseVerificationDraft(this.extractText(response))
   }
@@ -244,9 +264,31 @@ export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapte
     return { verdicts }
   }
 
-  private async requestCompletion(system: string, content: unknown): Promise<ChatCompletionResponse> {
+  private async requestCompletion(
+    system: string,
+    content: unknown,
+    role: NebiusInferenceRole,
+  ): Promise<ChatCompletionResponse> {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs)
+    const startedAt = Date.now()
+    let traceEmitted = false
+
+    const emit = (trace: Omit<NebiusInferenceTrace, 'provider' | 'model' | 'role' | 'latencyMs' | 'completedAt'>) => {
+      if (traceEmitted) return
+      traceEmitted = true
+      const event: NebiusInferenceTrace = {
+        provider: 'nebius-token-factory',
+        model: this.model,
+        role,
+        latencyMs: Math.max(0, Date.now() - startedAt),
+        completedAt: new Date().toISOString(),
+        ...trace,
+      }
+      console.info('SENTINEL_NEBIUS_INFERENCE', event)
+      this.onTrace?.(event)
+    }
+
     try {
       const response = await this.fetchImpl(`${this.baseUrl}/chat/completions`, {
         method: 'POST',
@@ -260,6 +302,7 @@ export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapte
       })
       if (!response.ok) {
         const body = await response.text().catch(() => '')
+        emit({ outcome: 'error', httpStatus: response.status, errorCode: 'NEBIUS_HTTP_ERROR' })
         throw new ModelAdapterError({
           code: 'NEBIUS_HTTP_ERROR',
           message: `Nebius inference failed (${response.status}): ${body.slice(0, 500)}`,
@@ -267,12 +310,19 @@ export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapte
           retryable: response.status === 429 || response.status >= 500,
         })
       }
-      return await response.json() as ChatCompletionResponse
+      const parsed = await response.json() as ChatCompletionResponse
+      emit({ outcome: 'success', httpStatus: response.status })
+      return parsed
     } catch (error) {
-      if (error instanceof ModelAdapterError) throw error
+      if (error instanceof ModelAdapterError) {
+        emit({ outcome: 'error', ...(error.status === undefined ? {} : { httpStatus: error.status }), errorCode: error.code })
+        throw error
+      }
       if (error instanceof DOMException && error.name === 'AbortError') {
+        emit({ outcome: 'error', errorCode: 'NEBIUS_TIMEOUT' })
         throw new ModelAdapterError({ code: 'NEBIUS_TIMEOUT', message: `Nebius inference exceeded ${this.timeoutMs}ms`, retryable: true })
       }
+      emit({ outcome: 'error', errorCode: 'NEBIUS_REQUEST_FAILED' })
       throw new ModelAdapterError({
         code: 'NEBIUS_REQUEST_FAILED',
         message: error instanceof Error ? error.message : 'Unknown Nebius request failure',
