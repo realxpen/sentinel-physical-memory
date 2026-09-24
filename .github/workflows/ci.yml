@@ -70,5 +70,7 @@ jobs:
         run: npm run check:phase16-telemetry
       - name: Verify Phase 17 submission package
         run: npm run check:phase17-submission
+      - name: Verify Phase 18 final demo package
+        run: npm run check:phase18-demo
       - name: Build
         run: npm run build
