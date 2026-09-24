@@ -21,6 +21,19 @@ try {
   expect(areaAnchor.context.includes('OBJECT exit-current: exit sign'), 'verification context must include the re-observed EXIT anchor')
   expect(areaAnchor.result.verdicts[0].relatedObjectIds.includes('exit-current'), 'resolved verdict should retain the current area-anchor object id')
 
+  const duplicateBaseline = await runDuplicateBaselineCase(VerificationAgentService)
+  expect(duplicateBaseline.result.status === 'passed', 'duplicate baseline records should project to one passed verification')
+  expect(duplicateBaseline.result.verdicts.length === 1, 'duplicate semantic baseline conditions must produce one verdict')
+  expect(duplicateBaseline.result.resolvedConditionIds.length === 1, 'duplicate semantic baseline conditions must produce one resolved condition id')
+  expect(duplicateBaseline.result.grounding.baselineConditions.length === 1, 'grounding envelope must expose one canonical baseline condition')
+  expect((duplicateBaseline.context.match(/Emergency exit access obstructed/g) || []).length === 1, 'model verification context must contain the duplicate physical condition once')
+
+  const conflictingVerdicts = await runConflictingDuplicateVerdictCase(VerificationAgentService)
+  expect(conflictingVerdicts.status === 'inconclusive', 'conflicting duplicate model verdicts must fail closed')
+  expect(conflictingVerdicts.verdicts.length === 1, 'conflicting duplicate model verdicts must still render one condition result')
+  expect(conflictingVerdicts.inconclusiveConditionIds.join(',') === 'condition_access', 'conflicting duplicate verdict must stay tied to canonical baseline id')
+  expect(/conflicting verdicts/i.test(conflictingVerdicts.verdicts[0].reason), 'conflicting duplicate verdicts must explain the fail-closed reason')
+
   const failed = await runFailedAccessCase(VerificationAgentService)
   expect(failed.result.status === 'failed', 'continued obstruction geometry must fail verification')
   expect(failed.result.remainingConditionIds.join(',') === 'condition_access', 'continued obstruction must remain tied to the baseline condition')
@@ -93,6 +106,8 @@ try {
   console.log('PASS  verification receives baseline localization + current proof images in deterministic order')
   console.log('PASS  positive current same-object evidence can verify a resolved condition')
   console.log('PASS  a re-observed durable EXIT-area anchor can verify access resolution even when the former obstacle is absent and object IDs changed')
+  console.log('PASS  duplicate grounded baseline conditions collapse to one verification verdict without rewriting history')
+  console.log('PASS  conflicting duplicate model verdicts fail closed as one inconclusive result')
   console.log('PASS  continued obstruction geometry overrides condition/issue disappearance')
   console.log('PASS  mixed resolved + remaining conditions become partial')
   console.log('PASS  missing same-object evidence remains inconclusive')
@@ -248,6 +263,84 @@ async function runAreaAnchorResolutionCase(Service) {
     conditionIds: ['condition_access_anchor'],
   })
   return { result, context }
+}
+
+
+async function runDuplicateBaselineCase(Service) {
+  const fixture = baseFixture({ currentCartPosition: 'beside orange shelving' })
+  const previousSnapshot = fixture.memory.snapshots.find((item) => item.stateId === fixture.previous.id)
+  const original = previousSnapshot.conditions[0]
+  previousSnapshot.conditions.push({
+    ...original,
+    id: 'condition_access_duplicate',
+    confidence: 0.87,
+    description: 'The emergency exit access is obstructed by the same orange cart.',
+  })
+
+  let context = ''
+  const model = {
+    provider: 'test',
+    model: 'test',
+    async verifyConditions(request) {
+      context = request.context
+      return {
+        verdicts: [{
+          conditionId: 'condition_access',
+          status: 'resolved',
+          confidence: 0.94,
+          reason: 'The same exit area is visible and the access path is clear.',
+          evidenceIds: ['e_current'],
+          relatedObjectIds: ['cart', 'door'],
+        }],
+      }
+    },
+  }
+
+  const result = await new Service({ get: async () => fixture.memory }, model).verify({
+    environmentId: fixture.memory.environment.id,
+    previousStateId: fixture.previous.id,
+    currentStateId: fixture.current.id,
+    conditionIds: ['condition_access', 'condition_access_duplicate'],
+  })
+
+  return { result, context }
+}
+
+async function runConflictingDuplicateVerdictCase(Service) {
+  const fixture = baseFixture({ currentCartPosition: 'beside orange shelving' })
+  const model = {
+    provider: 'test',
+    model: 'test',
+    async verifyConditions() {
+      return {
+        verdicts: [
+          {
+            conditionId: 'condition_access',
+            status: 'resolved',
+            confidence: 0.95,
+            reason: 'The route looks clear.',
+            evidenceIds: ['e_current'],
+            relatedObjectIds: ['cart', 'door'],
+          },
+          {
+            conditionId: 'condition_access',
+            status: 'remaining',
+            confidence: 0.91,
+            reason: 'The route still appears obstructed.',
+            evidenceIds: ['e_current'],
+            relatedObjectIds: ['cart', 'door'],
+          },
+        ],
+      }
+    },
+  }
+
+  return new Service({ get: async () => fixture.memory }, model).verify({
+    environmentId: fixture.memory.environment.id,
+    previousStateId: fixture.previous.id,
+    currentStateId: fixture.current.id,
+    conditionIds: ['condition_access'],
+  })
 }
 
 async function runFailedAccessCase(Service) {
