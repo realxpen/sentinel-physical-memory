@@ -1566,3 +1566,24 @@ Still requiring dedicated Phase 15 route/browser assertions:
 - consistent user-facing fallback language across Ask / Action / Verification / Scan.
 
 Next Phase 15 slice: build those route/browser failure assertions and normalize their user-facing error contract.
+
+
+### Phase 15 Slice 2 — route / snapshot / browser reliability
+
+Implemented:
+
+- stable unknown-environment / missing-state / missing-snapshot error classes across Ask, Action Planner and Verification;
+- immutable Ask/Action history now fails closed on missing snapshots instead of reconstructing from mutable canonical records;
+- oversized Scan / Ask / Action / Verification payloads are deterministically rejected before inference;
+- memory-read invalid query and persistence failure are separated;
+- shared browser API response parser normalizes JSON, empty, malformed, HTML, timeout and network failures;
+- non-scan network interruptions explicitly state that no result was confirmed rather than silently retrying an inference;
+- restore-memory failure no longer falls back to a misleading empty/new-location state;
+- `check:phase15-routes` provides deterministic coverage for the above.
+
+Next Slice 3 target:
+
+- hard deterministic no-material-change contract;
+- cold-start / reload production replay on current main;
+- consistent fallback rendering across visible Scan / Ask / Action / Verification surfaces;
+- final Phase 15 reliability matrix closure.
