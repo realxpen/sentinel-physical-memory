@@ -10,6 +10,8 @@ import type { ScanArtifact, ScanError, ScanFrame, ScanInput, ScanProgress, ScanR
 
 export interface ScanPipelineDependencies {
   now?: () => Date
+  nowMs?: () => number
+  deadlineAtMs?: number
   id?: (prefix: string) => string
   onProgress?: (progress: ScanProgress) => void
   model?: ModelAdapter
@@ -19,11 +21,16 @@ export interface ScanPipelineDependencies {
 const defaultId = (prefix: string) => `${prefix}_${crypto.randomUUID()}`
 const MAX_PERCEPTION_IMAGE_FRAMES = 10
 const MAX_PERCEPTION_ATTEMPTS = 2
+const OPTIONAL_AUDIT_TIMEOUT_MS = 25_000
+const TEMPORAL_VERIFICATION_TIMEOUT_MS = 40_000
+const PERSISTENCE_RESERVE_MS = 15_000
 const ENVIRONMENT_TYPES = new Set<EnvironmentType>(['office', 'school', 'hotel', 'clinic', 'retail', 'home', 'warehouse', 'construction', 'other'])
 const OPERATIONAL_CONDITION_KINDS = new Set<ConditionKind>(['attention', 'hazard', 'damage', 'maintenance', 'access', 'compliance'])
 
 export class ScanPipeline {
   private readonly now: () => Date
+  private readonly nowMs: () => number
+  private readonly deadlineAtMs?: number
   private readonly id: (prefix: string) => string
   private readonly onProgress?: (progress: ScanProgress) => void
   private readonly model?: ModelAdapter
@@ -32,6 +39,8 @@ export class ScanPipeline {
 
   constructor(deps: ScanPipelineDependencies = {}) {
     this.now = deps.now ?? (() => new Date())
+    this.nowMs = deps.nowMs ?? (() => Date.now())
+    this.deadlineAtMs = deps.deadlineAtMs
     this.id = deps.id ?? defaultId
     this.onProgress = deps.onProgress
     this.model = deps.model
@@ -64,7 +73,10 @@ export class ScanPipeline {
       ? existingMemory?.sources.find((source) => priorState.sourceIds.includes(source.id) && source.modality === 'image')
       : undefined
 
-    const perceived = await this.perceive(scanId, artifacts, frames, input, priorObjects)
+    const reserveAfterPerceptionMs = input.media.kind === 'image' && priorSnapshot && priorImageSource && this.model?.verifyTemporal
+      ? TEMPORAL_VERIFICATION_TIMEOUT_MS + PERSISTENCE_RESERVE_MS
+      : PERSISTENCE_RESERVE_MS
+    const perceived = await this.perceive(scanId, artifacts, frames, input, priorObjects, reserveAfterPerceptionMs)
     const completed = materializeExplicitGroundedObjects(perceived, input.source.capturedAt)
     if (completed.materialized.length > 0) {
       console.warn('SENTINEL_GROUNDED_OBJECT_COMPLETION', {
@@ -80,7 +92,14 @@ export class ScanPipeline {
     const derived = deriveOperationalConditions(completed.result, input.source.capturedAt)
     let perception = validatePerceptionForScan(derived.result, input.environmentId, input.source.id)
     let verifiedTemporalChanges: VerifiedTemporalChange[] = []
-    if (input.media.kind === 'image' && priorSnapshot && priorImageSource && this.model?.verifyTemporal) {
+    if (
+      input.media.kind === 'image'
+      && priorSnapshot
+      && priorImageSource
+      && this.model?.verifyTemporal
+      && !this.recoveredSceneProviderFailure
+      && this.hasRuntimeBudget(TEMPORAL_VERIFICATION_TIMEOUT_MS + PERSISTENCE_RESERVE_MS)
+    ) {
       const temporal = await this.verifyTemporalPhotoChanges(
         scanId,
         input,
@@ -91,6 +110,12 @@ export class ScanPipeline {
       )
       perception = temporal.perception
       verifiedTemporalChanges = temporal.verified
+    } else if (input.media.kind === 'image' && priorSnapshot && priorImageSource && this.model?.verifyTemporal) {
+      console.warn('SENTINEL_TEMPORAL_VERIFICATION_SKIPPED_FOR_RUNTIME_BUDGET', {
+        scanId,
+        recoveredSceneProviderFailure: this.recoveredSceneProviderFailure,
+        remainingMs: this.remainingRuntimeMs(),
+      })
     }
     console.warn('SENTINEL_CONDITION_DERIVATION_COMPLETED', {
       scanId,
@@ -236,6 +261,7 @@ export class ScanPipeline {
         currentSourceId: input.source.id,
         artifacts: [previousArtifact, currentFrame],
         candidates: [candidate],
+        timeoutMs: TEMPORAL_VERIFICATION_TIMEOUT_MS,
       })
       return { candidate, result }
     }))
@@ -325,7 +351,14 @@ export class ScanPipeline {
     })
   }
 
-  private async perceive(scanId: string, artifacts: ScanArtifact[], frames: ScanFrame[], input: ScanInput, priorObjects: SpatialObject[]): Promise<PerceptionResult> {
+  private async perceive(
+    scanId: string,
+    artifacts: ScanArtifact[],
+    frames: ScanFrame[],
+    input: ScanInput,
+    priorObjects: SpatialObject[],
+    reserveAfterPerceptionMs: number,
+  ): Promise<PerceptionResult> {
     if (!this.model) return { sourceId: input.source.id, observations: [], objects: [], conditions: [], relations: [], evidence: [] }
 
     const priorNamingContext = priorObjects.length
@@ -375,7 +408,11 @@ export class ScanPipeline {
     // the CURRENT image only and recover high-salience current objects/anchors. Prior
     // memory is naming context, never evidence, and recovered objects still require
     // trusted current-frame grounding + high confidence.
-    if (input.media.kind === 'image' && priorObjects.length > 0) {
+    if (
+      input.media.kind === 'image'
+      && priorObjects.length > 0
+      && this.hasRuntimeBudget(OPTIONAL_AUDIT_TIMEOUT_MS + reserveAfterPerceptionMs)
+    ) {
       const priorOperationalAnchors = priorObjects
         .filter(isOperationalChangeAuditObject)
         .slice(0, 20)
@@ -425,7 +462,12 @@ export class ScanPipeline {
     // Still-photo state audit: open/closed is operationally important but the broad
     // scene pass can omit it. Re-inspect only visible openable objects whose state
     // is missing; this pass may confirm state but must not invent unseen objects.
-    if (input.media.kind === 'image' && priorObjects.length === 0 && shouldRunOpenableStateAudit(scene)) {
+    if (
+      input.media.kind === 'image'
+      && priorObjects.length === 0
+      && shouldRunOpenableStateAudit(scene)
+      && this.hasRuntimeBudget(OPTIONAL_AUDIT_TIMEOUT_MS + reserveAfterPerceptionMs)
+    ) {
       const candidates = scene.objects
         .filter(isOpenableObject)
         .filter((item) => !hasExplicitOpenClosedState(item))
@@ -466,6 +508,14 @@ export class ScanPipeline {
 
     if (hasOperationalConditionCandidate(scene)) return scene
     if (input.media.kind === 'image' && !shouldRunStillImageConditionAudit(scene) && !shouldRunAccessGeometryAudit(scene)) return scene
+    if (!this.hasRuntimeBudget(OPTIONAL_AUDIT_TIMEOUT_MS + reserveAfterPerceptionMs)) {
+      console.warn('SENTINEL_CONDITION_AUDIT_SKIPPED_FOR_RUNTIME_BUDGET', {
+        scanId,
+        remainingMs: this.remainingRuntimeMs(),
+        reserveAfterPerceptionMs,
+      })
+      return scene
+    }
 
     const sceneObjectSummary = scene.objects.length
       ? scene.objects.map((item) => `${item.name} (${item.category})`).join(', ')
@@ -510,7 +560,11 @@ export class ScanPipeline {
         providerOperationalConditions: merged.conditions.filter((item) => OPERATIONAL_CONDITION_KINDS.has(item.kind)).length,
       })
 
-      if (!hasOperationalConditionCandidate(merged) && shouldRunIdentityAudit(merged)) {
+      if (
+        !hasOperationalConditionCandidate(merged)
+        && shouldRunIdentityAudit(merged)
+        && this.hasRuntimeBudget(OPTIONAL_AUDIT_TIMEOUT_MS + reserveAfterPerceptionMs)
+      ) {
         const identityPrompt = [
           `Targeted physical-object identity verification for scan ${scanId} in environment ${input.environmentId}.`,
           `The scan source id is ${input.source.id}.`,
@@ -544,7 +598,11 @@ export class ScanPipeline {
         }
       }
 
-      if (!hasOperationalConditionCandidate(merged) && shouldRunAccessGeometryAudit(merged)) {
+      if (
+        !hasOperationalConditionCandidate(merged)
+        && shouldRunAccessGeometryAudit(merged)
+        && this.hasRuntimeBudget(OPTIONAL_AUDIT_TIMEOUT_MS + reserveAfterPerceptionMs)
+      ) {
         const geometryCandidates = accessGeometryCandidates(merged)
           .map((item) => `${item.name} (${item.category})`)
           .join(', ')
@@ -619,7 +677,8 @@ export class ScanPipeline {
     input: ScanInput,
   ): Promise<PerceptionResult> {
     let lastError: unknown
-    for (let attempt = 1; attempt <= MAX_PERCEPTION_ATTEMPTS; attempt += 1) {
+    const maxAttempts = pass === 'scene' ? MAX_PERCEPTION_ATTEMPTS : 1
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       try {
         const retryInstruction = attempt > 1
           ? 'STRICT RETRY: Return one complete JSON object only. Use canonical enum values, finite numeric confidences, arrays for reference fields, and reference only supplied FRAME_ID evidence. Omit unsupported optional claims instead of guessing.'
@@ -628,6 +687,7 @@ export class ScanPipeline {
           role: 'perception',
           artifacts,
           prompt: [prompt, retryInstruction].filter((item): item is string => Boolean(item)).join('\n'),
+          ...(pass === 'scene' ? {} : { timeoutMs: OPTIONAL_AUDIT_TIMEOUT_MS }),
         })
 
         const grounded = groundPerceptionToTrustedFrames(result, frames, input.source.id, input.source.capturedAt)
@@ -654,7 +714,7 @@ export class ScanPipeline {
         lastError = error
         const outputRetry = isRetryablePerceptionOutputError(error)
         const providerRetry = pass === 'scene' && isTransientPerceptionProviderError(error)
-        if (attempt >= MAX_PERCEPTION_ATTEMPTS || (!outputRetry && !providerRetry)) throw error
+        if (attempt >= maxAttempts || (!outputRetry && !providerRetry)) throw error
 
         if (providerRetry) this.recoveredSceneProviderFailure = true
         console.warn(providerRetry ? 'SENTINEL_PERCEPTION_PROVIDER_RETRY' : 'SENTINEL_PERCEPTION_SCHEMA_RETRY', {
@@ -669,6 +729,16 @@ export class ScanPipeline {
     }
 
     throw lastError instanceof Error ? lastError : new Error('Perception failed without an error')
+  }
+
+  private remainingRuntimeMs(): number | undefined {
+    if (this.deadlineAtMs === undefined) return undefined
+    return Math.max(0, this.deadlineAtMs - this.nowMs())
+  }
+
+  private hasRuntimeBudget(requiredMs: number): boolean {
+    const remaining = this.remainingRuntimeMs()
+    return remaining === undefined || remaining >= requiredMs
   }
 
   private validate(input: ScanInput) {
