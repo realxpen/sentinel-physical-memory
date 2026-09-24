@@ -1,4 +1,4 @@
-import { createNebiusNemotronAdapter } from '../src/ai/nebius.js'
+import { createNebiusNemotronAdapter, type NebiusInferenceTrace } from '../src/ai/nebius.js'
 import { ModelAdapterError } from '../src/ai/model.js'
 import type { ScanArtifact, ScanFrame, ScanInput } from '../src/scan/types.js'
 import { ScanPipeline } from '../src/scan/pipeline.js'
@@ -80,10 +80,12 @@ export default async function handler(req: Request, res: Response) {
       })
     }
 
+    const inference: NebiusInferenceTrace[] = []
     const adapter = createNebiusNemotronAdapter(apiKey, {
       baseUrl: process.env.NEBIUS_TOKEN_FACTORY_BASE_URL,
       model: process.env.NEBIUS_PERCEPTION_MODEL?.trim() || DEFAULT_PERCEPTION_MODEL,
       timeoutMs: resolvePerceptionTimeout(process.env.NEBIUS_PERCEPTION_TIMEOUT_MS),
+      onTrace: (trace) => inference.push(trace),
       artifactResolver: {
         resolve: async (artifact: ScanArtifact) => ({
           artifactId: artifact.artifactId,
@@ -111,6 +113,7 @@ export default async function handler(req: Request, res: Response) {
       state: result.state,
       diff: result.diff,
       memory: updatedMemory,
+      inference,
     })
   } catch (error) {
     if (error instanceof ScanRequestError) {
