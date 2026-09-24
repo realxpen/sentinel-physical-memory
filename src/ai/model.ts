@@ -7,6 +7,7 @@ export interface ModelInferenceRequest {
   role: ModelRole
   prompt: string
   artifacts: ScanArtifact[]
+  timeoutMs?: number
 }
 
 export interface ReasoningInferenceRequest {
@@ -51,6 +52,7 @@ export interface TemporalVerificationRequest {
   currentSourceId: string
   artifacts: ScanArtifact[]
   candidates: TemporalVerificationCandidate[]
+  timeoutMs?: number
 }
 
 export interface TemporalVerificationChange {

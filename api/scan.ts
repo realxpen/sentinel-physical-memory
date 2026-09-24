@@ -17,12 +17,13 @@ const MAX_FRAME_DATA_URL_BYTES = 700 * 1024
 const ALLOWED_IMAGE_MIME = new Set(['image/jpeg', 'image/png', 'image/webp'])
 const ALLOWED_VIDEO_MIME = new Set(['video/mp4', 'video/webm', 'video/quicktime', 'video/x-m4v'])
 const DEFAULT_PERCEPTION_MODEL = 'openbmb/MiniCPM-V-4_5'
-// /api/scan has a 180s function budget. A scene perception call may retry once
-// on a transient provider timeout/5xx, so each provider attempt is deliberately
-// capped below half the function budget to leave time for grounding + Neon save.
-const DEFAULT_PERCEPTION_TIMEOUT_MS = 70_000
-const MIN_PERCEPTION_TIMEOUT_MS = 30_000
-const MAX_PERCEPTION_TIMEOUT_MS = 75_000
+// /api/scan has a 180s platform budget. Keep a 20s safety margin for persistence,
+// serialization, and the HTTP response. The primary scene may retry once, while
+// secondary audits use tighter per-pass budgets inside ScanPipeline.
+const SCAN_SOFT_RUNTIME_MS = 160_000
+const DEFAULT_PERCEPTION_TIMEOUT_MS = 50_000
+const MIN_PERCEPTION_TIMEOUT_MS = 20_000
+const MAX_PERCEPTION_TIMEOUT_MS = 55_000
 
 class ScanRequestError extends Error {
   readonly status: number
@@ -50,6 +51,7 @@ export default async function handler(req: Request, res: Response) {
   if (!apiKey) return res.status(503).json({ error: 'NEBIUS_NOT_CONFIGURED', message: 'Server inference credentials are not configured' })
 
   try {
+    const scanDeadlineAtMs = Date.now() + SCAN_SOFT_RUNTIME_MS
     const rawSize = Buffer.byteLength(JSON.stringify(req.body ?? {}), 'utf8')
     if (rawSize > MAX_BODY_BYTES) {
       throw new ScanRequestError(413, 'PAYLOAD_TOO_LARGE', 'Scan request exceeds the 4 MB SENTINEL safety budget. Use fewer or smaller evidence frames.')
@@ -95,7 +97,11 @@ export default async function handler(req: Request, res: Response) {
       },
     })
 
-    const pipeline = new ScanPipeline({ model: adapter, memoryRepository: repository })
+    const pipeline = new ScanPipeline({
+      model: adapter,
+      memoryRepository: repository,
+      deadlineAtMs: scanDeadlineAtMs,
+    })
     const result = await pipeline.run(input)
     const updatedMemory = await pipeline.getMemory(input.environmentId)
     if (!updatedMemory) throw new Error('Environmental memory was not created')

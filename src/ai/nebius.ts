@@ -75,7 +75,7 @@ export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapte
 
   async infer(request: ModelInferenceRequest): Promise<PerceptionResult> {
     const content = await this.buildContent(request.prompt, request.artifacts)
-    const response = await this.requestCompletion(this.systemPrompt(request.role), content, 'perception')
+    const response = await this.requestCompletion(this.systemPrompt(request.role), content, 'perception', request.timeoutMs)
     return this.parsePerceptionResult(this.extractText(response), request)
   }
 
@@ -114,6 +114,7 @@ export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapte
       'You are SENTINEL temporal verification. Compare two physical-environment images conservatively and return only the requested JSON.',
       content,
       'temporal-verification',
+      request.timeoutMs,
     )
     return this.parseTemporalVerification(this.extractText(response), request)
   }
@@ -268,9 +269,11 @@ export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapte
     system: string,
     content: unknown,
     role: NebiusInferenceRole,
+    timeoutOverrideMs?: number,
   ): Promise<ChatCompletionResponse> {
+    const requestTimeoutMs = timeoutOverrideMs ?? this.timeoutMs
     const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), this.timeoutMs)
+    const timeout = setTimeout(() => controller.abort(), requestTimeoutMs)
     const startedAt = Date.now()
     let traceEmitted = false
 
@@ -320,7 +323,7 @@ export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapte
       }
       if (error instanceof DOMException && error.name === 'AbortError') {
         emit({ outcome: 'error', errorCode: 'NEBIUS_TIMEOUT' })
-        throw new ModelAdapterError({ code: 'NEBIUS_TIMEOUT', message: `Nebius inference exceeded ${this.timeoutMs}ms`, retryable: true })
+        throw new ModelAdapterError({ code: 'NEBIUS_TIMEOUT', message: `Nebius inference exceeded ${requestTimeoutMs}ms`, retryable: true })
       }
       emit({ outcome: 'error', errorCode: 'NEBIUS_REQUEST_FAILED' })
       throw new ModelAdapterError({
