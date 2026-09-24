@@ -43,7 +43,9 @@
     "check:phase15-stability": "node --experimental-strip-types ./scripts/check-phase15-stability.mjs",
     "check:phase15-cold-start": "node ./scripts/check-phase15-production-cold-start.mjs",
     "check:phase16-telemetry": "node --experimental-strip-types ./scripts/check-phase16-nebius-telemetry.mjs",
-    "check:phase16-production": "node ./scripts/check-phase16-production-nebius.mjs"
+    "check:phase16-production": "node ./scripts/check-phase16-production-nebius.mjs",
+    "check:phase17-submission": "node ./scripts/check-phase17-submission-readiness.mjs",
+    "check:phase17-production": "node ./scripts/check-phase17-production-readiness.mjs"
   },
   "dependencies": {
     "@neondatabase/serverless": "latest",
