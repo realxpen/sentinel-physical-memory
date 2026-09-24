@@ -741,69 +741,27 @@ function App() {
           </div>
         </section>}
 
-        <div className="environment-stage spatial-memory-stage" aria-label={activeEnvironment.name + ' environmental memory canvas'}>
-          <div className="ambient-orb orb-one" /><div className="ambient-orb orb-two" /><div className="stage-grid" />
-          {memory && currentSnapshot ? <>
-            <div className="spatial-stage-header">
-              <div>
-                <span className="eyebrow">SPATIAL MEMORY / LIVE STATE</span>
-                <strong>{activeEnvironment.name}</strong>
-                <small>{currentSnapshot.objects.length} remembered objects · {currentSnapshot.relations.length} grounded relation{currentSnapshot.relations.length === 1 ? '' : 's'}</small>
-              </div>
-              <span>STATE v{memory.states.find((item) => item.id === currentSnapshot.stateId)?.version ?? memory.states.length}</span>
-            </div>
-            {hasGroundedSpatialAreas ? <div className="spatial-area-navigation" aria-label="Spatial area navigation">
-              <span>BUILDING</span>
-              <div>
-                <button className={normalizedSpatialAreaId === 'all' ? 'active' : ''} type="button" aria-current={normalizedSpatialAreaId === 'all' ? 'true' : undefined} onClick={() => setSelectedSpatialAreaId('all')}>
-                  <strong>{activeEnvironment.name}</strong><small>{currentSnapshot.objects.length} objects</small>
-                </button>
-                {spatialGroups.map((group) => <button className={normalizedSpatialAreaId === group.id ? 'active' : ''} type="button" aria-current={normalizedSpatialAreaId === group.id ? 'true' : undefined} key={group.id} onClick={() => setSelectedSpatialAreaId(group.id)}>
-                  <strong>{group.name}</strong><small>{group.kind === 'room' ? 'area' : 'unassigned'} · {group.objects.length}</small>
-                </button>)}
-              </div>
-            </div> : <div className="spatial-area-fallback">
-              <span>ENVIRONMENT-LEVEL MEMORY</span>
-              <strong>No grounded room structure is being claimed.</strong>
-              <small>SENTINEL is showing the observed space exactly as persisted.</small>
-            </div>}
-            <div className={'spatial-room-grid ' + (normalizedSpatialAreaId === 'all' ? 'building-view' : 'area-focused')}>
-              {focusedSpatialGroups.map((group) => <section className={normalizedSpatialAreaId === group.id ? 'spatial-room focused' : 'spatial-room'} key={group.id}>
-                <div className="spatial-room-heading">
-                  <div><span>{group.name}</span><small>{group.kind === 'room' ? 'remembered area' : 'observed space'}</small></div>
-                  <div className="spatial-room-actions">
-                    <strong>{group.objects.length}</strong>
-                    {hasGroundedSpatialAreas && normalizedSpatialAreaId !== group.id && <button type="button" onClick={() => setSelectedSpatialAreaId(group.id)}>Focus ↗</button>}
-                  </div>
-                </div>
-                <div className="spatial-object-cloud">
-                  {group.objects.length === 0 ? <span className="spatial-room-empty">No grounded objects assigned to this area yet.</span> : group.objects.map((item) => {
-                    const tone = spatialObjectTone(item, currentSnapshot)
-                    const displayName = spatialObjectDisplayNames.get(item.id) ?? item.name
-                    const relationshipClass = selectedSpatialObjectId === item.id ? ' selected-spatial' : relatedSpatialObjectIds.has(item.id) ? ' related-spatial' : verificationObjectIds.has(item.id) ? ' verification-related-spatial' : actionPlanObjectIds.has(item.id) ? ' action-related-spatial' : answerRelatedObjectIds.has(item.id) ? ' answer-related-spatial' : ''
-                    return <button className={'spatial-object ' + tone + relationshipClass} type="button" key={item.id} onClick={() => inspectSpatialObject(item.id)} aria-label={'Inspect ' + displayName}>
-                      <i />
-                      <span><strong>{displayName}</strong><small>{spatialObjectSubtitle(item)}</small></span>
-                      <em>{Math.round(item.confidence * 100)}%</em>
-                    </button>
-                  })}
-                </div>
-              </section>)}
-            </div>
-          </> : <div className="spatial-empty-state">
-            <span className="eyebrow">SPATIAL MEMORY</span>
-            <strong>Nothing has been grounded here yet.</strong>
-            <p>Your first observation will turn this canvas into a live map of remembered objects, areas and relationships.</p>
-          </div>}
-          <div className="stage-caption"><span>{memory ? 'LIVE SPATIAL MEMORY' : 'MEMORY CANVAS'}</span><strong>{memory ? memory.evidence.length + ' evidence records across ' + memory.states.length + ' state(s)' : 'No state exists yet for ' + activeEnvironment.name}</strong></div>
-        </div>
+        <section className={memory ? 'memory-environment-summary remembered' : 'memory-environment-summary empty'} aria-label={activeEnvironment.name + ' memory summary'}>
+          <div className="memory-environment-copy">
+            <span className="eyebrow">ENVIRONMENT MEMORY</span>
+            <h2>{activeEnvironment.name}</h2>
+            <p>{memory && currentMemoryState
+              ? `${currentStateLabel} · last remembered ${formatStateTimestamp(currentMemoryState.capturedAt)}`
+              : 'No remembered environmental state yet.'}</p>
+          </div>
+          {memory && currentSnapshot ? <div className="memory-environment-metrics">
+            <div><span>Remembered</span><strong>{memoryObjectRows.length}</strong><small>meaningful object groups</small></div>
+            <div><span>Relations</span><strong>{currentSnapshot.relations.length}</strong><small>grounded links</small></div>
+            <div><span>History</span><strong>{memory.states.length}</strong><small>immutable state{memory.states.length === 1 ? '' : 's'}</small></div>
+          </div> : <div className="memory-environment-empty-copy">Your first observation will create State v1 and unlock history, Reality Diff and grounded Ask.</div>}
+          <div className="memory-environment-actions">
+            {memory && <button type="button" onClick={() => document.getElementById('state-history')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>View state history ↓</button>}
+            <button className="primary" type="button" onClick={() => libraryInputRef.current?.click()}>{memory ? 'Choose update photo ↗' : 'Choose first photo ↗'}</button>
+          </div>
+          {memory && <div className="memory-environment-diff"><span>Since the previous state</span><strong>{latestDiff ? latestDiff.summary : 'No comparison yet'}</strong></div>}
+        </section>
 
-        <div className="memory-summary">
-          <div><span>Since you were last here</span><strong>{latestDiff ? latestDiff.summary : memory ? 'No comparison yet' : 'No previous state yet'}</strong></div>
-          <button className="observe-cta" type="button" onClick={() => libraryInputRef.current?.click()}><span className="observe-orb"><i /></span><span><strong>{memory ? 'Choose update photo' : 'Choose first photo'}</strong><small>{memory ? `Select an image for the next ${activeEnvironment.name} state` : `Select an image to create ${activeEnvironment.name} memory v1`}</small></span></button>
-        </div>
-
-        {memory && <section className="history-section" aria-label="Environmental state history">
+        {memory && <section className="history-section" id="state-history" aria-label="Environmental state history">
           <div className="section-heading history-heading">
             <div>
               <span className="eyebrow">TIME / IMMUTABLE MEMORY</span>
@@ -843,13 +801,32 @@ function App() {
           </div>
         </section>}
 
-        {result && <section className="evidence-section">
-          <div className="section-heading"><div><span className="eyebrow">EVIDENCE / CURRENT STATE</span><h2>What SENTINEL observed.</h2></div><span className="scan-id">{result.scanId}</span></div>
-          <div className="observation-list">{displayObservations.length === 0 ? <div className="empty-observation">No material grounded observations were returned for this scan.</div> : visibleObservations.map((item) => {
-            const index = result.observations.indexOf(item)
-            return <button className="observation-row" type="button" key={item.id} onClick={() => setSelectedObservation(index)}><span className="observation-index">{String(index + 1).padStart(2, '0')}</span><span className="observation-copy"><strong>{item.label}</strong><small>{item.description}</small></span><span className="observation-confidence">{Math.round(item.confidence * 100)}%</span><span className="arrow">↗</span></button>
-          })}</div>
-          {displayObservations.length > 14 && <button className="observation-expand" type="button" onClick={() => setShowAllObservations((value) => !value)}>{showAllObservations ? 'Show less evidence' : `Show all ${displayObservations.length} observations`}</button>}
+        {memory && currentSnapshot && <section className="evidence-section current-memory-section" aria-label="Current remembered objects">
+          <div className="section-heading current-memory-heading">
+            <div>
+              <span className="eyebrow">CURRENT STATE / REMEMBERED OBJECTS</span>
+              <h2>What SENTINEL observed.</h2>
+              <p>Meaningful objects are surfaced first. Structural details remain available without dominating the memory view.</p>
+            </div>
+            <span className="scan-id">{currentStateLabel}</span>
+          </div>
+          <div className="observation-list memory-object-list">
+            {visibleMemoryObjectRows.length === 0
+              ? <div className="empty-observation">No meaningful remembered objects are being surfaced by default for this state.</div>
+              : visibleMemoryObjectRows.map((row, index) => <button className={row.lowSalience ? 'observation-row memory-object-row low-salience' : 'observation-row memory-object-row'} type="button" key={row.object.id} onClick={() => inspectSpatialObject(row.object.id)}>
+                <span className="observation-index">{String(index + 1).padStart(2, '0')}</span>
+                <span className="observation-copy">
+                  <strong>{row.object.name}</strong>
+                  <small>{row.count > 1 ? `${row.count} similar grounded records · ` : ''}{row.object.description ?? row.object.position?.description ?? row.object.category}</small>
+                </span>
+                <span className="memory-object-category">{row.object.category}</span>
+                <span className="observation-confidence">{Math.round(row.object.confidence * 100)}%</span>
+                <span className="arrow">↗</span>
+              </button>)}
+          </div>
+          {hiddenMemoryObjectCount > 0 && <button className="observation-expand" type="button" onClick={() => setShowAllMemoryObjects((value) => !value)}>
+            {showAllMemoryObjects ? 'Show meaningful objects only' : `Show all ${memoryObjectRows.length} remembered objects`}
+          </button>}
         </section>}
       </section>}
 
@@ -1106,8 +1083,6 @@ function App() {
           }}>Ask SENTINEL about this object ↗</button>
         </aside>
       </div>}
-
-      {observation && <div className="drawer-backdrop" role="presentation" onClick={() => setSelectedObservation(null)}><aside className="evidence-drawer" role="dialog" aria-modal="true" aria-label={`${observation.label} evidence`} onClick={(event) => event.stopPropagation()}><button className="drawer-close" type="button" onClick={() => setSelectedObservation(null)}>×</button><span className="eyebrow">OBSERVED / EVIDENCE-BACKED</span><h2>{observation.label}</h2><p>{observation.description}</p><Confidence value={observation.confidence} /><div className="evidence-rule" /><div className="evidence-note"><span>What this means</span><strong>SENTINEL stores this as an observation, not a professional diagnosis.</strong><p>Interpretation and recommended action remain separate from what the visual evidence directly supports.</p></div></aside></div>}
 
       {showEnvironmentDialog && <div className="drawer-backdrop location-backdrop" role="presentation" onClick={() => setShowEnvironmentDialog(false)}><form className="location-dialog" onSubmit={addEnvironment} onClick={(event) => event.stopPropagation()}><button className="drawer-close" type="button" onClick={() => setShowEnvironmentDialog(false)}>×</button><span className="eyebrow">NEW PHYSICAL MEMORY</span><h2>Add another location.</h2><p>Each location gets its own environment ID, scans, state history, Reality Diffs and questions. Scanning a new location will not overwrite {activeEnvironment.name}.</p><label><span>Location name</span><input autoFocus value={newEnvironmentName} onChange={(event) => setNewEnvironmentName(event.target.value)} placeholder="e.g. Head Office, Warehouse A" maxLength={80} /></label><label><span>Space type</span><select value={newEnvironmentType} onChange={(event) => setNewEnvironmentType(event.target.value as EnvironmentType)}>{ENVIRONMENT_TYPES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label><div className="location-actions"><button type="button" onClick={() => setShowEnvironmentDialog(false)}>Cancel</button><button className="location-create" type="submit" disabled={!newEnvironmentName.trim()}>Create location</button></div></form></div>}
 
