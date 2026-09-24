@@ -68,5 +68,7 @@ jobs:
         run: npm run check:phase15-stability
       - name: Verify Phase 16 Nebius NVIDIA telemetry
         run: npm run check:phase16-telemetry
+      - name: Verify Phase 17 submission package
+        run: npm run check:phase17-submission
       - name: Build
         run: npm run build
