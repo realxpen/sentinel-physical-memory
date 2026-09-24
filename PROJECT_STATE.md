@@ -14,7 +14,7 @@ Hackathon track: **Best Apps and Agents**.
 
 ## Current phase
 
-**Phase 16 — Nebius / NVIDIA Architecture Hardening: ACTIVE / PHASE 15 COMPLETE**
+**Phase 17 — Submission Readiness: ACTIVE / PHASE 16 COMPLETE**
 
 ## Phase 3 — COMPLETE
 
@@ -1137,8 +1137,8 @@ Canonical production proof: `Knowledge/Technical/phase-9-real-history-proof.md`.
 - [x] Phase 13 — Living Spatial Intelligence UI rebuild/polish (**COMPLETE — human production visual review passed**)
 - [x] Phase 14 — Demo scenario engineering (**COMPLETE — deployed Scan A/B/C closed-loop replay reached Verified repeatedly**)
 - [x] Phase 15 — Reliability and guardrails (**COMPLETE — deterministic guardrails + production cold-start proof passed**)
-- [ ] Phase 16 — Nebius/NVIDIA architecture hardening (**ACTIVE — runtime role/model/latency proof in progress**)
-- [ ] Phase 17 — Submission readiness
+- [x] Phase 16 — Nebius/NVIDIA architecture hardening (**COMPLETE — exact-main Token Factory + NVIDIA runtime proof passed**)
+- [ ] Phase 17 — Submission readiness (**ACTIVE — judge-facing repository + submission package**)
 - [ ] Phase 18 — Final demo polish
 
 ## Current exit check
@@ -1617,7 +1617,7 @@ Exact main commit: `69d0c167684f47c0e3ca8f39af7e8f83611c39b6`.
 
 Phase 15 is **COMPLETE**.
 
-## Phase 16 — ACTIVE
+## Phase 16 — COMPLETE
 
 Nebius / NVIDIA architecture hardening now owns the hackathon technology proof.
 
@@ -1633,3 +1633,36 @@ Slice 1 implementation:
 - exact-main production workflow will prove a real Ask call ran through Nebius Token Factory with NVIDIA model + measured latency.
 
 Canonical record: `Knowledge/Technical/phase-16-nebius-nvidia-architecture.md`.
+
+
+### Phase 16 production closure — PASS
+
+Exact main commit: `19673c690d034a7f6ffbeb63c672b3d0987d50ed`.
+
+- Phase 16 Production Nebius NVIDIA Trace run `35991108585` — **SUCCESS**;
+- production health reported `nebius-token-factory`;
+- Ask and Action Plan mapped to `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B`;
+- real production Ask returned a successful `reasoning` trace with measured latency `15904ms`;
+- Vercel deployment completed successfully;
+- deterministic Phase 16 telemetry gate and Sentinel CI passed.
+
+Phase 16 is **COMPLETE**.
+
+## Phase 17 — ACTIVE
+
+Submission Readiness now owns the judge-facing repository and Devpost package.
+
+Locked source requirements:
+
+- public code repository;
+- visible open-source license;
+- working demo URL;
+- README with setup and run guidance;
+- explicit NVIDIA model and Nebius Token Factory usage;
+- public YouTube demo under three minutes;
+- track identification;
+- Nebius/NVIDIA feedback;
+- testing access free of charge;
+- English submission materials.
+
+Repository preparation starts with a complete README, architecture diagram, judge testing guide, demo instructions, submission copy, and an executable submission-readiness gate.
