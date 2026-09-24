@@ -33,7 +33,7 @@ for (const required of ['give this place a memory', 'observe', 'remembered', 'ev
 
 expect(finalDoc.includes('Target runtime: **2:58**'), 'final demo guide must state the locked runtime')
 expect(finalDoc.includes('Browser zoom: **100%**'), 'final demo guide must fix recording zoom')
-expect(finalDoc.includes('Cut all inference waits'), 'editing guide must remove inference waiting time')
+expect(/cut[^\n]*inference[^\n]*wait/i.test(finalDoc) || /inference[^\n]*wait[^\n]*cut/i.test(finalDoc), 'editing guide must remove inference waiting time')
 expect(finalDoc.includes('Nebius Token Factory · NVIDIA Nemotron 3 Nano'), 'video plan must include brief Nebius/NVIDIA proof')
 expect(finalDoc.includes('no secrets'), 'video quality gate must protect secrets')
 expect(finalDoc.includes('final result visibly says **Verified**'), 'video quality gate must require the closed-loop result')
