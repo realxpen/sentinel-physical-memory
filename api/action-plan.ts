@@ -1,4 +1,4 @@
-import { createNebiusNemotronAdapter } from '../src/ai/nebius.js'
+import { createNebiusNemotronAdapter, type NebiusInferenceTrace } from '../src/ai/nebius.js'
 import { ModelAdapterError } from '../src/ai/model.js'
 import { ActionPlannerInputError, ActionPlannerService } from '../src/action/planner.ts'
 import { getMemoryPersistenceMode, getRuntimeEnvironmentalMemoryRepository } from '../server/memory-repository.js'
@@ -36,10 +36,12 @@ export default async function handler(req: Request, res: Response) {
 
     const body = parseBody(req.body)
     const repository = getRuntimeEnvironmentalMemoryRepository()
+    const inference: NebiusInferenceTrace[] = []
     const adapter = createNebiusNemotronAdapter(apiKey, {
       baseUrl: process.env.NEBIUS_TOKEN_FACTORY_BASE_URL,
       model: process.env.NEBIUS_NEMOTRON_REASONING_MODEL?.trim() || DEFAULT_REASONING_MODEL,
       timeoutMs: 90_000,
+      onTrace: (trace) => inference.push(trace),
     })
     const result = await new ActionPlannerService(repository, adapter).create(body)
 
@@ -51,6 +53,7 @@ export default async function handler(req: Request, res: Response) {
       ...result,
       persistence: getMemoryPersistenceMode(),
       actionContract: ACTION_PLAN_CONTRACT,
+      inference,
     })
   } catch (error) {
     if (error instanceof ActionPlannerInputError) {
