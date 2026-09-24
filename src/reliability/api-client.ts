@@ -1,4 +1,4 @@
-export type SentinelOperation = 'observation' | 'history' | 'ask' | 'action-plan' | 'verification'
+export type SentinelOperation = 'observation' | 'memory' | 'history' | 'ask' | 'action-plan' | 'verification'
 
 export interface SentinelErrorPayload {
   error?: string
@@ -174,6 +174,7 @@ function networkFailureMessage(operation: SentinelOperation): string {
 function operationLabel(operation: SentinelOperation): string {
   switch (operation) {
     case 'observation': return 'Observation'
+    case 'memory': return 'Memory'
     case 'history': return 'History'
     case 'ask': return 'Ask'
     case 'action-plan': return 'Action planning'
