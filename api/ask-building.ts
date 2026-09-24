@@ -1,4 +1,4 @@
-import { createNebiusNemotronAdapter } from '../src/ai/nebius.js'
+import { createNebiusNemotronAdapter, type NebiusInferenceTrace } from '../src/ai/nebius.js'
 import { ModelAdapterError } from '../src/ai/model.js'
 import { AskBuildingInputError, AskBuildingService } from '../src/memory/ask-building.ts'
 import { getMemoryPersistenceMode, getRuntimeEnvironmentalMemoryRepository } from '../server/memory-repository.js'
@@ -30,16 +30,18 @@ export default async function handler(req: Request, res: Response) {
     const body = parseBody(req.body)
     const repository = getRuntimeEnvironmentalMemoryRepository()
 
+    const inference: NebiusInferenceTrace[] = []
     const adapter = createNebiusNemotronAdapter(apiKey, {
       baseUrl: process.env.NEBIUS_TOKEN_FACTORY_BASE_URL,
       model: process.env.NEBIUS_NEMOTRON_REASONING_MODEL?.trim() || DEFAULT_REASONING_MODEL,
+      onTrace: (trace) => inference.push(trace),
     })
     const service = new AskBuildingService(repository, adapter)
     const answer = await service.ask({ environmentId: body.environmentId, question: body.question, stateId: body.stateId })
     if (!answer.grounding) {
       throw new Error('Phase 10 grounding envelope was not produced by AskBuildingService')
     }
-    return res.status(200).json({ ...answer, persistence: getMemoryPersistenceMode(), reasoningContract: ASK_BUILDING_CONTRACT })
+    return res.status(200).json({ ...answer, persistence: getMemoryPersistenceMode(), reasoningContract: ASK_BUILDING_CONTRACT, inference })
   } catch (error) {
     if (error instanceof AskBuildingInputError) {
       return res.status(error.status).json({ error: error.code, message: error.message })
