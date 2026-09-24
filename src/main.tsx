@@ -8,7 +8,8 @@ import './phase13.css'
 import type { ActionPlanningResponse, AskBuildingResponse, Change, EnvironmentalCondition, EnvironmentalDiff, EnvironmentalMemory, EnvironmentalState, EnvironmentType, Observation, SpatialObject, VerificationResult } from './domain/sentinel'
 import type { EnvironmentalStateHistoryEntry, EnvironmentalStateHistoryRecord } from './memory/history'
 import { changesForPresentation, presentedChangeSummary } from './memory/change-presentation'
-import { buildSpatialGroups, buildSpatialObjectDisplayNames, buildSpatialRelationEdges, describeSpatialRelations, focusSpatialGroups, spatialGroupForObject, spatialObjectSubtitle, spatialObjectTone } from './memory/spatial-memory'
+import { buildSpatialObjectDisplayNames, buildSpatialRelationEdges, describeSpatialRelations } from './memory/spatial-memory'
+import { buildMemoryObjectRows, primaryMemoryObjectRows } from './memory/memory-presentation'
 import { createEnvironmentProfile, DEFAULT_ENVIRONMENT, ENVIRONMENT_TYPES, loadActiveEnvironmentId, loadEnvironmentDirectory, saveActiveEnvironmentId, saveEnvironmentDirectory, type EnvironmentProfile } from './environment/directory'
 import { ingestImageFile } from './scan/image-ingestion'
 import { ingestVideoFile } from './scan/video-ingestion'
@@ -90,7 +91,6 @@ function App() {
   const [memory, setMemory] = useState<EnvironmentalMemory | null>(null)
   const [error, setError] = useState('')
   const [view, setView] = useState<View>('memory')
-  const [selectedObservation, setSelectedObservation] = useState<number | null>(null)
   const [question, setQuestion] = useState('')
   const [askStatus, setAskStatus] = useState('')
   const [askStateId, setAskStateId] = useState<string>('current')
@@ -105,8 +105,7 @@ function App() {
   const [historyAt, setHistoryAt] = useState('')
   const [selectedChangeId, setSelectedChangeId] = useState<string | null>(null)
   const [selectedSpatialObjectId, setSelectedSpatialObjectId] = useState<string | null>(null)
-  const [selectedSpatialAreaId, setSelectedSpatialAreaId] = useState<string>('all')
-  const [showAllObservations, setShowAllObservations] = useState(false)
+  const [showAllMemoryObjects, setShowAllMemoryObjects] = useState(false)
 
   const activeEnvironment = environments.find((item) => item.id === activeEnvironmentId) ?? environments[0] ?? DEFAULT_ENVIRONMENT
   const isWorking = status.startsWith('Observing') || status.startsWith('Understanding') || status.startsWith('Remembering')
@@ -117,8 +116,6 @@ function App() {
   const physicalChanges = presentedChanges.filter((change) => changeBucket(change) === 'physical')
   const resolvedChanges = presentedChanges.filter((change) => changeBucket(change) === 'resolved')
   const verificationChanges = presentedChanges.filter((change) => changeBucket(change) === 'verification')
-  const displayObservations = (result?.observations ?? []).filter(isDisplayableObservation)
-  const visibleObservations = showAllObservations ? displayObservations : displayObservations.slice(0, 14)
   const previousDiffState = latestDiff ? memory?.states.find((state) => state.id === latestDiff.fromStateId) : undefined
   const currentDiffState = latestDiff ? memory?.states.find((state) => state.id === latestDiff.toStateId) : undefined
   const previousDiffImage = previousDiffState ? memory?.sources.find((source) => previousDiffState.sourceIds.includes(source.id) && source.modality === 'image')?.uri : undefined
@@ -126,11 +123,11 @@ function App() {
   const currentSnapshot = memory?.environment.currentStateId
     ? memory.snapshots.find((snapshot) => snapshot.stateId === memory.environment.currentStateId)
     : undefined
-  const spatialGroups = currentSnapshot ? buildSpatialGroups(currentSnapshot, activeEnvironment.name) : []
   const spatialObjectDisplayNames = currentSnapshot ? buildSpatialObjectDisplayNames(currentSnapshot) : new Map<string, string>()
-  const normalizedSpatialAreaId = selectedSpatialAreaId === 'all' || spatialGroups.some((group) => group.id === selectedSpatialAreaId) ? selectedSpatialAreaId : 'all'
-  const focusedSpatialGroups = focusSpatialGroups(spatialGroups, normalizedSpatialAreaId)
-  const hasGroundedSpatialAreas = spatialGroups.some((group) => group.kind === 'room')
+  const memoryObjectRows = currentSnapshot ? buildMemoryObjectRows(currentSnapshot.objects) : []
+  const primaryMemoryRows = primaryMemoryObjectRows(memoryObjectRows)
+  const visibleMemoryObjectRows = showAllMemoryObjects ? memoryObjectRows : primaryMemoryRows
+  const hiddenMemoryObjectCount = Math.max(0, memoryObjectRows.length - primaryMemoryRows.length)
   const selectedSpatialObject = selectedSpatialObjectId && currentSnapshot
     ? currentSnapshot.objects.find((item) => item.id === selectedSpatialObjectId) ?? null
     : null
@@ -149,7 +146,6 @@ function App() {
   const selectedSpatialRelationEdges = selectedSpatialObject && currentSnapshot
     ? buildSpatialRelationEdges(selectedSpatialObject, currentSnapshot, spatialObjectDisplayNames)
     : []
-  const relatedSpatialObjectIds = new Set(selectedSpatialRelationEdges.map((edge) => edge.otherId))
   const selectedSpatialTimeline = selectedSpatialObject && memory
     ? buildSpatialObjectTimeline(memory, selectedSpatialObject.id)
     : []
@@ -182,7 +178,7 @@ function App() {
     : 0
   const currentStateLabel = currentMemoryState ? `State v${currentMemoryState.version}` : 'No state yet'
   const canVerifyActionPlan = Boolean(actionPlan && actionPlanBaselineState && currentMemoryState && currentMemoryState.version > actionPlanBaselineState.version)
-  const overlayOpen = Boolean(selectedChange || historySelection || selectedSpatialObject || selectedObservation !== null || showEnvironmentDialog)
+  const overlayOpen = Boolean(selectedChange || historySelection || selectedSpatialObject || showEnvironmentDialog)
 
   useEffect(() => {
     saveEnvironmentDirectory(environments)
@@ -202,15 +198,13 @@ function App() {
     setVerification(null)
     setVerificationStatus('')
     setAskStateId('current')
-    setSelectedObservation(null)
     setHistory([])
     setHistorySelection(null)
     setHistoryStatus('')
     setHistoryAt('')
     setSelectedChangeId(null)
     setSelectedSpatialObjectId(null)
-    setSelectedSpatialAreaId('all')
-    setShowAllObservations(false)
+    setShowAllMemoryObjects(false)
     setError('')
     setStatus(`Loading ${activeEnvironment.name} memory`)
 
@@ -283,8 +277,6 @@ function App() {
 
   function inspectSpatialObject(objectId: string) {
     setSelectedSpatialObjectId(objectId)
-    const groupId = spatialGroupForObject(spatialGroups, objectId)
-    if (groupId) setSelectedSpatialAreaId(groupId)
   }
 
   function addEnvironment(event: FormEvent<HTMLFormElement>) {
@@ -307,9 +299,8 @@ function App() {
     setVerification(null)
     setVerificationStatus('')
     setView('observe')
-    setSelectedObservation(null)
     setSelectedChangeId(null)
-    setShowAllObservations(false)
+    setShowAllMemoryObjects(false)
 
     try {
       setStatus('Observing · preparing photo evidence')
@@ -367,7 +358,6 @@ function App() {
     setVerification(null)
     setVerificationStatus('')
     setView('observe')
-    setSelectedObservation(null)
     setSelectedChangeId(null)
 
     try {
@@ -538,11 +528,6 @@ function App() {
         void runActionPlanner({ stateId: payload.stateId, goal: trimmed })
       }
 
-      const currentRelated = payload.grounding?.objects.filter((item) => item.isCurrent) ?? []
-      if (currentRelated.length === 1) {
-        const groupId = spatialGroupForObject(spatialGroups, currentRelated[0].id)
-        if (groupId) setSelectedSpatialAreaId(groupId)
-      }
     } catch (askError) {
       setAskStatus(askError instanceof Error ? askError.message : 'Unable to ask SENTINEL')
     }
@@ -552,8 +537,6 @@ function App() {
     event.preventDefault()
     void runAskBuilding(question)
   }
-
-  const observation = selectedObservation === null ? null : result?.observations[selectedObservation]
 
   return (
     <main className={`app phase13-shell view-${view}${isWorking ? ' system-awake' : ''}${overlayOpen ? ' overlay-open' : ''}`}>
