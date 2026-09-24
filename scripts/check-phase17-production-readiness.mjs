@@ -2,13 +2,15 @@ const origin = (process.env.SENTINEL_PRODUCTION_ORIGIN || 'https://sentinel-phys
 const repoApi = 'https://api.github.com/repos/realxpen/sentinel-physical-memory'
 const expectedCommit = process.env.SENTINEL_EXPECTED_DEPLOYMENT_COMMIT?.trim() || ''
 
-if (expectedCommit) await waitForDeployment(expectedCommit)
+const deploymentHealth = expectedCommit
+  ? await waitForDeployment(expectedCommit)
+  : await fetchJson(origin + '/api/health?phase17=' + Date.now())
 
-const [repo, health, home] = await Promise.all([
+const [repo, home] = await Promise.all([
   fetchJson(repoApi),
-  fetchJson(origin + '/api/health?phase17=' + Date.now()),
   fetchText(origin + '/'),
 ])
+const health = deploymentHealth
 
 expect(repo.private === false && repo.visibility === 'public', 'judge repository must be public')
 expect(repo.license?.spdx_id === 'MIT', 'GitHub must detect the MIT license')
@@ -32,7 +34,7 @@ async function waitForDeployment(commit) {
       const health = await fetchJson(origin + '/api/health?phase17_wait=' + Date.now())
       if (health.deploymentCommit === commit) {
         console.log('Fresh production deployment detected for ' + commit)
-        return
+        return health
       }
       console.log('Waiting for production commit ' + commit + '; currently ' + (health.deploymentCommit || 'unknown'))
     } catch (error) {
