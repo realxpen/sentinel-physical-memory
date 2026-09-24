@@ -1,0 +1,109 @@
+{
+  "targetDurationSeconds": 178,
+  "segments": [
+    {
+      "start": 0,
+      "end": 8,
+      "label": "Give this place a memory",
+      "screen": "New/empty Memory state",
+      "action": "Show SENTINEL and immediately move into the first observation.",
+      "voiceover": "Physical places usually have no persistent machine memory. SENTINEL gives them one."
+    },
+    {
+      "start": 8,
+      "end": 25,
+      "label": "Observe",
+      "screen": "Observe / first photo",
+      "action": "Choose Scan A and cut the inference wait.",
+      "voiceover": "I observe this hallway once. SENTINEL grounds visible evidence and turns the scene into a remembered environmental state."
+    },
+    {
+      "start": 25,
+      "end": 38,
+      "label": "Remembered",
+      "screen": "Memory",
+      "action": "Show the remembered image, objects and state history briefly.",
+      "voiceover": "Now the place remembers what was here, with evidence and immutable history behind it."
+    },
+    {
+      "start": 38,
+      "end": 55,
+      "label": "Ask attention",
+      "screen": "Ask response",
+      "action": "Use What needs my attention? and show the evidence-backed conclusion.",
+      "voiceover": "Ask is not a detached chatbot. It reasons over the selected physical state and can only cite evidence SENTINEL actually remembers."
+    },
+    {
+      "start": 55,
+      "end": 70,
+      "label": "Evidence",
+      "screen": "Ask grounding / Spatial Memory",
+      "action": "Open evidence or illuminate the related physical object.",
+      "voiceover": "Every answer stays connected to the state, object and evidence that support it."
+    },
+    {
+      "start": 70,
+      "end": 80,
+      "label": "Introduce physical change",
+      "screen": "Short before/after physical insert",
+      "action": "Show Scan B scene: boxes added near exit and extinguisher moved.",
+      "voiceover": "Then I change reality itself: boxes enter the exit path and the extinguisher moves."
+    },
+    {
+      "start": 80,
+      "end": 100,
+      "label": "Observe again",
+      "screen": "Observe → Changes",
+      "action": "Choose Scan B, remove waiting time, land on Changes.",
+      "voiceover": "A second observation creates a new immutable state. SENTINEL compares it with what the space remembered before."
+    },
+    {
+      "start": 100,
+      "end": 116,
+      "label": "Reality Diff",
+      "screen": "What changed.",
+      "action": "Hold the before/after surface and the important change cards.",
+      "voiceover": "This is Reality Diff — a Git diff for the physical world. It separates supported physical changes from uncertainty and operational attention."
+    },
+    {
+      "start": 116,
+      "end": 132,
+      "label": "Priority",
+      "screen": "Ask: Which change matters most?",
+      "action": "Show the exit obstruction conclusion and grounded rationale.",
+      "voiceover": "Because SENTINEL has memory, I can ask which change matters most. The answer is grounded in the remembered state, not generated from an isolated screenshot."
+    },
+    {
+      "start": 132,
+      "end": 148,
+      "label": "Action Plan",
+      "screen": "What should I do? / Action Plan",
+      "action": "Show recommended steps and the deterministic Rescan to verify handoff.",
+      "voiceover": "SENTINEL recommends bounded next steps, but it does not pretend the work happened. The final step is always to rescan and verify."
+    },
+    {
+      "start": 148,
+      "end": 163,
+      "label": "Fix and rescan",
+      "screen": "Scan C / clear hallway",
+      "action": "Show boxes removed, choose Scan C, cut inference wait.",
+      "voiceover": "I clear the obstruction and observe the same area again."
+    },
+    {
+      "start": 163,
+      "end": 175,
+      "label": "Verified",
+      "screen": "Verification result",
+      "action": "Show Verified, resolved count, positive current evidence and trust rule.",
+      "voiceover": "Verification compares the old condition with positive current evidence. Missing is not enough. Here, the exit path is visibly clear, so the condition is Verified."
+    },
+    {
+      "start": 175,
+      "end": 178,
+      "label": "Close",
+      "screen": "Memory / brand close",
+      "action": "Return to the remembered environment.",
+      "voiceover": "SENTINEL: the AI memory for the physical world."
+    }
+  ]
+}
