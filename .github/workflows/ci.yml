@@ -66,5 +66,7 @@ jobs:
         run: npm run check:phase15-routes
       - name: Verify Phase 15 stable-state and fallback consistency
         run: npm run check:phase15-stability
+      - name: Verify Phase 16 Nebius NVIDIA telemetry
+        run: npm run check:phase16-telemetry
       - name: Build
         run: npm run build

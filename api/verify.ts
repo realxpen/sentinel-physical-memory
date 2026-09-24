@@ -1,4 +1,4 @@
-import { createNebiusNemotronAdapter } from '../src/ai/nebius.js'
+import { createNebiusNemotronAdapter, type NebiusInferenceTrace } from '../src/ai/nebius.js'
 import { ModelAdapterError } from '../src/ai/model.js'
 import type { ScanArtifact } from '../src/scan/types.js'
 import { VerificationAgentService, VerificationInputError } from '../src/verification/service.ts'
@@ -36,12 +36,14 @@ export default async function handler(req: Request, res: Response) {
 
     const body = parseBody(req.body)
     const repository = getRuntimeEnvironmentalMemoryRepository()
+    const inference: NebiusInferenceTrace[] = []
     const adapter = createNebiusNemotronAdapter(apiKey, {
       baseUrl: process.env.NEBIUS_TOKEN_FACTORY_BASE_URL,
       model: process.env.NEBIUS_VERIFICATION_MODEL?.trim()
         || process.env.NEBIUS_PERCEPTION_MODEL?.trim()
         || DEFAULT_VERIFICATION_MODEL,
       timeoutMs: 90_000,
+      onTrace: (trace) => inference.push(trace),
       artifactResolver: {
         resolve: async (artifact: ScanArtifact) => ({
           artifactId: artifact.artifactId,
@@ -56,6 +58,7 @@ export default async function handler(req: Request, res: Response) {
       ...result,
       persistence: getMemoryPersistenceMode(),
       verificationContract: VERIFICATION_CONTRACT,
+      inference,
     })
   } catch (error) {
     if (error instanceof VerificationInputError) {

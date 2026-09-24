@@ -14,7 +14,7 @@ Hackathon track: **Best Apps and Agents**.
 
 ## Current phase
 
-**Phase 15 — Reliability and Guardrails: ACTIVE / PHASES 12–14 COMPLETE / DUPLICATE-CONDITION HARDENING IN PROGRESS**
+**Phase 16 — Nebius / NVIDIA Architecture Hardening: ACTIVE / PHASE 15 COMPLETE**
 
 ## Phase 3 — COMPLETE
 
@@ -1136,8 +1136,8 @@ Canonical production proof: `Knowledge/Technical/phase-9-real-history-proof.md`.
 - [x] Phase 12 — Verification Agent (**COMPLETE — positive + negative production verification and real closed-loop replay passed**)
 - [x] Phase 13 — Living Spatial Intelligence UI rebuild/polish (**COMPLETE — human production visual review passed**)
 - [x] Phase 14 — Demo scenario engineering (**COMPLETE — deployed Scan A/B/C closed-loop replay reached Verified repeatedly**)
-- [ ] Phase 15 — Reliability and guardrails (**ACTIVE — Slice 1 duplicate condition/verdict hardening**)
-- [ ] Phase 16 — Nebius/NVIDIA architecture hardening
+- [x] Phase 15 — Reliability and guardrails (**COMPLETE — deterministic guardrails + production cold-start proof passed**)
+- [ ] Phase 16 — Nebius/NVIDIA architecture hardening (**ACTIVE — runtime role/model/latency proof in progress**)
 - [ ] Phase 17 — Submission readiness
 - [ ] Phase 18 — Final demo polish
 
@@ -1518,7 +1518,7 @@ Those are now Phase 15 reliability/guardrail defects. They do not reopen the clo
 
 Phase 14 is therefore **COMPLETE** and Phase 15 owns the remaining repeatability/noise hardening.
 
-## Phase 15 — ACTIVE
+## Phase 15 — COMPLETE
 
 Canonical record: `Knowledge/Technical/phase-15-reliability-guardrails.md`.
 
@@ -1603,3 +1603,33 @@ Implemented:
 Deterministic Slice 3 gate: `npm run check:phase15-stability`.
 
 Phase 15 now has one remaining exit gate: merge this slice and pass the exact deployed-main **Phase 15 Production Cold Start** workflow.
+
+
+### Phase 15 production closure — PASS
+
+Exact main commit: `69d0c167684f47c0e3ca8f39af7e8f83611c39b6`.
+
+- Phase 15 Production Cold Start run `35990225437` — **SUCCESS**;
+- exact deployed main restored Neon-backed memory across independent no-cache reads;
+- Memory and State History agreed on the current immutable state;
+- persisted-memory fingerprint remained unchanged;
+- no browser-carried memory was required.
+
+Phase 15 is **COMPLETE**.
+
+## Phase 16 — ACTIVE
+
+Nebius / NVIDIA architecture hardening now owns the hackathon technology proof.
+
+Slice 1 implementation:
+
+- every Nebius Token Factory completion emits non-secret provider / model / role / latency / outcome telemetry;
+- runtime roles are explicit: perception, temporal verification, reasoning, action and verification;
+- Scan / Ask / Action Plan / Verification collect request-local inference traces;
+- successful API responses expose those traces for demonstrable runtime proof;
+- `/api/health` exposes the non-secret Token Factory role → model map;
+- README now documents the actual production model split rather than the earlier aspirational multi-model plan;
+- NVIDIA Nemotron 3 Nano 30B-A3B is explicitly on the Ask and Action Planner critical path;
+- exact-main production workflow will prove a real Ask call ran through Nebius Token Factory with NVIDIA model + measured latency.
+
+Canonical record: `Knowledge/Technical/phase-16-nebius-nvidia-architecture.md`.

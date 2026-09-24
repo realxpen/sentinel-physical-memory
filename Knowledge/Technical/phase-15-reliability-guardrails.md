@@ -1,6 +1,6 @@
 # Phase 15 — Reliability and Guardrails
 
-Status: **ACTIVE — Slices 1–3 implemented / production cold-start proof pending merge**
+Status: **COMPLETE — all major failure paths covered / production cold-start proof passed**
 
 Goal: prevent demo failure and unsafe overclaiming. Every major failure path must either recover safely or fail closed with a useful user-facing message. SENTINEL must never fabricate a smoother result.
 
@@ -71,7 +71,7 @@ Production gate after merge:
 | Missing prior/current state | Reject reasoning/history request with explicit typed error | `check:phase12-verification`, `check:phase15-routes` | **Covered in Slice 2** |
 | No material changes | Render stable-state outcome; do not invent a change | `check:phase15-stability` + Reality Diff UI | **Covered in Slice 3** |
 | Wrong environment/source identity | Reject mismatched scan identity / unknown memory | `api/scan.ts`, typed service guards, `check:phase15-routes` | **Covered in Slice 2** |
-| Reload / cold start | Restore Neon-authoritative memory; surface read failure instead of pretending memory is empty | Phase 3 Neon proof + `phase15-cold-start.yml` | **Production proof pending merged deployment** |
+| Reload / cold start | Restore Neon-authoritative memory; surface read failure instead of pretending memory is empty | Phase 3 Neon proof + `phase15-cold-start.yml` | **Covered — production run `35990225437` passed** |
 | Incomplete immutable memory/snapshot | Fail closed instead of synthesizing missing history | Ask / Action / Verification + `check:phase15-routes` | **Covered in Slice 2** |
 | Reasoning references non-existent evidence | Filter references and cap unsupported confidence | `check:phase10-ask-building` | Covered |
 | Huge request body | Reject before inference with 413 safety budget | all inference routes + `check:phase15-routes` | **Covered in Slice 2** |
@@ -81,8 +81,23 @@ Production gate after merge:
 
 ## Exit condition
 
-Phase 15 closes only when every row above has a deterministic test or production proof and the product exposes a graceful fallback instead of an opaque crash, false-green state, or fabricated answer. After Slice 3, the only remaining closure gate is the exact-main production cold-start/reload workflow.
+Phase 15 closes only when every row above has a deterministic test or production proof and the product exposes a graceful fallback instead of an opaque crash, false-green state, or fabricated answer.
 
 Canonical fallback language:
 
 > I couldn't verify this condition from the available evidence. A clearer observation is needed.
+
+
+## Phase 15 closure
+
+Phase 15 closed on exact main commit `69d0c167684f47c0e3ca8f39af7e8f83611c39b6`.
+
+Final production gate:
+
+- **Phase 15 Production Cold Start** run `35990225437` — **SUCCESS**;
+- exact deployed main restored Neon-authoritative memory independently across no-cache reads;
+- Memory and State History agreed on the current immutable state;
+- read-only reload fingerprint remained stable;
+- browser-carried state was not required for restoration.
+
+All locked Phase 15 failure classes now have deterministic coverage, production proof, or both.

@@ -1,0 +1,39 @@
+name: Phase 16 Production Nebius NVIDIA Trace
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase16-nebius-trace.yml'
+      - 'src/ai/nebius.ts'
+      - 'api/health.ts'
+      - 'api/ask-building.ts'
+      - 'api/action-plan.ts'
+      - 'api/verify.ts'
+      - 'api/scan.ts'
+      - 'scripts/check-phase16-production-nebius.mjs'
+      - 'Knowledge/Technical/phase-16-nebius-nvidia-architecture.md'
+      - 'README.md'
+      - 'PROJECT_STATE.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  production-trace:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify exact-main Nebius / NVIDIA runtime trace
+        env:
+          SENTINEL_PRODUCTION_ORIGIN: https://sentinel-physical-memory.vercel.app
+          SENTINEL_PHASE16_ENVIRONMENT_ID: env_warehouse_73266674
+          SENTINEL_EXPECTED_DEPLOYMENT_COMMIT: ${{ github.sha }}
+        run: node ./scripts/check-phase16-production-nebius.mjs

@@ -18,15 +18,25 @@ Software has persistent memory for documents, databases, websites, and APIs. Phy
 
 SENTINEL turns observations of a physical environment into a persistent, queryable state and compares new observations against previous states.
 
-## Planned NVIDIA / Nebius architecture
+## NVIDIA / Nebius architecture
 
-- **Nemotron 3 Nano Omni** — multimodal video/image/audio understanding and evidence extraction.
-- **Nemotron 3 Nano** — efficient specialist analysis and verification tasks.
-- **Nemotron 3 Super** — agent orchestration and operational reasoning.
-- **Nemotron 3 Ultra** — difficult long-horizon planning and high-value reasoning.
-- **Nebius AI Cloud / Token Factory** — GPU-backed inference and scalable processing.
+SENTINEL makes runtime inference calls through **Nebius Token Factory**. The production model split is intentionally explicit:
 
-Model usage will be implemented as a functional part of the application, not as a decorative chatbot layer.
+| Responsibility | Request role | Default model |
+| --- | --- | --- |
+| Scene perception / evidence extraction | `perception` | `openbmb/MiniCPM-V-4_5` |
+| Paired temporal visual verification | `temporal-verification` | `openbmb/MiniCPM-V-4_5` |
+| Ask the Building reasoning / prioritization | `reasoning` | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` |
+| Action Planner | `action` | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` |
+| Physical condition verification | `verification` | configured verification model, falling back to the perception model |
+
+The NVIDIA requirement is satisfied by **NVIDIA Nemotron 3 Nano 30B-A3B**, which is on SENTINEL's core reasoning and action-planning path through Nebius Token Factory.
+
+Every Token Factory completion records non-secret runtime telemetry: **provider, model, request role, latency, outcome, completion time, and HTTP status/error code**. Successful Scan, Ask, Action Plan, and Verification API responses expose their per-request inference traces so the working product can demonstrate the model/runtime path directly.
+
+`GET /api/health` exposes the non-secret role → model architecture map and deployment commit. API keys, prompts, images, and evidence content are never included in telemetry.
+
+Canonical technical record: `Knowledge/Technical/phase-16-nebius-nvidia-architecture.md`.
 
 ## MVP
 
@@ -68,9 +78,11 @@ README.md
 
 ## Status
 
-🚧 Early implementation / hackathon build.
+SENTINEL is in late-stage hackathon hardening. The deployed product already supports persistent Neon-backed environmental memory, immutable state history, Reality Diff, Ask the Building, evidence-backed Action Plans, and closed-loop visual Verification.
 
-The repository will evolve through small, verifiable milestones. The implementation should preserve the core product thesis: **SENTINEL remembers the physical world and can explain what changed.**
+Current roadmap phase: **Phase 16 — Nebius / NVIDIA architecture hardening**.
+
+The implementation preserves the core product thesis: **SENTINEL remembers the physical world, reasons over that memory, and verifies what changed.**
 
 ## License
 
