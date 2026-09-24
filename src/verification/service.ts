@@ -20,6 +20,7 @@ import type { ScanArtifact } from '../scan/types.js'
 import { EnvironmentalDiffEngine } from '../memory/diff-engine.js'
 import { matchObjectsConservatively } from '../memory/object-identity.js'
 import type { EnvironmentalMemoryReader } from '../memory/repository.js'
+import { dedupeVerificationConditions } from './condition-equivalence.js'
 
 const RESOLVED_MIN_CONFIDENCE = 0.75
 const REMAINING_MIN_CONFIDENCE = 0.6
@@ -65,21 +66,30 @@ export class VerificationAgentService {
 
     const previousSnapshot = requireSnapshot(memory, previousState.id)
     const currentSnapshot = requireSnapshot(memory, currentState.id)
-    const previousActionable = previousSnapshot.conditions.filter((item) => item.kind !== 'normal')
+    const previousActionableRaw = previousSnapshot.conditions.filter((item) => item.kind !== 'normal')
 
-    let targetConditions = previousActionable
+    let selectedPrevious = previousActionableRaw
     if (request.conditionIds?.length) {
       const requested = new Set(request.conditionIds)
-      targetConditions = previousActionable.filter((item) => requested.has(item.id))
-      if (targetConditions.length !== requested.size) {
+      const knownPreviousIds = new Set(previousActionableRaw.map((item) => item.id))
+      if ([...requested].some((id) => !knownPreviousIds.has(id))) {
         throw new VerificationInputError('One or more requested conditions do not belong to the previous immutable state.')
       }
+      selectedPrevious = previousActionableRaw.filter((item) => requested.has(item.id))
     }
+
+    // Historical snapshots remain immutable. Verification projects duplicate
+    // provider/audit condition records into one grounded semantic condition so
+    // users never receive duplicate verdicts for the same physical problem.
+    const previousActionable = dedupeVerificationConditions(previousActionableRaw)
+    const targetConditions = dedupeVerificationConditions(selectedPrevious)
     if (!targetConditions.length) {
       throw new VerificationInputError('The previous state has no grounded non-normal condition to verify.')
     }
 
-    const currentConditions = currentSnapshot.conditions.filter((item) => item.kind !== 'normal')
+    const currentConditions = dedupeVerificationConditions(
+      currentSnapshot.conditions.filter((item) => item.kind !== 'normal'),
+    )
     const conditionMatches = matchConditionSets(previousActionable, currentConditions)
     const matchedCurrent = new Set(conditionMatches.values())
     const newConditions = currentConditions.filter((_, index) => !matchedCurrent.has(index))
@@ -151,11 +161,17 @@ export class VerificationAgentService {
         context: buildVerificationContext(scope, pending.slice(0, MAX_MODEL_CONDITIONS)),
         artifacts: verificationArtifactsForComparison(scope.memory, scope.previousState, scope.currentState),
       })
-      const byCondition = new Map(draft.verdicts.map((item) => [item.conditionId, item]))
 
       for (const condition of pending) {
-        const raw = byCondition.get(condition.id)
-        verdicts.push(validateModelVerdict(condition, raw, scope))
+        const selection = selectModelVerdict(draft.verdicts, condition.id)
+        if (selection.conflict) {
+          verdicts.push(inconclusive(
+            condition,
+            'The verification model returned conflicting verdicts for the same condition, so SENTINEL failed closed.',
+          ))
+          continue
+        }
+        verdicts.push(validateModelVerdict(condition, selection.verdict, scope))
       }
     }
 
@@ -191,6 +207,26 @@ export class VerificationAgentService {
 
     return result
   }
+}
+
+
+function selectModelVerdict(
+  verdicts: VerificationDraftVerdict[],
+  conditionId: string,
+): { verdict?: VerificationDraftVerdict; conflict: boolean } {
+  const candidates = verdicts.filter((item) => item.conditionId === conditionId)
+  if (candidates.length === 0) return { conflict: false }
+
+  const statuses = new Set(candidates.map((item) => item.status))
+  if (statuses.size > 1) return { conflict: true }
+
+  const verdict = [...candidates].sort((a, b) => {
+    const confidence = clamp01(b.confidence) - clamp01(a.confidence)
+    if (confidence !== 0) return confidence
+    return (b.evidenceIds?.length ?? 0) - (a.evidenceIds?.length ?? 0)
+  })[0]
+
+  return { verdict, conflict: false }
 }
 
 function validateModelVerdict(
