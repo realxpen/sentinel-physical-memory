@@ -1,6 +1,6 @@
 # Phase 15 — Reliability and Guardrails
 
-Status: **ACTIVE — Slices 1–2 implemented**
+Status: **ACTIVE — Slices 1–3 implemented / production cold-start proof pending merge**
 
 Goal: prevent demo failure and unsafe overclaiming. Every major failure path must either recover safely or fail closed with a useful user-facing message. SENTINEL must never fabricate a smoother result.
 
@@ -39,6 +39,25 @@ Deterministic gate:
 
 `npm run check:phase15-routes`
 
+## Slice 3 — Stable-state, fallback consistency, and production reload
+
+Implemented:
+
+- a deterministic stable-state contract proves two materially equivalent environmental snapshots produce zero Reality Diff changes;
+- stable states retain the canonical summary **No material environmental changes detected.**;
+- a stable normal environment cannot manufacture prior-condition verification work;
+- Scan / Ask / Action Plan / Verification are statically asserted to use the same browser response parser;
+- a dedicated production cold-start workflow waits for the exact deployed main commit, then performs independent no-cache reads from Memory and State History;
+- the production reload proof requires Neon persistence, the same currentStateId across independent reads, consistent state counts, and an unchanged read-only fingerprint.
+
+Deterministic gate:
+
+`npm run check:phase15-stability`
+
+Production gate after merge:
+
+`npm run check:phase15-cold-start`
+
 ## Reliability matrix
 
 | Failure path | Expected behavior | Current deterministic coverage | Phase 15 state |
@@ -50,9 +69,9 @@ Deterministic gate:
 | Invalid provider JSON/schema | Repair/normalize only when deterministic; otherwise retry/fail closed | `check:perception-retry`, `check:provider-boundary` | Covered |
 | Missing/unknown evidence references | Drop unsupported references; never present fabricated grounding | `check:provider-boundary`, `check:phase10-ask-building` | Covered |
 | Missing prior/current state | Reject reasoning/history request with explicit typed error | `check:phase12-verification`, `check:phase15-routes` | **Covered in Slice 2** |
-| No material changes | Render stable-state outcome; do not invent a change | Phase 8 presentation + deployed UI | Covered; dedicated Phase 15 assertion next |
+| No material changes | Render stable-state outcome; do not invent a change | `check:phase15-stability` + Reality Diff UI | **Covered in Slice 3** |
 | Wrong environment/source identity | Reject mismatched scan identity / unknown memory | `api/scan.ts`, typed service guards, `check:phase15-routes` | **Covered in Slice 2** |
-| Reload / cold start | Restore Neon-authoritative memory; surface read failure instead of pretending memory is empty | Phase 3 Neon proof + shared browser failure contract | **Covered; production cold-start replay still useful** |
+| Reload / cold start | Restore Neon-authoritative memory; surface read failure instead of pretending memory is empty | Phase 3 Neon proof + `phase15-cold-start.yml` | **Production proof pending merged deployment** |
 | Incomplete immutable memory/snapshot | Fail closed instead of synthesizing missing history | Ask / Action / Verification + `check:phase15-routes` | **Covered in Slice 2** |
 | Reasoning references non-existent evidence | Filter references and cap unsupported confidence | `check:phase10-ask-building` | Covered |
 | Huge request body | Reject before inference with 413 safety budget | all inference routes + `check:phase15-routes` | **Covered in Slice 2** |
@@ -62,7 +81,7 @@ Deterministic gate:
 
 ## Exit condition
 
-Phase 15 closes only when every row above has a deterministic test or production proof and the product exposes a graceful fallback instead of an opaque crash, false-green state, or fabricated answer. Remaining work after Slice 2 is primarily no-material-change assertion hardening, cold-start production replay, and end-to-end fallback consistency validation.
+Phase 15 closes only when every row above has a deterministic test or production proof and the product exposes a graceful fallback instead of an opaque crash, false-green state, or fabricated answer. After Slice 3, the only remaining closure gate is the exact-main production cold-start/reload workflow.
 
 Canonical fallback language:
 
