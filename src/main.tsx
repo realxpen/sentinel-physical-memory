@@ -162,9 +162,6 @@ function App() {
   })() : undefined)
   const answerPreviousState = answerState && memory ? memory.states.find((item) => item.version === answerState.version - 1) : undefined
   const answerDiff = answerState && memory ? memory.diffs.find((item) => item.toStateId === answerState.id) : undefined
-  const answerRelatedObjectIds = new Set(answer?.grounding?.objects.filter((item) => item.isCurrent).map((item) => item.id) ?? answer?.relatedObjectIds ?? [])
-  const actionPlanObjectIds = new Set(actionPlan?.grounding.objects.filter((item) => item.isCurrent).map((item) => item.id) ?? [])
-  const verificationObjectIds = new Set(verification?.grounding.objects.filter((item) => item.stateIds.includes(verification.currentStateId)).map((item) => item.id) ?? [])
   const actionPlanBaselineState = actionPlan && memory ? memory.states.find((item) => item.id === actionPlan.plan.stateId) : undefined
   const currentMemoryState = memory?.environment.currentStateId ? memory.states.find((item) => item.id === memory.environment.currentStateId) : undefined
   const priorConditionVerificationCandidate = memory && currentMemoryState
@@ -1267,15 +1264,6 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms))
 }
 
-function isDisplayableObservation(item: Observation): boolean {
-  const text = `${item.label} ${item.description}`.toLowerCase()
-  return !(
-    /^\s*(?:no|none)\b/.test(text) ||
-    /\bno visible\b/.test(text) ||
-    /\bno signs? of\b/.test(text) ||
-    /\bno evidence of\b/.test(text)
-  )
-}
 
 function formatStateTimestamp(value: string): string {
   const date = new Date(value)
