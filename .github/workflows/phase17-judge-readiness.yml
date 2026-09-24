@@ -1,0 +1,38 @@
+name: Phase 17 Production Judge Readiness
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase17-judge-readiness.yml'
+      - 'README.md'
+      - 'LICENSE'
+      - '.env.example'
+      - 'docs/ARCHITECTURE.md'
+      - 'docs/JUDGE_TESTING.md'
+      - 'docs/DEMO_SCENARIO.md'
+      - 'SUBMISSION.md'
+      - 'SUBMISSION_CHECKLIST.md'
+      - 'scripts/check-phase17-production-readiness.mjs'
+      - 'PROJECT_STATE.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  judge-readiness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify exact-main public judge package
+        env:
+          SENTINEL_PRODUCTION_ORIGIN: https://sentinel-physical-memory.vercel.app
+          SENTINEL_EXPECTED_DEPLOYMENT_COMMIT: ${{ github.sha }}
+        run: node ./scripts/check-phase17-production-readiness.mjs

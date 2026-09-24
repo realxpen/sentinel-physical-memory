@@ -1,6 +1,6 @@
 # Phase 16 — Nebius / NVIDIA Architecture Hardening
 
-Status: **ACTIVE — Slice 1 implemented / production trace proof pending**
+Status: **COMPLETE — deterministic telemetry + exact-main production Token Factory/NVIDIA trace passed**
 
 ## Goal
 
@@ -87,14 +87,24 @@ The trace is:
 
 This lets a judge verify the architecture without access to environment secrets.
 
-## Phase 16 Slice 1 exit gate
+## Phase 16 production closure
 
-Before Slice 1 closes:
+Exit gates:
 
-- deterministic telemetry tests pass;
+- deterministic `check:phase16-telemetry` passed;
 - README shows the actual model responsibility map;
 - exact deployed main reports `provider=nebius-token-factory`;
-- exact deployed main reports the NVIDIA Nemotron reasoning model;
-- one real production Ask request returns a successful `reasoning` trace with model + latency.
+- exact deployed main reports `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` as the reasoning model;
+- a real production Ask request returned a successful `reasoning` trace with model + latency.
 
-The full Phase 16 exit condition remains: README and architecture prove Nebius/NVIDIA are core to the working product, not decorative.
+Exact main commit: `19673c690d034a7f6ffbeb63c672b3d0987d50ed`.
+
+Production proof:
+
+- **Phase 16 Production Nebius NVIDIA Trace** run `35991108585` — **SUCCESS**;
+- production deployment commit matched exact main;
+- Nebius Token Factory was reported as the AI runtime;
+- Ask + Action Plan mapped to NVIDIA Nemotron 3 Nano 30B-A3B;
+- real production Ask completed through Token Factory with measured latency **15,904 ms**.
+
+Phase 16 is **COMPLETE**.
