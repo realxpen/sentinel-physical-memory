@@ -62,5 +62,7 @@ jobs:
         run: npm run check:phase13-ui
       - name: Verify Phase 15 reliability guardrails
         run: npm run check:phase15-reliability
+      - name: Verify Phase 15 route and browser failures
+        run: npm run check:phase15-routes
       - name: Build
         run: npm run build

@@ -38,7 +38,8 @@
     "check:phase14-demo": "node --experimental-strip-types ./scripts/check-phase14-demo-scenario.mjs",
     "check:phase14-live": "node --experimental-strip-types ./scripts/check-phase14-demo-scenario.mjs --live",
     "check:prior-verification": "node --experimental-strip-types ./scripts/check-direct-prior-verification.mjs",
-    "check:phase15-reliability": "node --experimental-strip-types ./scripts/check-phase15-reliability.mjs"
+    "check:phase15-reliability": "node --experimental-strip-types ./scripts/check-phase15-reliability.mjs",
+    "check:phase15-routes": "node --experimental-strip-types ./scripts/check-phase15-route-browser-reliability.mjs"
   },
   "dependencies": {
     "@neondatabase/serverless": "latest",

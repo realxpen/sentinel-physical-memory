@@ -18,8 +18,15 @@ import type { EnvironmentalMemoryReader } from '../memory/repository.js'
 const ACTIVE_ISSUES = new Set(['open', 'acknowledged', 'in_progress'])
 
 export class ActionPlannerInputError extends Error {
-  readonly status = 422
-  constructor(message: string) { super(message); this.name = 'ActionPlannerInputError' }
+  readonly status: number
+  readonly code: string
+
+  constructor(message: string, status = 422, code = 'ACTION_PLAN_NOT_GROUNDED') {
+    super(message)
+    this.name = 'ActionPlannerInputError'
+    this.status = status
+    this.code = code
+  }
 }
 
 export class ActionPlannerService {
@@ -30,7 +37,8 @@ export class ActionPlannerService {
 
   async create(request: ActionPlanningRequest): Promise<ActionPlanningResponse> {
     const memory = await this.memory.get(request.environmentId)
-    if (!memory?.states.length) throw new ActionPlannerInputError('No remembered environmental state is available.')
+    if (!memory) throw new ActionPlannerInputError('This location has no persisted SENTINEL memory.', 404, 'ENVIRONMENT_NOT_FOUND')
+    if (!memory.states.length) throw new ActionPlannerInputError('This location does not have a grounded environmental state yet.', 422, 'MEMORY_NOT_READY')
     const state = resolveState(memory, request.stateId)
     const snapshot = snapshotFor(memory, state)
     const conditions = selectConditions(snapshot.conditions, request.relatedConditionIds)
@@ -231,7 +239,7 @@ function buildGrounding(
 function resolveState(memory: EnvironmentalMemory, stateId?: string): EnvironmentalState {
   if (stateId) {
     const selected = memory.states.find((item) => item.id === stateId)
-    if (!selected) throw new ActionPlannerInputError(`State ${stateId} not found`)
+    if (!selected) throw new ActionPlannerInputError('The requested remembered state was not found in this location.', 404, 'STATE_NOT_FOUND')
     return selected
   }
   const current = memory.environment.currentStateId ? memory.states.find((item) => item.id === memory.environment.currentStateId) : undefined
@@ -239,14 +247,15 @@ function resolveState(memory: EnvironmentalMemory, stateId?: string): Environmen
 }
 
 function snapshotFor(memory: EnvironmentalMemory, state: EnvironmentalState): EnvironmentalStateSnapshot {
-  return memory.snapshots.find((item) => item.stateId === state.id) ?? {
-    stateId: state.id,
-    environmentId: memory.environment.id,
-    objects: memory.objects.filter((item) => state.objectIds.includes(item.id)),
-    conditions: memory.conditions.filter((item) => state.conditionIds.includes(item.id)),
-    issues: memory.issues.filter((item) => state.issueIds.includes(item.id)),
-    relations: memory.relations.filter((item) => state.relationIds.includes(item.id)),
+  const snapshot = memory.snapshots.find((item) => item.stateId === state.id && item.environmentId === memory.environment.id)
+  if (!snapshot) {
+    throw new ActionPlannerInputError(
+      'The selected state exists, but its immutable snapshot is unavailable. SENTINEL stopped instead of reconstructing history from newer data.',
+      409,
+      'HISTORICAL_SNAPSHOT_UNAVAILABLE',
+    )
   }
+  return snapshot
 }
 
 function capPriority(requested: ActionPriority, conditionIds: string[], issueIds: string[], conditions: EnvironmentalCondition[], issues: Issue[]): ActionPriority {

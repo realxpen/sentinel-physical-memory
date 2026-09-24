@@ -24,6 +24,18 @@ const MAX_CONTEXT_RELATIONS = 40
 const MAX_CONTEXT_EVIDENCE = 80
 const MAX_CONTEXT_DIFFS = 8
 
+export class AskBuildingInputError extends Error {
+  readonly status: number
+  readonly code: string
+
+  constructor(message: string, status = 422, code = 'ASK_NOT_GROUNDED') {
+    super(message)
+    this.name = 'AskBuildingInputError'
+    this.status = status
+    this.code = code
+  }
+}
+
 interface AskContextScope {
   text: string
   intent: AskBuildingIntent
@@ -38,8 +50,8 @@ export class AskBuildingService {
 
   async ask(request: AskBuildingRequest): Promise<AskBuildingResponse> {
     const environment = await this.memory.get(request.environmentId)
-    if (!environment) throw new Error(`Environment ${request.environmentId} not found`)
-    if (!environment.states.length) throw new Error(`Environment ${request.environmentId} has no scans yet`)
+    if (!environment) throw new AskBuildingInputError('This location has no persisted SENTINEL memory.', 404, 'ENVIRONMENT_NOT_FOUND')
+    if (!environment.states.length) throw new AskBuildingInputError('This location does not have a grounded environmental state yet.', 422, 'MEMORY_NOT_READY')
 
     const state = this.resolveState(environment, request.stateId)
     const context = this.buildContext(environment, state, request.question)
@@ -54,7 +66,7 @@ export class AskBuildingService {
   private resolveState(memory: EnvironmentalMemory, requestedStateId?: string): EnvironmentalState {
     if (requestedStateId) {
       const selected = memory.states.find((item) => item.id === requestedStateId)
-      if (!selected) throw new Error(`State ${requestedStateId} not found`)
+      if (!selected) throw new AskBuildingInputError('The requested remembered state was not found in this location.', 404, 'STATE_NOT_FOUND')
       return selected
     }
 
@@ -200,15 +212,14 @@ export class AskBuildingService {
 
   private snapshotForState(memory: EnvironmentalMemory, state: EnvironmentalState): EnvironmentalStateSnapshot {
     const snapshot = memory.snapshots.find((item) => item.stateId === state.id && item.environmentId === memory.environment.id)
-    if (snapshot) return snapshot
-    return {
-      stateId: state.id,
-      environmentId: memory.environment.id,
-      objects: memory.objects.filter((item) => state.objectIds.includes(item.id)),
-      conditions: memory.conditions.filter((item) => state.conditionIds.includes(item.id)),
-      issues: memory.issues.filter((item) => state.issueIds.includes(item.id)),
-      relations: memory.relations.filter((item) => state.relationIds.includes(item.id)),
+    if (!snapshot) {
+      throw new AskBuildingInputError(
+        'The selected state exists, but its immutable snapshot is unavailable. SENTINEL stopped instead of reconstructing history from newer data.',
+        409,
+        'HISTORICAL_SNAPSHOT_UNAVAILABLE',
+      )
     }
+    return snapshot
   }
 
   private objectRelevance(item: SpatialObject, tokens: string[], issues: Issue[], conditions: EnvironmentalCondition[], intent: AskBuildingIntent): number {

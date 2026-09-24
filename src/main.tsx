@@ -13,6 +13,7 @@ import { createEnvironmentProfile, DEFAULT_ENVIRONMENT, ENVIRONMENT_TYPES, loadA
 import { ingestImageFile } from './scan/image-ingestion'
 import { ingestVideoFile } from './scan/video-ingestion'
 import { findPriorConditionVerificationCandidate } from './verification/candidate'
+import { fetchSentinel, readSentinelApiResponse } from './reliability/api-client'
 
 interface ScanResponse {
   scanId: string
@@ -215,9 +216,8 @@ function App() {
 
     async function restoreEnvironmentalMemory() {
       try {
-        const response = await fetch(`/api/memory?environmentId=${encodeURIComponent(activeEnvironment.id)}`, { headers: { Accept: 'application/json' } })
-        const payload = await readApiResponse<MemoryResponse>(response, 'Unable to restore environmental memory')
-        if (!response.ok) throw new Error(payload.message ?? 'Unable to restore environmental memory')
+        const response = await fetchSentinel(`/api/memory?environmentId=${encodeURIComponent(activeEnvironment.id)}`, { headers: { Accept: 'application/json' } }, 'memory')
+        const payload = await readSentinelApiResponse<MemoryResponse>(response, 'memory')
         if (cancelled) return
         if (payload.memory) {
           setMemory(payload.memory)
@@ -225,8 +225,11 @@ function App() {
         } else {
           setStatus(`Ready to observe ${activeEnvironment.name}`)
         }
-      } catch {
-        if (!cancelled) setStatus(`Ready to observe ${activeEnvironment.name}`)
+      } catch (memoryError) {
+        if (!cancelled) {
+          setStatus(`Unable to restore ${activeEnvironment.name} memory`)
+          setError(memoryError instanceof Error ? memoryError.message : 'SENTINEL could not restore this location safely.')
+        }
       }
     }
 
@@ -247,9 +250,8 @@ function App() {
 
     async function restoreStateHistory() {
       try {
-        const response = await fetch(`/api/states?environmentId=${encodeURIComponent(memory!.environment.id)}`, { headers: { Accept: 'application/json' } })
-        const payload = await readApiResponse<StateHistoryResponse>(response, 'Unable to restore environmental state history')
-        if (!response.ok) throw new Error(payload.message ?? 'Unable to restore environmental state history')
+        const response = await fetchSentinel(`/api/states?environmentId=${encodeURIComponent(memory!.environment.id)}`, { headers: { Accept: 'application/json' } }, 'history')
+        const payload = await readSentinelApiResponse<StateHistoryResponse>(response, 'history')
         if (cancelled) return
         setHistory(payload.states)
         setHistoryStatus('')
@@ -333,8 +335,7 @@ function App() {
       const response = await postScanWithRetry(scanPayload, () => setStatus('Reconnecting · retrying observation safely'))
 
       setStatus('Remembering · grounding observations')
-      const payload = await readApiResponse<ScanResponse & { error?: string; message?: string }>(response, 'Observation request failed')
-      if (!response.ok) throw new Error(payload.message ?? payload.error ?? `Scan request failed (${response.status})`)
+      const payload = await readSentinelApiResponse<ScanResponse>(response, 'observation')
       setResult(payload)
       setMemory(payload.memory)
       setStatus(payload.diff ? `${payload.diff.changes.length} supported change(s) remembered` : `${activeEnvironment.name} is now remembered`)
@@ -389,8 +390,7 @@ function App() {
       const response = await postScanWithRetry(scanPayload, () => setStatus('Reconnecting · retrying observation safely'))
 
       setStatus('Remembering · grounding observations')
-      const payload = await readApiResponse<ScanResponse & { error?: string; message?: string }>(response, 'Observation request failed')
-      if (!response.ok) throw new Error(payload.message ?? payload.error ?? `Scan request failed (${response.status})`)
+      const payload = await readSentinelApiResponse<ScanResponse>(response, 'observation')
       setResult(payload)
       setMemory(payload.memory)
       setStatus(payload.diff ? `${payload.diff.changes.length} supported change(s) remembered` : `${activeEnvironment.name} is now remembered`)
@@ -425,9 +425,9 @@ function App() {
       if (query.stateId) params.set('stateId', query.stateId)
       if (query.at) params.set('at', query.at)
 
-      const response = await fetch(`/api/states?${params.toString()}`, { headers: { Accept: 'application/json' } })
-      const payload = await readApiResponse<StateHistoryResponse>(response, 'Unable to inspect historical state')
-      if (!response.ok || !payload.selection) throw new Error(payload.message ?? 'Historical state was not found')
+      const response = await fetchSentinel(`/api/states?${params.toString()}`, { headers: { Accept: 'application/json' } }, 'history')
+      const payload = await readSentinelApiResponse<StateHistoryResponse>(response, 'history')
+      if (!payload.selection) throw new Error('Historical state was not found')
       setHistory(payload.states)
       setHistorySelection(payload.selection)
       setHistoryStatus('')
@@ -452,7 +452,7 @@ function App() {
     setView('memory')
 
     try {
-      const response = await fetch('/api/verify', {
+      const response = await fetchSentinel('/api/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         body: JSON.stringify({
@@ -462,9 +462,8 @@ function App() {
           actionPlanId: options.actionPlanId,
           conditionIds: options.conditionIds,
         }),
-      })
-      const payload = await readApiResponse<VerificationResult & { message?: string }>(response, 'Verification failed')
-      if (!response.ok) throw new Error(payload.message ?? 'Verification failed')
+      }, 'verification')
+      const payload = await readSentinelApiResponse<VerificationResult>(response, 'verification')
       setVerification(payload)
       setVerificationStatus('')
     } catch (verificationError) {
@@ -486,7 +485,7 @@ function App() {
     setView('memory')
 
     try {
-      const response = await fetch('/api/action-plan', {
+      const response = await fetchSentinel('/api/action-plan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         body: JSON.stringify({
@@ -497,9 +496,8 @@ function App() {
           relatedIssueIds: options.relatedIssueIds,
           relatedObjectIds: options.relatedObjectIds,
         }),
-      })
-      const payload = await readApiResponse<ActionPlanningResponse & { message?: string }>(response, 'Action planning failed')
-      if (!response.ok) throw new Error(payload.message ?? 'Action planning failed')
+      }, 'action-plan')
+      const payload = await readSentinelApiResponse<ActionPlanningResponse>(response, 'action-plan')
       setActionPlan(payload)
       setActionPlanStatus('')
     } catch (planError) {
@@ -528,13 +526,12 @@ function App() {
     setVerificationStatus('')
     setView('memory')
     try {
-      const response = await fetch('/api/ask-building', {
+      const response = await fetchSentinel('/api/ask-building', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ environmentId: memory.environment.id, question: trimmed, stateId }),
-      })
-      const payload = await readApiResponse<AskBuildingResponse & { message?: string }>(response, 'Ask request failed')
-      if (!response.ok) throw new Error(payload.message ?? 'Ask request failed')
+      }, 'ask')
+      const payload = await readSentinelApiResponse<AskBuildingResponse>(response, 'ask')
       setAnswer(payload)
       setAskStatus('')
       if (payload.grounding?.intent === 'action') {
@@ -1311,38 +1308,6 @@ async function postScanWithRetry(payload: unknown, onRetry?: () => void): Promis
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms))
-}
-
-async function readApiResponse<T>(response: Response, fallback: string): Promise<T> {
-  const text = await response.text()
-  if (!text.trim()) {
-    throw new Error(response.ok ? `${fallback}: server returned an empty response` : `${fallback} (${response.status})`)
-  }
-
-  const contentType = response.headers.get('content-type')?.toLowerCase() ?? ''
-  const looksJson = contentType.includes('application/json') || /^[\s]*[\[{]/.test(text)
-
-  if (looksJson) {
-    try {
-      return JSON.parse(text) as T
-    } catch {
-      throw new Error(`${fallback}: server returned malformed JSON`)
-    }
-  }
-
-  const cleaned = text
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 220)
-
-  const statusHint = response.status === 504
-    ? 'The observation timed out before inference completed.'
-    : response.status >= 500
-      ? 'The observation service returned a server error.'
-      : fallback
-
-  throw new Error(cleaned ? `${statusHint} ${cleaned}` : `${statusHint} (${response.status})`)
 }
 
 function isDisplayableObservation(item: Observation): boolean {

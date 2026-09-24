@@ -1,6 +1,6 @@
 import { createNebiusNemotronAdapter } from '../src/ai/nebius.js'
 import { ModelAdapterError } from '../src/ai/model.js'
-import { AskBuildingService } from '../src/memory/ask-building.ts'
+import { AskBuildingInputError, AskBuildingService } from '../src/memory/ask-building.ts'
 import { getMemoryPersistenceMode, getRuntimeEnvironmentalMemoryRepository } from '../server/memory-repository.js'
 
 type Request = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: unknown }
@@ -26,7 +26,7 @@ export default async function handler(req: Request, res: Response) {
 
   try {
     const rawSize = Buffer.byteLength(JSON.stringify(req.body ?? {}), 'utf8')
-    if (rawSize > MAX_BODY_BYTES) return res.status(413).json({ error: 'PAYLOAD_TOO_LARGE', message: 'Ask request exceeds 64 KB' })
+    if (rawSize > MAX_BODY_BYTES) return res.status(413).json({ error: 'PAYLOAD_TOO_LARGE', message: 'Ask request exceeds the 64 KB SENTINEL safety budget.' })
     const body = parseBody(req.body)
     const repository = getRuntimeEnvironmentalMemoryRepository()
 
@@ -41,6 +41,10 @@ export default async function handler(req: Request, res: Response) {
     }
     return res.status(200).json({ ...answer, persistence: getMemoryPersistenceMode(), reasoningContract: ASK_BUILDING_CONTRACT })
   } catch (error) {
+    if (error instanceof AskBuildingInputError) {
+      return res.status(error.status).json({ error: error.code, message: error.message })
+    }
+
     const message = error instanceof Error ? error.message : 'Unknown ask error'
     if (error instanceof ModelAdapterError) {
       const timedOut = /timeout/i.test(error.code) || /timed out/i.test(error.message)
@@ -56,14 +60,14 @@ export default async function handler(req: Request, res: Response) {
 }
 
 function parseBody(value: unknown): { environmentId: string; question: string; stateId?: string } {
-  if (!isRecord(value)) throw new Error('Request body must be a JSON object')
+  if (!isRecord(value)) throw new AskBuildingInputError('Request body must be a JSON object', 400, 'INVALID_REQUEST')
   const environmentId = requiredString(value.environmentId, 'environmentId')
   const question = requiredString(value.question, 'question')
-  if (question.length > MAX_QUESTION_LENGTH) throw new Error(`question must be ${MAX_QUESTION_LENGTH} characters or fewer`)
+  if (question.length > MAX_QUESTION_LENGTH) throw new AskBuildingInputError(`question must be ${MAX_QUESTION_LENGTH} characters or fewer`, 400, 'INVALID_REQUEST')
   return { environmentId, question, stateId: optionalString(value.stateId) }
 }
 
-function requiredString(value: unknown, path: string): string { if (typeof value !== 'string' || !value.trim()) throw new Error(`${path} must be a non-empty string`); return value.trim() }
+function requiredString(value: unknown, path: string): string { if (typeof value !== 'string' || !value.trim()) throw new AskBuildingInputError(`${path} must be a non-empty string`, 400, 'INVALID_REQUEST'); return value.trim() }
 function optionalString(value: unknown): string | undefined { return value === undefined || value === null ? undefined : requiredString(value, 'stateId') }
 function normalizedOrigin(value: string | undefined): string | undefined {
   if (!value?.trim()) return undefined

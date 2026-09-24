@@ -31,7 +31,7 @@ export default async function handler(req: Request, res: Response) {
   try {
     const rawSize = Buffer.byteLength(JSON.stringify(req.body ?? {}), 'utf8')
     if (rawSize > MAX_BODY_BYTES) {
-      return res.status(413).json({ error: 'PAYLOAD_TOO_LARGE', message: 'Verification request exceeds 64 KB' })
+      return res.status(413).json({ error: 'PAYLOAD_TOO_LARGE', message: 'Verification request exceeds the 64 KB SENTINEL safety budget.' })
     }
 
     const body = parseBody(req.body)
@@ -59,7 +59,7 @@ export default async function handler(req: Request, res: Response) {
     })
   } catch (error) {
     if (error instanceof VerificationInputError) {
-      return res.status(error.status).json({ error: 'VERIFICATION_NOT_GROUNDED', message: error.message })
+      return res.status(error.status).json({ error: error.code, message: error.message })
     }
 
     const message = error instanceof Error ? error.message : 'Unknown verification error'
@@ -78,7 +78,7 @@ export default async function handler(req: Request, res: Response) {
 }
 
 function parseBody(value: unknown) {
-  if (!isRecord(value)) throw new VerificationInputError('Request body must be a JSON object')
+  if (!isRecord(value)) throw new VerificationInputError('Request body must be a JSON object', 400, 'INVALID_REQUEST')
   return {
     environmentId: requiredString(value.environmentId, 'environmentId'),
     previousStateId: requiredString(value.previousStateId, 'previousStateId'),
@@ -89,7 +89,7 @@ function parseBody(value: unknown) {
 }
 
 function requiredString(value: unknown, path: string): string {
-  if (typeof value !== 'string' || !value.trim()) throw new VerificationInputError(`${path} must be a non-empty string`)
+  if (typeof value !== 'string' || !value.trim()) throw new VerificationInputError(`${path} must be a non-empty string`, 400, 'INVALID_REQUEST')
   return value.trim()
 }
 function optionalString(value: unknown, path: string): string | undefined {
@@ -99,7 +99,7 @@ function optionalString(value: unknown, path: string): string | undefined {
 function optionalStringArray(value: unknown, path: string): string[] | undefined {
   if (value === undefined || value === null) return undefined
   if (!Array.isArray(value) || value.length > MAX_IDS || !value.every((item) => typeof item === 'string' && item.trim())) {
-    throw new VerificationInputError(`${path} must contain at most ${MAX_IDS} non-empty string IDs`)
+    throw new VerificationInputError(`${path} must contain at most ${MAX_IDS} non-empty string IDs`, 400, 'INVALID_REQUEST')
   }
   return [...new Set(value.map((item) => item.trim()))]
 }
