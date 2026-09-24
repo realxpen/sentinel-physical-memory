@@ -2,9 +2,9 @@ const origin = (process.env.SENTINEL_PRODUCTION_ORIGIN || 'https://sentinel-phys
 const environmentId = process.env.SENTINEL_PHASE16_ENVIRONMENT_ID || 'env_warehouse_73266674'
 const expectedCommit = process.env.SENTINEL_EXPECTED_DEPLOYMENT_COMMIT?.trim() || ''
 
-if (expectedCommit) await waitForDeployment(expectedCommit)
-
-const health = await fetchJson('/api/health?phase16=' + Date.now())
+const health = expectedCommit
+  ? await waitForDeployment(expectedCommit)
+  : await fetchJson('/api/health?phase16=' + Date.now())
 expect(health.deploymentCommit === expectedCommit || !expectedCommit, 'production health must report the expected deployment commit')
 expect(health.nebiusConfigured === true, 'production must report Nebius configured')
 expect(health.aiRuntime?.provider === 'nebius-token-factory', 'production health must identify Nebius Token Factory')
@@ -65,7 +65,7 @@ async function waitForDeployment(commit) {
       const health = await fetchJson('/api/health?phase16_wait=' + Date.now())
       if (health.deploymentCommit === commit) {
         console.log('Fresh production deployment detected for ' + commit)
-        return
+        return health
       }
       console.log('Waiting for production commit ' + commit + '; currently ' + (health.deploymentCommit || 'unknown'))
     } catch (error) {
