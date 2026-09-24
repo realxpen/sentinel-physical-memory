@@ -27,10 +27,14 @@ const REMAINING_MIN_CONFIDENCE = 0.6
 const MAX_MODEL_CONDITIONS = 8
 
 export class VerificationInputError extends Error {
-  readonly status = 422
-  constructor(message: string) {
+  readonly status: number
+  readonly code: string
+
+  constructor(message: string, status = 422, code = 'VERIFICATION_NOT_GROUNDED') {
     super(message)
     this.name = 'VerificationInputError'
+    this.status = status
+    this.code = code
   }
 }
 
@@ -56,7 +60,8 @@ export class VerificationAgentService {
 
   async verify(request: VerificationRequest): Promise<VerificationResult> {
     const memory = await this.memory.get(request.environmentId)
-    if (!memory?.states.length) throw new VerificationInputError('No remembered environmental state is available.')
+    if (!memory) throw new VerificationInputError('This location has no persisted SENTINEL memory.', 404, 'ENVIRONMENT_NOT_FOUND')
+    if (!memory.states.length) throw new VerificationInputError('This location does not have a grounded environmental state yet.', 422, 'MEMORY_NOT_READY')
 
     const previousState = requireState(memory, request.previousStateId, 'previousStateId')
     const currentState = requireState(memory, request.currentStateId, 'currentStateId')
@@ -526,13 +531,13 @@ function conditionScore(a: EnvironmentalCondition, b: EnvironmentalCondition): n
 
 function requireState(memory: EnvironmentalMemory, stateId: string, path: string): EnvironmentalState {
   const state = memory.states.find((item) => item.id === stateId)
-  if (!state) throw new VerificationInputError(`${path} does not identify a state in this environment.`)
+  if (!state) throw new VerificationInputError(`${path} does not identify a state in this environment.`, 404, 'STATE_NOT_FOUND')
   return state
 }
 
 function requireSnapshot(memory: EnvironmentalMemory, stateId: string): EnvironmentalStateSnapshot {
   const snapshot = memory.snapshots.find((item) => item.stateId === stateId && item.environmentId === memory.environment.id)
-  if (!snapshot) throw new VerificationInputError(`Immutable snapshot unavailable for state ${stateId}.`)
+  if (!snapshot) throw new VerificationInputError(`Immutable snapshot unavailable for state ${stateId}.`, 409, 'HISTORICAL_SNAPSHOT_UNAVAILABLE')
   return snapshot
 }
 
