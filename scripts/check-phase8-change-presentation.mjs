@@ -76,6 +76,70 @@ try {
   if (!historicalNoise.some((item) => item.title === 'New: cardboard boxes')) throw new Error('historical filter must preserve new obstruction card')
   if (!historicalNoise.some((item) => item.title === 'Moved: fire extinguisher')) throw new Error('historical filter must preserve moved extinguisher card')
 
+  const hallwayArchitecturalNoise = changesForPresentation([
+    {
+      id: 'conference-door', environmentId: 'office', fromStateId: 'state_1', toStateId: 'state_2',
+      type: 'added', entityKind: 'object', entityId: 'door_conference', title: 'New: Conference Room door',
+      description: 'Conference Room door was not present in the previous state.', confidence: 0.94, evidenceIds: ['e_current'],
+    },
+    {
+      id: 'exit-door', environmentId: 'office', fromStateId: 'state_1', toStateId: 'state_2',
+      type: 'added', entityKind: 'object', entityId: 'door_exit', title: 'New: exit door',
+      description: 'exit door was not present in the previous state.', confidence: 0.95, evidenceIds: ['e_current'],
+    },
+    {
+      id: 'room-old', environmentId: 'office', fromStateId: 'state_1', toStateId: 'state_2',
+      type: 'uncertain', entityKind: 'object', entityId: 'room_conference', title: 'Not re-observed: Conference Room',
+      description: 'Conference Room was present previously but was not re-observed.', confidence: 0.5, evidenceIds: ['e_previous'],
+    },
+    {
+      id: 'glass-door-old', environmentId: 'office', fromStateId: 'state_1', toStateId: 'state_2',
+      type: 'uncertain', entityKind: 'object', entityId: 'glass_door', title: 'Not re-observed: glass door',
+      description: 'glass door was present previously but was not re-observed.', confidence: 0.5, evidenceIds: ['e_previous'],
+    },
+    {
+      id: 'window-old', environmentId: 'office', fromStateId: 'state_1', toStateId: 'state_2',
+      type: 'uncertain', entityKind: 'object', entityId: 'window', title: 'Not re-observed: window',
+      description: 'window was present previously but was not re-observed.', confidence: 0.5, evidenceIds: ['e_previous'],
+    },
+    {
+      id: 'frame-old', environmentId: 'office', fromStateId: 'state_1', toStateId: 'state_2',
+      type: 'uncertain', entityKind: 'object', entityId: 'frame', title: 'Not re-observed: door frame',
+      description: 'door frame was present previously but was not re-observed.', confidence: 0.5, evidenceIds: ['e_previous'],
+    },
+    {
+      id: 'boxes-live', environmentId: 'office', fromStateId: 'state_1', toStateId: 'state_2',
+      type: 'added', entityKind: 'object', entityId: 'boxes_live', title: 'New: stacked cardboard boxes',
+      description: 'stacked cardboard boxes were not present in the previous state.', confidence: 0.99, evidenceIds: ['e_boxes'],
+    },
+    {
+      id: 'ext-live', environmentId: 'office', fromStateId: 'state_1', toStateId: 'state_2',
+      type: 'moved', entityKind: 'object', entityId: 'ext_live', title: 'Moved: fire extinguisher',
+      description: 'fire extinguisher changed its grounded relationship context.', confidence: 0.97, evidenceIds: ['e_ext'],
+    },
+    {
+      id: 'condition-live', environmentId: 'office', fromStateId: 'state_1', toStateId: 'state_2',
+      type: 'added', entityKind: 'condition', entityId: 'condition_exit', title: 'New condition: Emergency exit access obstructed',
+      description: 'Stacked cardboard boxes obstruct the emergency exit access route.', confidence: 0.98, evidenceIds: ['e_boxes'],
+    },
+  ])
+
+  const hallwayTitles = hallwayArchitecturalNoise.map((item) => item.title)
+  if (hallwayTitles.some((title) => /Conference Room door|New: exit door|Not re-observed: Conference Room|glass door|window|door frame/i.test(title))) {
+    throw new Error(`persisted architectural segmentation noise must be hidden immediately: ${hallwayTitles.join(' | ')}`)
+  }
+  if (!hallwayTitles.includes('New: stacked cardboard boxes')) throw new Error('presentation filter must preserve stacked boxes')
+  if (!hallwayTitles.includes('Moved: fire extinguisher')) throw new Error('presentation filter must preserve extinguisher movement')
+  if (!hallwayTitles.includes('New condition: Emergency exit access obstructed')) throw new Error('presentation filter must preserve access condition')
+  if (hallwayArchitecturalNoise.length !== 3) {
+    throw new Error(`expected only operational hallway changes, got ${hallwayTitles.join(' | ')}`)
+  }
+
+  const closetDoorUncertainty = changesForPresentation([
+    change('closet_door', 'Not re-observed: closet door', 'closet_door_a'),
+  ])
+  if (closetDoorUncertainty.length !== 1) throw new Error('furniture/closet door uncertainty must remain distinct from architectural re-segmentation')
+
   const distinctWalls = changesForPresentation([
     change('left_wall', 'Not re-observed: white wall', 'wall_left', ['e_left']),
     change('right_wall', 'Not re-observed: white wall', 'wall_right', ['e_right']),
@@ -85,7 +149,7 @@ try {
   console.log('PASS  persisted raw structural-surface churn is hidden from Reality Diff presentation')
   console.log('PASS  distinct operational object changes remain visible')
   console.log('PASS  independently grounded structural surfaces remain in immutable history but not headline diff cards')
-  console.log('PASS  historical micro-inventory churn is filtered without hiding obstruction or extinguisher changes')
+  console.log('PASS  historical micro-inventory and architectural re-segmentation churn are filtered without hiding obstruction, extinguisher, or access-condition changes')
   console.log('SENTINEL PHASE 8 CHANGE PRESENTATION VERIFIED')
 } finally {
   await vite.close()

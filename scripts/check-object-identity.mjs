@@ -50,6 +50,32 @@ try {
     throw new Error('cardboard boxes -> cardboard box should preserve the durable box family')
   }
 
+
+  if (!objectsSemanticallyMatch(
+    object('doorway-old', 'door', 'doorway', 'doorway at the end of the hallway'),
+    object('door-generic-new', 'door', 'door', 'door at the end of the hallway'),
+  )) {
+    throw new Error('doorway -> generic door should preserve durable architectural identity')
+  }
+  if (!objectsSemanticallyMatch(
+    object('exit-door-old', 'door', 'emergency exit doorway', 'emergency exit doorway'),
+    object('exit-door-new', 'door', 'exit door', 'exit door'),
+  )) {
+    throw new Error('exit doorway -> exit door should preserve exit-door identity')
+  }
+  if (!objectsSemanticallyMatch(
+    object('glass-door-old', 'door', 'glass doorway', 'glass doorway'),
+    object('glass-door-new', 'door', 'glass door', 'glass door'),
+  )) {
+    throw new Error('glass doorway -> glass door should preserve glass-door identity')
+  }
+  if (!objectsSemanticallyMatch(
+    object('window-old', 'other', 'window', 'hallway window'),
+    object('window-new', 'other', 'glass window', 'hallway glass window'),
+  )) {
+    throw new Error('window naming drift should preserve durable window identity')
+  }
+
   if (!objectsSemanticallyMatch(
     object('books-old', 'other', 'books'),
     object('books-new', 'furniture', 'books'),
@@ -307,7 +333,7 @@ try {
   }
 
   console.log('PASS  provider naming aliases map to conservative durable object families')
-  console.log('PASS  color-anchored door aliases match while unanchored generic doors remain excluded')
+  console.log('PASS  door, doorway, exit/glass door and window naming drift preserve durable architectural identity')
   console.log('PASS  secondary description mentions do not redefine object identity')
   console.log('PASS  grounded cross-pass exact duplicates across audit/identity/geometry and semantic aliases consolidate conservatively')
   console.log('PASS  still-photo exact duplicate bursts collapse conservatively while distinct positions remain separate')
