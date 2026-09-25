@@ -237,11 +237,13 @@ function semanticFamily(item: SpatialObject): ObjectFamily | undefined {
 
   const doorText = `${name} ${description}`
   if (item.category === 'door' || /\b(?:door|doorway|entryway|entrance)\b/.test(name)) {
-    if (/\b(?:emergency )?exit\b/.test(doorText)) return 'door:exit'
-    if (/\bconference room\b/.test(doorText)) return 'door:conference-room'
-    if (/\bglass\b/.test(doorText)) return 'door:glass'
-    const color = doorColor(doorText)
+    // A visible color anchor is more stable than nearby semantic context
+    // mentioned in a description (for example a green door below an EXIT sign).
+    const color = doorColor(name)
     if (color) return `door:${color}`
+    if (/\b(?:emergency )?exit\b/.test(name)) return 'door:exit'
+    if (/\bconference room\b/.test(name)) return 'door:conference-room'
+    if (/\bglass\b/.test(name)) return 'door:glass'
     return 'door:generic'
   }
 
