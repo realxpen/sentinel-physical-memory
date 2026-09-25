@@ -235,7 +235,6 @@ function semanticFamily(item: SpatialObject): ObjectFamily | undefined {
   if (/\b(?:concrete |warehouse )?floor\b/.test(name)) return 'floor'
   if (/\b(?:white |warehouse |high )?ceiling\b/.test(name)) return 'ceiling'
 
-  const doorText = `${name} ${description}`
   if (item.category === 'door' || /\b(?:door|doorway|entryway|entrance)\b/.test(name)) {
     // A visible color anchor is more stable than nearby semantic context
     // mentioned in a description (for example a green door below an EXIT sign).
