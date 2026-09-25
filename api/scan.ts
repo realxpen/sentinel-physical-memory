@@ -1,5 +1,5 @@
 import { createNebiusNemotronAdapter, type NebiusInferenceTrace } from '../src/ai/nebius.js'
-import { ModelAdapterError } from '../src/ai/model.js'
+import { ModelAdapterError, type ModelAdapter } from '../src/ai/model.js'
 import type { ScanArtifact, ScanFrame, ScanInput } from '../src/scan/types.js'
 import { ScanPipeline } from '../src/scan/pipeline.js'
 import { getMemoryPersistenceMode, getRuntimeEnvironmentalMemoryRepository } from '../server/memory-repository.js'
@@ -17,6 +17,9 @@ const MAX_FRAME_DATA_URL_BYTES = 700 * 1024
 const ALLOWED_IMAGE_MIME = new Set(['image/jpeg', 'image/png', 'image/webp'])
 const ALLOWED_VIDEO_MIME = new Set(['video/mp4', 'video/webm', 'video/quicktime', 'video/x-m4v'])
 const DEFAULT_PERCEPTION_MODEL = 'openbmb/MiniCPM-V-4_5'
+const DEFAULT_PREFERRED_VISION_MODEL = 'Qwen/Qwen2.5-VL-72B-Instruct'
+const PREFERRED_VISION_TIMEOUT_MS = 55_000
+const CONFIGURED_VISION_FALLBACK_TIMEOUT_MS = 45_000
 // /api/scan has a 180s platform budget. Keep a 20s safety margin for persistence,
 // serialization, and the HTTP response. The primary scene may retry once, while
 // secondary audits use tighter per-pass budgets inside ScanPipeline.
@@ -83,19 +86,32 @@ export default async function handler(req: Request, res: Response) {
     }
 
     const inference: NebiusInferenceTrace[] = []
-    const adapter = createNebiusNemotronAdapter(apiKey, {
+    const configuredPerceptionModel = process.env.NEBIUS_PERCEPTION_MODEL?.trim() || DEFAULT_PERCEPTION_MODEL
+    const preferredVisionModel = process.env.NEBIUS_PREFERRED_VISION_MODEL?.trim() || DEFAULT_PREFERRED_VISION_MODEL
+    const artifactResolver = {
+      resolve: async (artifact: ScanArtifact) => ({
+        artifactId: artifact.artifactId,
+        mimeType: artifact.kind === 'frame' ? 'image/jpeg' : input.media.mimeType,
+        uri: artifact.uri,
+      }),
+    }
+    const configuredAdapter = createNebiusNemotronAdapter(apiKey, {
       baseUrl: process.env.NEBIUS_TOKEN_FACTORY_BASE_URL,
-      model: process.env.NEBIUS_PERCEPTION_MODEL?.trim() || DEFAULT_PERCEPTION_MODEL,
+      model: configuredPerceptionModel,
       timeoutMs: resolvePerceptionTimeout(process.env.NEBIUS_PERCEPTION_TIMEOUT_MS),
       onTrace: (trace) => inference.push(trace),
-      artifactResolver: {
-        resolve: async (artifact: ScanArtifact) => ({
-          artifactId: artifact.artifactId,
-          mimeType: artifact.kind === 'frame' ? 'image/jpeg' : input.media.mimeType,
-          uri: artifact.uri,
-        }),
-      },
+      artifactResolver,
     })
+    const preferredAdapter = preferredVisionModel === configuredPerceptionModel
+      ? configuredAdapter
+      : createNebiusNemotronAdapter(apiKey, {
+        baseUrl: process.env.NEBIUS_TOKEN_FACTORY_BASE_URL,
+        model: preferredVisionModel,
+        timeoutMs: PREFERRED_VISION_TIMEOUT_MS,
+        onTrace: (trace) => inference.push(trace),
+        artifactResolver,
+      })
+    const adapter = createLatencyResilientPerceptionAdapter(configuredAdapter, preferredAdapter)
 
     const pipeline = new ScanPipeline({
       model: adapter,
@@ -144,6 +160,65 @@ export default async function handler(req: Request, res: Response) {
     console.error('SENTINEL_SCAN_FAILED', summarizeError(error))
     return res.status(500).json({ error: 'SCAN_FAILED', message })
   }
+}
+
+function createLatencyResilientPerceptionAdapter(configured: ModelAdapter, preferred: ModelAdapter): ModelAdapter {
+  if (configured.model === preferred.model) return configured
+
+  return {
+    provider: configured.provider,
+    model: configured.model,
+    async infer(request) {
+      // Optional audits already carry an explicit tight timeout from ScanPipeline.
+      // Keep them on the configured model and reserve multi-model routing for the
+      // mandatory scene pass that determines whether an observation can exist.
+      if (request.timeoutMs !== undefined) return configured.infer(request)
+
+      try {
+        return await preferred.infer({ ...request, timeoutMs: PREFERRED_VISION_TIMEOUT_MS })
+      } catch (preferredError) {
+        if (!allowsVisionRouteFallback(preferredError)) throw preferredError
+        console.warn('SENTINEL_PREFERRED_VISION_ROUTE_FAILED', {
+          preferredModel: preferred.model,
+          fallbackModel: configured.model,
+          code: providerErrorCode(preferredError),
+          message: preferredError instanceof Error ? preferredError.message : 'Unknown preferred vision failure',
+        })
+      }
+
+      try {
+        return await configured.infer({ ...request, timeoutMs: CONFIGURED_VISION_FALLBACK_TIMEOUT_MS })
+      } catch (configuredError) {
+        const timedOut = configuredError instanceof ModelAdapterError
+          && (configuredError.code === 'NEBIUS_TIMEOUT' || /timed out|timeout/i.test(configuredError.message))
+        throw new ModelAdapterError({
+          code: timedOut ? 'PERCEPTION_TIMEOUT' : 'PERCEPTION_PROVIDER_FAILED',
+          message: timedOut
+            ? `Preferred vision route and configured fallback did not complete within the bounded observation window.`
+            : `Preferred vision route failed and configured fallback could not complete: ${configuredError instanceof Error ? configuredError.message : 'unknown provider error'}`,
+          status: configuredError instanceof ModelAdapterError ? configuredError.status : undefined,
+          retryable: false,
+        })
+      }
+    },
+    async verifyTemporal(request) {
+      if (!configured.verifyTemporal) return { changes: [] }
+      return configured.verifyTemporal(request)
+    },
+  }
+}
+
+function allowsVisionRouteFallback(error: unknown): boolean {
+  if (!(error instanceof ModelAdapterError)) return false
+  if (error.code === 'NEBIUS_TIMEOUT' || error.code === 'NEBIUS_REQUEST_FAILED') return true
+  if (error.code !== 'NEBIUS_HTTP_ERROR') return false
+  // A preferred model can be unavailable to a particular Token Factory account
+  // or region even when it exists in the public catalog. Fall back safely.
+  return error.status === 400 || error.status === 404 || error.status === 429 || (typeof error.status === 'number' && error.status >= 500)
+}
+
+function providerErrorCode(error: unknown): string {
+  return error instanceof ModelAdapterError ? error.code : 'UNKNOWN_PROVIDER_ERROR'
 }
 
 function parseScanInput(value: unknown): ScanInput {
