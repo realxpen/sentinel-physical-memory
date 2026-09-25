@@ -13,11 +13,11 @@ const SAFETY_SIGNAGE = /\b(?:exit|emergency|fire|safety|warning|caution|hazard|e
 export function isDurableArchitecturalAnchorObject(
   item: Pick<SpatialObject, 'name' | 'description' | 'category'>,
 ): boolean {
-  const text = normalize(`${item.name} ${item.description ?? ''}`)
-  if (FURNITURE_DOOR.test(text)) return false
+  const name = normalize(item.name)
+  if (FURNITURE_DOOR.test(name)) return false
   if (item.category === 'room') return true
   if (item.category === 'door') return true
-  return DURABLE_ARCHITECTURAL_ANCHOR.test(text)
+  return DURABLE_ARCHITECTURAL_ANCHOR.test(name)
 }
 
 export function isLowSalienceInventoryObject(
@@ -56,10 +56,11 @@ export function isLowSalienceObjectChange(change: Change): boolean {
   // "Conference Room door"). Treat unmatched added/not-re-observed cards for
   // those durable anchors as presentation noise. Explicit state transitions,
   // movement, removals, and condition/issue cards remain visible.
+  const subject = normalize(stripChangePrefix(change.title))
   if (
     (change.type === 'added' || change.type === 'uncertain') &&
-    !FURNITURE_DOOR.test(text) &&
-    DURABLE_ARCHITECTURAL_ANCHOR.test(text)
+    !FURNITURE_DOOR.test(subject) &&
+    DURABLE_ARCHITECTURAL_ANCHOR.test(subject)
   ) return true
 
   if (STRUCTURAL_SURFACE.test(normalize(stripChangePrefix(change.title)))) return true
