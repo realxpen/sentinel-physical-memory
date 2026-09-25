@@ -681,7 +681,7 @@ export class ScanPipeline {
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       try {
         const retryInstruction = attempt > 1
-          ? 'STRICT RETRY: Return one complete JSON object only. Use canonical enum values, finite numeric confidences, arrays for reference fields, and reference only supplied FRAME_ID evidence. Omit unsupported optional claims instead of guessing.'
+          ? 'FAST STRICT RETRY: Return one complete JSON object only. Prioritize operationally meaningful visible objects and anchors; for a still image keep the inventory concise (prefer at most 12 objects). Use canonical enum values, finite numeric confidences, arrays for reference fields, and reference only supplied FRAME_ID evidence. Omit decorative micro-inventory and unsupported optional claims instead of guessing.'
           : undefined
         const result = await this.model!.infer({
           role: 'perception',
