@@ -280,6 +280,76 @@ try {
     throw new Error(`salience filtering must preserve new obstruction evidence: ${synthTitles.join(' | ')}`)
   }
 
+  const architecturalNamingNoise = engine.compare(
+    {
+      stateId: 'state_arch_1',
+      environmentId,
+      objects: [
+        object('conference_room_old', 'Conference Room', 'room', { description: 'Conference room along the left side of the hallway' }),
+        object('doorway_old', 'doorway', 'door', { description: 'Doorway at the end of the hallway' }),
+        object('glass_door_old', 'glass door', 'door', { description: 'Glass door along the hallway' }),
+        object('window_old', 'window', 'other', { description: 'Hallway window' }),
+        object('frame_old', 'door frame', 'door', { description: 'Black door frame' }),
+        object('ext_arch_old', 'fire extinguisher', 'safety', { position: { description: 'right of exit door' } }),
+      ],
+      conditions: [],
+      issues: [],
+      relations: [],
+    },
+    {
+      stateId: 'state_arch_2',
+      environmentId,
+      objects: [
+        object('conference_door_new', 'Conference Room door', 'door', { description: 'Door to the Conference Room on the left' }),
+        object('exit_door_new', 'exit door', 'door', { description: 'Exit door at the end of the hallway' }),
+        object('ext_arch_new', 'fire extinguisher', 'safety', { position: { description: 'left of conference room door' } }),
+        object('boxes_arch_new', 'stacked cardboard boxes', 'obstruction', { position: { description: 'in front of exit door' } }),
+      ],
+      conditions: [
+        condition('condition_exit_arch', 'Emergency exit access obstructed', ['boxes_arch_new'], { kind: 'access' }),
+      ],
+      issues: [],
+      relations: [],
+    },
+  )
+
+  const architecturalTitles = architecturalNamingNoise.changes.map((change) => change.title)
+  if (architecturalTitles.some((title) => /Conference Room door|exit door|Conference Room$|glass door|window|door frame/i.test(title))) {
+    throw new Error(`permanent architecture naming/re-segmentation must not pollute raw Reality Diff: ${architecturalTitles.join(' | ')}`)
+  }
+  if (!architecturalTitles.includes('Moved: fire extinguisher')) {
+    throw new Error(`architectural noise suppression must preserve moved extinguisher: ${architecturalTitles.join(' | ')}`)
+  }
+  if (!architecturalTitles.includes('New: stacked cardboard boxes')) {
+    throw new Error(`architectural noise suppression must preserve new stacked boxes: ${architecturalTitles.join(' | ')}`)
+  }
+  if (!architecturalTitles.includes('New condition: Emergency exit access obstructed')) {
+    throw new Error(`architectural noise suppression must preserve grounded access condition: ${architecturalTitles.join(' | ')}`)
+  }
+
+  // Explicit state transitions on a matched architectural object remain material.
+  const architecturalStateChange = engine.compare(
+    {
+      stateId: 'state_door_closed',
+      environmentId,
+      objects: [object('office_door_old', 'office door', 'door', { state: 'closed' })],
+      conditions: [],
+      issues: [],
+      relations: [],
+    },
+    {
+      stateId: 'state_door_open',
+      environmentId,
+      objects: [object('office_door_new', 'office door', 'door', { state: 'open' })],
+      conditions: [],
+      issues: [],
+      relations: [],
+    },
+  )
+  if (!architecturalStateChange.changes.some((change) => change.title === 'Changed: office door')) {
+    throw new Error('architectural noise suppression must not hide explicit closed→open door state changes')
+  }
+
   const learnedStateOnly = engine.compare(
     {
       stateId: 'state_learned_1',
@@ -493,7 +563,8 @@ try {
   console.log('PASS  object movement can use grounded relationship-anchor changes')
   console.log('PASS  non-observation remains uncertain rather than removed/resolved')
   console.log('PASS  first-class condition transition semantics avoid duplicate issue noise')
-  console.log('PASS  door hardware, light fixtures, room labels, and decor stay out of raw Reality Diff while extinguisher/obstruction changes remain')
+  console.log('PASS  door hardware, light fixtures, room labels, decor, and permanent architecture naming drift stay out of raw Reality Diff')
+  console.log('PASS  architectural noise suppression preserves obstruction, extinguisher movement, access conditions, and explicit door state changes')
   console.log('PASS  generated state-pair diffs remain stored in environmental memory')
   console.log('SENTINEL PHASE 7 DIFF ENGINE V2 VERIFIED')
 } finally {
