@@ -21,9 +21,9 @@ const DEFAULT_PERCEPTION_MODEL = 'openbmb/MiniCPM-V-4_5'
 // serialization, and the HTTP response. The primary scene may retry once, while
 // secondary audits use tighter per-pass budgets inside ScanPipeline.
 const SCAN_SOFT_RUNTIME_MS = 160_000
-const DEFAULT_PERCEPTION_TIMEOUT_MS = 50_000
-const MIN_PERCEPTION_TIMEOUT_MS = 20_000
-const MAX_PERCEPTION_TIMEOUT_MS = 55_000
+const DEFAULT_PERCEPTION_TIMEOUT_MS = 65_000
+const MIN_PERCEPTION_TIMEOUT_MS = 25_000
+const MAX_PERCEPTION_TIMEOUT_MS = 70_000
 
 class ScanRequestError extends Error {
   readonly status: number

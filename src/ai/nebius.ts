@@ -299,6 +299,7 @@ export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapte
         body: JSON.stringify({
           model: this.model,
           temperature: 0,
+          max_tokens: maxTokensForRole(role),
           messages: [{ role: 'system', content: system }, { role: 'user', content }],
         }),
         signal: controller.signal,
@@ -667,4 +668,14 @@ export function createNebiusNemotronAdapter(
   options: Omit<NebiusAdapterOptions, 'apiKey'> = {},
 ) {
   return new NebiusNemotronAdapter({ apiKey, ...options })
+}
+
+function maxTokensForRole(role: NebiusInferenceRole): number {
+  switch (role) {
+    case 'perception': return 2200
+    case 'temporal-verification': return 320
+    case 'reasoning': return 900
+    case 'action': return 1200
+    case 'verification': return 1000
+  }
 }
