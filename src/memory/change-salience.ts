@@ -7,7 +7,7 @@ const DURABLE_ARCHITECTURAL_ANCHOR = /\b(?:doorway|door|window|room|corridor|hal
 const FURNITURE_DOOR = /\b(?:closet|cabinet|cupboard|locker|wardrobe)\s+door\b/
 const LIGHT_FIXTURE = /\b(?:ceiling light|ceiling lights|light fixture|light fixtures|recessed light|recessed lights|downlight|downlights|pendant light|wall sconce)\b/
 const DECOR = /\b(?:wall decor|wall decoration|decorative wall|poster|motivational poster|framed poster|artwork|wall art|picture|picture frame|framed picture)\b/
-const ROOM_LABEL = /\b(?:conference room sign|room sign|office sign|nameplate|room label|door sign|room plaque|wall plaque)\b/
+const ROOM_LABEL = /\b(?:conference room sign|room sign|office sign|nameplate|room label|door sign|room plaque|wall plaque|generic sticker|plain sticker|sticker)\b/
 const SAFETY_SIGNAGE = /\b(?:exit|emergency|fire|safety|warning|caution|hazard|evacuation|first aid|aed)\b/
 
 export function isDurableArchitecturalAnchorObject(
