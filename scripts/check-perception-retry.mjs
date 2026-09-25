@@ -9,11 +9,13 @@ const vite = await createServer({
 try {
   const { ScanPipeline } = await vite.ssrLoadModule('/src/scan/pipeline.ts')
   const { ModelAdapterError } = await vite.ssrLoadModule('/src/ai/model.ts')
+  const { createLatencyResilientPerceptionAdapter } = await vite.ssrLoadModule('/api/scan.ts')
 
   await verifyOutputContractRetry(ScanPipeline, ModelAdapterError)
   await verifyTransientProviderRetry(ScanPipeline, ModelAdapterError)
   await verifyRecoveredUpdateSkipsTemporal(ScanPipeline, ModelAdapterError)
   await verifySoftBudgetSkipsOptional(ScanPipeline)
+  await verifyPreferredVisionFallback(createLatencyResilientPerceptionAdapter, ModelAdapterError)
 
   console.log('PASS  malformed first scene perception response retries automatically once')
   console.log('PASS  retry uses trusted frame grounding and still creates State v1')
@@ -22,6 +24,8 @@ try {
   console.log('PASS  recovered timeout persists the grounded scene without spending runtime on optional audits')
   console.log('PASS  recovered update timeout also skips temporal verification and persists before platform timeout')
   console.log('PASS  scan soft deadline skips optional still-image audits when persistence reserve is at risk')
+  console.log('PASS  mandatory scene perception can fail over from preferred Qwen vision to configured MiniCPM without weakening trust')
+  console.log('PASS  optional audits stay single-route and vision fallback exhaustion is non-retryable')
   console.log('SENTINEL PERCEPTION RETRY VERIFIED')
 } finally {
   await vite.close()
@@ -280,6 +284,84 @@ async function verifySoftBudgetSkipsOptional(ScanPipeline) {
 
   expect(inferCalls === 1, `soft budget must keep only the mandatory scene call, got ${inferCalls} inference calls`)
   expect(result.state.version === 1, 'soft-budget scan must persist the grounded scene instead of failing')
+}
+
+async function verifyPreferredVisionFallback(createAdapter, ModelAdapterError) {
+  let preferredCalls = 0
+  let configuredCalls = 0
+  const timeouts = []
+
+  const configured = {
+    provider: 'nebius-token-factory',
+    model: 'openbmb/MiniCPM-V-4_5',
+    async infer(request) {
+      configuredCalls += 1
+      timeouts.push(['configured', request.timeoutMs])
+      return { sourceId: 'fallback-source', observations: [], objects: [], conditions: [], relations: [], evidence: [] }
+    },
+    async verifyTemporal() { return { changes: [] } },
+  }
+  const preferred = {
+    provider: 'nebius-token-factory',
+    model: 'Qwen/Qwen2.5-VL-72B-Instruct',
+    async infer(request) {
+      preferredCalls += 1
+      timeouts.push(['preferred', request.timeoutMs])
+      throw new ModelAdapterError({
+        code: 'NEBIUS_TIMEOUT',
+        message: 'simulated preferred vision timeout',
+        retryable: true,
+      })
+    },
+  }
+
+  const adapter = createAdapter(configured, preferred)
+  const scene = await adapter.infer({ role: 'perception', prompt: 'scene', artifacts: [] })
+  expect(scene.sourceId === 'fallback-source', 'configured vision model must recover the mandatory scene')
+  expect(preferredCalls === 1 && configuredCalls === 1, 'mandatory scene must try preferred then configured exactly once')
+  expect(timeouts.some(([route, timeout]) => route === 'preferred' && timeout === 55_000), 'preferred vision route must use its bounded timeout')
+  expect(timeouts.some(([route, timeout]) => route === 'configured' && timeout === 45_000), 'configured fallback must use its bounded timeout')
+
+  preferredCalls = 0
+  configuredCalls = 0
+  await adapter.infer({ role: 'perception', prompt: 'audit', artifacts: [], timeoutMs: 25_000 })
+  expect(preferredCalls === 0 && configuredCalls === 1, 'optional audit must stay on the configured model and not consume fallback budget')
+
+  const unavailablePreferred = {
+    ...preferred,
+    async infer() {
+      throw new ModelAdapterError({
+        code: 'NEBIUS_HTTP_ERROR',
+        message: 'preferred model unavailable in this account',
+        status: 404,
+        retryable: false,
+      })
+    },
+  }
+  const unavailableAdapter = createAdapter(configured, unavailablePreferred)
+  const recovered = await unavailableAdapter.infer({ role: 'perception', prompt: 'scene', artifacts: [] })
+  expect(recovered.sourceId === 'fallback-source', '404 on preferred model must safely fall back to configured vision')
+
+  const timedOutConfigured = {
+    ...configured,
+    async infer() {
+      throw new ModelAdapterError({
+        code: 'NEBIUS_TIMEOUT',
+        message: 'configured fallback timed out',
+        retryable: true,
+      })
+    },
+  }
+  const exhausted = createAdapter(timedOutConfigured, preferred)
+  let thrown
+  try {
+    await exhausted.infer({ role: 'perception', prompt: 'scene', artifacts: [] })
+  } catch (error) {
+    thrown = error
+  }
+  expect(thrown instanceof ModelAdapterError, 'exhausted vision routing must throw a model adapter error')
+  expect(thrown.code === 'PERCEPTION_TIMEOUT', `expected PERCEPTION_TIMEOUT after both routes fail, got ${thrown?.code}`)
+  expect(thrown.retryable === false, 'exhausted multi-model route must not trigger another full scene retry')
 }
 
 async function runImageScan(pipeline, environmentId, sourceId, capturedAt) {
