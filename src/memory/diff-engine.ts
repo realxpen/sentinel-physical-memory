@@ -12,7 +12,7 @@ import {
   objectsSemanticallyMatch,
   semanticObjectIdentityKey,
 } from './object-identity.js'
-import { isLowSalienceInventoryObject } from './change-salience.js'
+import { isDurableArchitecturalAnchorObject, isLowSalienceInventoryObject } from './change-salience.js'
 
 export interface EnvironmentalSnapshot {
   stateId: string
@@ -96,7 +96,7 @@ export class EnvironmentalDiffEngine implements DiffEngine {
 
       if (!previous) {
         if (hasUnresolvedFamilyCounterpart(current, normalizedFrom.objects)) continue
-        if (isLowSalienceInventoryObject(current)) continue
+        if (isLowSalienceInventoryObject(current) || isDurableArchitecturalAnchorObject(current)) continue
         changes.push(this.change(
           normalizedFrom,
           normalizedTo,
@@ -178,7 +178,7 @@ export class EnvironmentalDiffEngine implements DiffEngine {
       if (matchedPrevious.has(previousIndex)) continue
       if (hasUnresolvedFamilyCounterpart(previous, normalizedTo.objects)) continue
       if (isExplicitlyReobservedInCurrentDescriptions(previous, normalizedTo.objects)) continue
-      if (isLowSalienceInventoryObject(previous)) continue
+      if (isLowSalienceInventoryObject(previous) || isDurableArchitecturalAnchorObject(previous)) continue
       changes.push(this.change(
         normalizedFrom,
         normalizedTo,
