@@ -162,7 +162,7 @@ export default async function handler(req: Request, res: Response) {
   }
 }
 
-function createLatencyResilientPerceptionAdapter(configured: ModelAdapter, preferred: ModelAdapter): ModelAdapter {
+export function createLatencyResilientPerceptionAdapter(configured: ModelAdapter, preferred: ModelAdapter): ModelAdapter {
   if (configured.model === preferred.model) return configured
 
   return {
