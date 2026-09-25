@@ -140,6 +140,21 @@ try {
   ])
   if (closetDoorUncertainty.length !== 1) throw new Error('furniture/closet door uncertainty must remain distinct from architectural re-segmentation')
 
+  const genericStickerNoise = changesForPresentation([
+    change('sticker-old', 'Not re-observed: sticker', 'sticker_a'),
+    {
+      id: 'warning-sign', environmentId: 'office', fromStateId: 'state_1', toStateId: 'state_2',
+      type: 'added', entityKind: 'object', entityId: 'warning_sign', title: 'New: warning sign',
+      description: 'Warning sign was not present in the previous state.', confidence: 0.95, evidenceIds: ['e_warning'],
+    },
+  ])
+  if (genericStickerNoise.some((item) => /sticker/i.test(item.title))) {
+    throw new Error('generic sticker churn must stay out of Reality Diff presentation')
+  }
+  if (!genericStickerNoise.some((item) => item.title === 'New: warning sign')) {
+    throw new Error('safety signage must remain visible when generic sticker churn is filtered')
+  }
+
   const distinctWalls = changesForPresentation([
     change('left_wall', 'Not re-observed: white wall', 'wall_left', ['e_left']),
     change('right_wall', 'Not re-observed: white wall', 'wall_right', ['e_right']),
