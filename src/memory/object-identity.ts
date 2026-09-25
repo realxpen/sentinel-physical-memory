@@ -1,7 +1,8 @@
 import type { SpatialObject } from '../domain/sentinel.js'
 
 type DoorColor = 'green' | 'red' | 'blue' | 'orange' | 'yellow' | 'white' | 'black' | 'brown' | 'gray'
-type ObjectFamily = 'shelving' | 'box' | 'wall' | 'floor' | 'ceiling' | 'fire-extinguisher' | 'exit-sign' | 'potted-plant' | 'duffel-bag' | 'cabinet-door' | 'rug' | 'wall-art' | 'basket' | 'lamp' | `door:${DoorColor}`
+type DoorSemantic = DoorColor | 'exit' | 'conference-room' | 'glass' | 'generic'
+type ObjectFamily = 'shelving' | 'box' | 'wall' | 'floor' | 'ceiling' | 'window' | 'fire-extinguisher' | 'exit-sign' | 'potted-plant' | 'duffel-bag' | 'cabinet-door' | 'rug' | 'wall-art' | 'basket' | 'lamp' | `door:${DoorSemantic}`
 
 /**
  * Conservative semantic identity for recurring provider naming variance.
@@ -234,10 +235,17 @@ function semanticFamily(item: SpatialObject): ObjectFamily | undefined {
   if (/\b(?:concrete |warehouse )?floor\b/.test(name)) return 'floor'
   if (/\b(?:white |warehouse |high )?ceiling\b/.test(name)) return 'ceiling'
 
-  if (item.category === 'door' && /\bdoor\b/.test(name)) {
-    const color = doorColor(name)
+  const doorText = `${name} ${description}`
+  if (item.category === 'door' || /\b(?:door|doorway|entryway|entrance)\b/.test(name)) {
+    if (/\b(?:emergency )?exit\b/.test(doorText)) return 'door:exit'
+    if (/\bconference room\b/.test(doorText)) return 'door:conference-room'
+    if (/\bglass\b/.test(doorText)) return 'door:glass'
+    const color = doorColor(doorText)
     if (color) return `door:${color}`
+    return 'door:generic'
   }
+
+  if (/\bwindows?\b/.test(name) || (item.category === 'other' && /\bwindows?\b/.test(description))) return 'window'
 
   return undefined
 }
