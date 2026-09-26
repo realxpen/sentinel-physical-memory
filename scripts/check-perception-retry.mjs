@@ -23,6 +23,7 @@ try {
   console.log('PASS  retry uses trusted frame grounding and still creates State v1')
   console.log('PASS  zero-condition normal result continues into one grounded condition-audit pass')
   console.log('PASS  sparse still-photo inventory retries before State v1 can be persisted')
+  console.log('PASS  recovered arbitrary still images receive one generic current-state integrity audit')
   console.log('PASS  persistently empty still-photo inventory fails closed without writing memory')
   console.log('PASS  transient provider timeout retries the primary scene once')
   console.log('PASS  recovered timeout persists the grounded scene without spending runtime on optional audits')
@@ -92,6 +93,7 @@ async function verifySparseStillInventoryRetry(ScanPipeline) {
   const sourceId = 'sparse-still-retry-source'
   const capturedAt = '2026-09-26T12:30:00.000Z'
   let sceneAttempts = 0
+  let auditAttempts = 0
   const prompts = []
 
   const model = {
@@ -100,6 +102,10 @@ async function verifySparseStillInventoryRetry(ScanPipeline) {
     async infer(request) {
       prompts.push(request.prompt)
       const frameId = request.artifacts.find((artifact) => artifact.kind === 'frame')?.frameId ?? 'frame_0'
+      if (request.prompt.includes('Condition audit for scan')) {
+        auditAttempts += 1
+        return { sourceId, observations: [], objects: [], conditions: [], relations: [], evidence: [] }
+      }
       sceneAttempts += 1
 
       if (sceneAttempts === 1) {
@@ -193,6 +199,7 @@ async function verifySparseStillInventoryRetry(ScanPipeline) {
   const result = await runImageScan(pipeline, environmentId, sourceId, capturedAt)
 
   expect(sceneAttempts === 2, `expected one sparse-inventory retry, got ${sceneAttempts} scene calls`)
+  expect(auditAttempts === 1, `generic still-image integrity audit must run after the recovered scene, got ${auditAttempts}`)
   expect(prompts[1]?.includes('SPARSE STILL-PHOTO RETRY'), 'second scene attempt must receive the sparse still-photo recovery instruction')
   expect(result.state.version === 1, 'successful retry must create exactly State v1')
   const memory = await pipeline.getMemory(environmentId)
