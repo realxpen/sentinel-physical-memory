@@ -102,6 +102,24 @@ try {
     throw new Error('a door mentioning nearby signage must not become an exit-sign object')
   }
 
+  const genericPrevious = [
+    object('seat-old', 'furniture', 'green chair', 'green upholstered chair', { position: { description: 'right of window' } }),
+  ]
+  const genericCurrent = [
+    object('seat-new', 'furniture', 'green armchair', 'green upholstered armchair', { position: { description: 'right of window' } }),
+  ]
+  const genericMatches = matchObjectsConservatively(genericPrevious, genericCurrent)
+  if (genericMatches.get(0) !== 0) {
+    throw new Error('unique cross-scan wording drift such as green chair -> green armchair must match without a named semantic whitelist')
+  }
+  const genericDiff = new EnvironmentalDiffEngine({ now: () => new Date(at) }).compare(
+    { stateId: 'generic_1', environmentId, objects: genericPrevious, conditions: [], issues: [], relations: [] },
+    { stateId: 'generic_2', environmentId, objects: genericCurrent, conditions: [], issues: [], relations: [] },
+  )
+  if (genericDiff.changes.some((change) => /green (?:arm)?chair/i.test(change.title))) {
+    throw new Error('generic wording drift for the same grounded furniture instance must not become a false physical addition')
+  }
+
   const sameDoorEvidence = ['e_green_door_shared']
   const verboseDoor = object('door-verbose', 'door', 'green emergency exit door', 'green door with exit sign above', { evidenceIds: sameDoorEvidence, position: { description: 'center' } })
   const shortDoor = object('door-short', 'door', 'green door', 'green double door', { evidenceIds: sameDoorEvidence })
@@ -338,6 +356,7 @@ try {
   console.log('PASS  grounded cross-pass exact duplicates across audit/identity/geometry and semantic aliases consolidate conservatively')
   console.log('PASS  still-photo exact duplicate bursts collapse conservatively while distinct positions remain separate')
   console.log('PASS  office aliases and category drift preserve durable identity')
+  console.log('PASS  unique chair -> armchair wording drift matches generically without a demo-specific semantic family')
   console.log('PASS  repeated plant instances match by grounded location')
   console.log('PASS  same-frame structural surface segments collapse while directional walls remain separate')
   console.log('PASS  repeated ambiguous objects are not collapsed into one match')
