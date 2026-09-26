@@ -160,12 +160,38 @@ export class VerificationAgentService {
     }
 
     if (pending.length > 0) {
-      const draft = await this.model.verifyConditions({
+      const artifacts = verificationArtifactsForComparison(scope.memory, scope.previousState, scope.currentState)
+      const firstBatch = pending.slice(0, MAX_MODEL_CONDITIONS)
+      let draft = await this.model.verifyConditions({
         role: 'verification',
         request,
-        context: buildVerificationContext(scope, pending.slice(0, MAX_MODEL_CONDITIONS)),
-        artifacts: verificationArtifactsForComparison(scope.memory, scope.previousState, scope.currentState),
+        context: buildVerificationContext(scope, firstBatch),
+        artifacts,
       })
+
+      const returnedIds = new Set(draft.verdicts.map((item) => item.conditionId))
+      const omitted = firstBatch.filter((condition) => !returnedIds.has(condition.id))
+      if (omitted.length > 0) {
+        const requiredIds = omitted.map((item) => item.id)
+        console.warn('SENTINEL_VERIFICATION_COMPLETENESS_RETRY', {
+          environmentId: request.environmentId,
+          previousStateId: request.previousStateId,
+          currentStateId: request.currentStateId,
+          missingConditionIds: requiredIds,
+        })
+        const retry = await this.model.verifyConditions({
+          role: 'verification',
+          request,
+          context: [
+            buildVerificationContext(scope, omitted),
+            'VERDICT_COMPLETENESS_RETRY:',
+            `Return exactly one verdict for every REQUIRED_CONDITION_ID: ${requiredIds.join(', ')}.`,
+            'Do not omit a condition. If the current visual evidence is insufficient, return status="inconclusive" with the best current evidence/object IDs available rather than returning an empty verdict list.',
+          ].join('\n'),
+          artifacts,
+        })
+        draft = { verdicts: [...draft.verdicts, ...retry.verdicts] }
+      }
 
       for (const condition of pending) {
         const selection = selectModelVerdict(draft.verdicts, condition.id)
