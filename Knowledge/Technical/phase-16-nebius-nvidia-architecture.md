@@ -23,6 +23,10 @@ Make the hackathon technology story explicit and provable:
 
 This is intentionally smaller and more honest than the early concept that listed multiple Nemotron sizes. SENTINEL uses the model that is actually wired into each production role.
 
+### Perception routing rule
+
+The proven `NEBIUS_PERCEPTION_MODEL` is the direct primary perception route. SENTINEL no longer probes an unavailable design-time Qwen route before every scan. A distinct `NEBIUS_PREFERRED_VISION_MODEL` is opt-in only and should be configured only after its availability is verified for the active Token Factory account and region.
+
 ## Runtime flow
 
 ```text
