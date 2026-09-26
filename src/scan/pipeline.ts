@@ -1021,13 +1021,9 @@ function pruneNegativeAuditObservations(result: PerceptionResult): PerceptionRes
 }
 
 
-const OPERATIONAL_CHANGE_AUDIT_TERMS = /\b(?:box|boxes|carton|package|fire extinguisher|extinguisher|chair|stool|bench|cart|trolley|pallet jack|hand truck|dolly|wheelchair|ladder|barrier|cone|toolbox|bag|suitcase|equipment case|door|doorway|exit|egress|walkway|walking path|passage|aisle|obstruction|blocking|blocked|obstructing|obstructed)\b/i
-
 function isOperationalChangeAuditObject(item: SpatialObject): boolean {
-  if (item.confidence < 0.9) return false
-  if (item.category === 'obstruction' || item.category === 'safety' || item.category === 'door') return true
-  const text = `${item.name} ${item.description ?? ''}`
-  return OPERATIONAL_CHANGE_AUDIT_TERMS.test(text)
+  if (item.confidence < 0.9 || item.evidenceIds.length === 0) return false
+  return item.category !== 'room' && item.category !== 'person'
 }
 
 function mergeOperationalChangeAudit(
@@ -1074,12 +1070,11 @@ function mergeOperationalChangeAudit(
     added.push(next)
   }
 
-  const mappedObservationText = audit.observations.filter((item) =>
-    item.confidence >= 0.9 && OPERATIONAL_CHANGE_AUDIT_TERMS.test(`${item.label} ${item.description}`),
-  ).map((item) => ({ ...item, id: `change_audit_${item.id}` }))
+  const mappedObservationText = audit.observations
+    .filter((item) => item.confidence >= 0.9 && item.evidenceIds.length > 0)
+    .map((item) => ({ ...item, id: `change_audit_${item.id}` }))
 
   const mappedConditions = audit.conditions.flatMap((item) => {
-    if (item.confidence < 0.85 || !OPERATIONAL_CHANGE_AUDIT_TERMS.test(`${item.title} ${item.description}`)) return []
     const objectIds = item.objectIds.map((id) => idMap.get(id)).filter((id): id is string => Boolean(id))
     if (item.objectIds.length > 0 && objectIds.length !== item.objectIds.length) return []
     return [{ ...item, id: `change_audit_${item.id}`, objectIds }]
@@ -1139,8 +1134,13 @@ function temporalStateCandidateAllowed(item: SpatialObject): boolean {
 }
 
 function temporalMovementCandidateAllowed(item: SpatialObject): boolean {
-  const name = normalizeTemporalName(item.name)
-  return /\b(?:chair|stool|bench|cart|trolley|pallet jack|hand truck|dolly|wheelchair|ladder|box|crate|bin|barrier|cone|toolbox|bag|suitcase|equipment case|fire extinguisher|extinguisher)\b/.test(name)
+  if (item.category === 'room' || item.category === 'window' || item.category === 'signage' || item.category === 'document') return false
+  if (item.category === 'door') return false
+  return item.category === 'furniture'
+    || item.category === 'equipment'
+    || item.category === 'safety'
+    || item.category === 'obstruction'
+    || item.category === 'other'
 }
 
 function isCompositeOpenable(item: SpatialObject): boolean {
@@ -1179,13 +1179,7 @@ function shouldRunOpenableStateAudit(result: PerceptionResult): boolean {
 }
 
 function shouldRunStillImageConditionAudit(result: PerceptionResult): boolean {
-  const text = normalizeSemanticText([
-    ...result.observations.flatMap((item) => [item.label, item.description]),
-    ...result.objects.flatMap((item) => [item.name, item.description ?? '', item.position?.description ?? '']),
-    ...result.conditions.flatMap((item) => [item.title, item.description]),
-  ].join(' '))
-
-  return /\b(?:emergency exit|exit sign|blocked|blocking|obstruction|obstructed|walkway|access route|spill|leak|smoke|fire|broken|cracked|damaged|damage|loose cable|exposed wire|unstable|fallen|pallet jack|trolley|cart in front|box in doorway|across walkway)\b/.test(text)
+  return result.objects.some((item) => item.evidenceIds.length > 0)
 }
 
 function hasOperationalConditionCandidate(result: PerceptionResult): boolean {
@@ -1339,17 +1333,17 @@ function shouldRunAccessGeometryAudit(result: PerceptionResult): boolean {
 }
 
 function accessGeometryCandidates(result: PerceptionResult): SpatialObject[] {
-  return result.objects.filter((item) => {
-    if (item.evidenceIds.length === 0) return false
-    if (item.category === 'obstruction') return true
-
-    const text = `${item.name} ${item.description ?? ''}`
-    // Do not proactively reinterpret ordinary office furniture as an access
-    // obstacle from a single perspective. If a chair/table/desk truly blocks
-    // a doorway, the broad scene or condition audit may state that directly;
-    // this targeted geometry pass is reserved for obstruction-like objects.
-    return /\b(?:pallet\s+jack|pallet|trolley|cart|forklift|box|carton|barrier|cone|ladder|equipment\s+case|material[-\s]+handling\s+equipment)\b/i.test(text)
-  })
+  return result.objects
+    .filter((item) =>
+      item.evidenceIds.length > 0 &&
+      item.category !== 'room' &&
+      item.category !== 'door' &&
+      item.category !== 'person' &&
+      item.category !== 'signage' &&
+      item.category !== 'window',
+    )
+    .sort((a, b) => b.confidence - a.confidence)
+    .slice(0, 12)
 }
 
 function sharesTrustedEvidenceWithAnyDoor(candidate: SpatialObject, doors: SpatialObject[]): boolean {
