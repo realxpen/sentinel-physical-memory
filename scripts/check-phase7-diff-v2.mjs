@@ -280,6 +280,47 @@ try {
     throw new Error(`salience filtering must preserve new obstruction evidence: ${synthTitles.join(' | ')}`)
   }
 
+  const exitSignRepresentationRefinement = engine.compare(
+    {
+      stateId: 'state_exit_sign_embedded_1',
+      environmentId,
+      objects: [object('exit_door_embedded', 'Exit Door', 'door', {
+        description: 'Black glass door with a green "EXIT" sign above it.',
+        evidenceIds: ['e_exit_v1'],
+      })],
+      conditions: [],
+      issues: [],
+      relations: [],
+    },
+    {
+      stateId: 'state_exit_sign_embedded_2',
+      environmentId,
+      objects: [
+        object('exit_door_embedded_new', 'Exit Door', 'door', {
+          description: 'Black glass door below the green EXIT sign.',
+          evidenceIds: ['e_exit_v2'],
+        }),
+        object('exit_sign_split', 'Exit Sign', 'signage', {
+          description: 'Green EXIT sign mounted above the door.',
+          evidenceIds: ['e_exit_v2'],
+        }),
+        object('boxes_exit_new', 'Cardboard Boxes', 'obstruction', {
+          position: { description: 'in front of Exit Door' },
+          evidenceIds: ['e_exit_v2'],
+        }),
+      ],
+      conditions: [],
+      issues: [],
+      relations: [],
+    },
+  )
+  if (exitSignRepresentationRefinement.changes.some((change) => /New: Exit Sign/i.test(change.title))) {
+    throw new Error('splitting previously grounded EXIT signage into its own object must not become a physical addition')
+  }
+  if (!exitSignRepresentationRefinement.changes.some((change) => change.title === 'New: Cardboard Boxes')) {
+    throw new Error('exit-sign representation refinement must not hide the real cardboard-box addition')
+  }
+
   const transientPersonNoise = engine.compare(
     {
       stateId: 'state_person_1',
@@ -587,6 +628,7 @@ try {
   console.log('PASS  first-class condition transition semantics avoid duplicate issue noise')
   console.log('PASS  door hardware, light fixtures, room labels, decor, and permanent architecture naming drift stay out of raw Reality Diff')
   console.log('PASS  architectural noise suppression preserves obstruction, extinguisher movement, access conditions, and explicit door state changes')
+  console.log('PASS  exit-sign object materialization remains representation refinement when prior grounded memory already described the sign')
   console.log('PASS  transient people never become durable Reality Diff changes')
   console.log('PASS  generated state-pair diffs remain stored in environmental memory')
   console.log('SENTINEL PHASE 7 DIFF ENGINE V2 VERIFIED')
