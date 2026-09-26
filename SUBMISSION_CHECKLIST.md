@@ -22,6 +22,8 @@
 - [x] Voiceover / shot list prepared
 - [x] YouTube title + description prepared
 - [x] Recording/edit/upload checklist prepared
+- [x] Final submission runbook prepared
+- [x] Canonical demo locked to the proven Office Lounge Test 4 State v1 → v2 → v3 journey
 
 ## External submission items
 
@@ -29,6 +31,7 @@
 - [ ] Keep final video under 3:00
 - [ ] Upload video publicly to YouTube
 - [ ] Add YouTube URL to `SUBMISSION.md`
+- [ ] Export four clean Devpost screenshots: Memory, Reality Diff, Action Plan, Verified
 - [ ] Add final screenshots/images to Devpost
 - [ ] Paste/review final project description on Devpost
 - [ ] Confirm repository About section shows the open-source license
