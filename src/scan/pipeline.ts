@@ -665,44 +665,6 @@ export class ScanPipeline {
 
       if (
         !hasOperationalConditionCandidate(merged)
-        && shouldRunIdentityAudit(merged)
-        && this.hasRuntimeBudget(OPTIONAL_AUDIT_TIMEOUT_MS + reserveAfterPerceptionMs)
-      ) {
-        const identityPrompt = [
-          `Targeted physical-object identity verification for scan ${scanId} in environment ${input.environmentId}.`,
-          `The scan source id is ${input.source.id}.`,
-          `The trusted scan capturedAt is ${input.source.capturedAt}.`,
-          'The earlier grounded passes found an emergency/exit context and an access-adjacent object whose taxonomy is ambiguous.',
-          'Inspect the supplied frames again, focusing specifically on the physical object directly in front of/across/near the door or exit.',
-          'Classify by visible morphology, not by the earlier label and not by filenames or metadata.',
-          'For warehouse material-handling equipment: a pallet jack/trolley/cart is movable and normally has wheels/casters, fork arms/platform and/or a steering handle; a ramp is a sloped or bridging surface and does not have those handling features.',
-          'Return a specific pallet jack/trolley/cart label only when those visible features support it. If the evidence really supports a ramp, keep ramp. If neither is clear, use conservative generic equipment/object wording.',
-          'State the object-to-door placement explicitly when visible (for example in front of, across, blocking, or beside).',
-          'If exit signage is visible, include a grounded exit-sign observation/object so the access role remains independently evidenced.',
-          'Do not force a hazard or access condition. Emit an operational condition only if the visible evidence itself supports one.',
-          'Reference only exact supplied FRAME_ID values in evidenceIds. Return the full SENTINEL PerceptionResult JSON schema.',
-        ].join('\n')
-
-        console.warn('SENTINEL_IDENTITY_AUDIT_STARTED', { scanId, reason: 'ambiguous_access_adjacent_object' })
-        try {
-          const identityAudit = await this.inferPerceptionPass('identity-audit', identityPrompt, artifacts, frames, input)
-          merged = mergePerceptionPasses(merged, identityAudit, 'identity_')
-          console.warn('SENTINEL_IDENTITY_AUDIT_COMPLETED', {
-            scanId,
-            objects: identityAudit.objects.map((item) => ({ name: item.name, category: item.category, confidence: item.confidence })),
-            conditions: identityAudit.conditions.map((item) => ({ title: item.title, kind: item.kind, confidence: item.confidence })),
-          })
-        } catch (error) {
-          console.warn('SENTINEL_IDENTITY_AUDIT_SKIPPED', {
-            scanId,
-            code: errorCode(error),
-            message: error instanceof Error ? error.message : 'Unknown identity-audit failure',
-          })
-        }
-      }
-
-      if (
-        !hasOperationalConditionCandidate(merged)
         && shouldRunAccessGeometryAudit(merged)
         && this.hasRuntimeBudget(OPTIONAL_AUDIT_TIMEOUT_MS + reserveAfterPerceptionMs)
       ) {
@@ -775,7 +737,7 @@ export class ScanPipeline {
   }
 
   private async inferPerceptionPass(
-    pass: 'scene' | 'state-audit' | 'condition-audit' | 'identity-audit' | 'access-geometry-audit' | 'operational-change-audit' | 'person-confirmation-audit',
+    pass: 'scene' | 'state-audit' | 'condition-audit' | 'access-geometry-audit' | 'operational-change-audit' | 'person-confirmation-audit',
     prompt: string,
     artifacts: ScanArtifact[],
     frames: ScanFrame[],
