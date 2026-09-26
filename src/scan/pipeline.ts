@@ -1077,7 +1077,10 @@ function movementCandidateWorthVerifying(previous: SpatialObject, current: Spati
 function positionDescriptionsEquivalent(a: string, b: string): boolean {
   if (a === b || a.includes(b) || b.includes(a)) return true
 
-  const stop = new Set(['the','and','with','from','near','beside','next','left','right','front','back','center','centre'])
+  const stop = new Set([
+    'the','and','with','from','near','beside','next','left','right','front','back','center','centre',
+    'wall','floor','room','area','side','door','doorway','window','corner','middle','inside','outside',
+  ])
   const tokens = (value: string) => value
     .split(' ')
     .filter((token) => token.length >= 4 && !stop.has(token))
