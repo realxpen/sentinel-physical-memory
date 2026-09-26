@@ -28,6 +28,7 @@ try {
     object('ceiling', 'structure', 'ceiling', 'Exposed white ceiling.'),
     object('knob_a', 'door', 'door knob', 'Metal knob.', 0.91),
     object('knob_b', 'door', 'door knob', 'Metal knob duplicate from another pass.', 0.97),
+    object('person_false', 'person', 'person', 'False-positive distant silhouette.', 1),
   ])
 
   const primary = primaryMemoryObjectRows(rows, 10)
@@ -41,6 +42,7 @@ try {
   expect(!names.includes('floor'), 'floor must not dominate the default Memory list')
   expect(!names.includes('ceiling'), 'ceiling must not dominate the default Memory list')
   expect(!names.includes('door knob'), 'door hardware must not dominate the default Memory list')
+  expect(!rows.some((row) => row.object.category === 'person'), 'transient people must not appear even in the expanded remembered-object list')
 
   const knob = rows.find((row) => row.object.name.toLowerCase() === 'door knob')
   expect(knob?.count === 2, 'duplicate same-name/category records must collapse into one display row')
@@ -64,6 +66,7 @@ try {
 
   console.log('PASS  duplicate object records collapse for presentation without rewriting memory')
   console.log('PASS  safety and meaningful objects stay prominent while structural inventory is hidden by default')
+  console.log('PASS  transient people never appear as remembered environmental objects')
   console.log('PASS  retired dark spatial inventory is removed from the Memory render tree')
   console.log('PASS  State History precedes one canonical current-object surface')
   console.log('PASS  full inventory remains available through Show all and object detail remains interactive')
