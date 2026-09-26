@@ -492,8 +492,8 @@ export class ScanPipeline {
       'Treat all supplied frames as one walkthrough of the same environment. Repeated sightings of the same physical entity across frames should resolve to one object, not one object per frame.',
       'Do not emit the overall scene/environment itself (for example "warehouse" or "office") as a SpatialObject. A room/area object requires a distinct bounded physical-space identity.',
       'For every durable physical item named in a direct observation, emit a corresponding object entry when the item is visually identifiable.',
-      'Prefer stable physical identity names over viewpoint-dependent phrases. In warehouses, distinguish pallet jacks/carts/trolleys from ramps: a pallet jack is wheeled material-handling equipment with fork arms and a handle; a ramp is a fixed or sloped walking/loading surface. Distinguish a portable fire extinguisher (cylinder/handle/hose) from a hydrant or standpipe. If uncertain, use a conservative generic equipment label instead of a wrong specific label.',
-      'If an emergency/exit sign is directly visible, emit both a grounded observation and a signage object for it.',
+      'Prefer stable whole-object identity names over viewpoint-dependent phrases. Classify from visible morphology and context, never from an expected room type, prior demo scenario, filename, or remembered change. If a specific identity is uncertain, use a conservative generic physical-object label instead of forcing a familiar noun.',
+      'For any directly visible operational signage, safety device, access feature, equipment, fixture, or other durable scene anchor, emit a corresponding grounded object when visually identifiable.',
       'Separate direct visual observations from condition interpretations.',
       'Reference only the exact supplied FRAME_ID values in evidenceIds. SENTINEL owns frame evidence records; do not manufacture replacement frame evidence IDs.',
       'Omit unsupported optional claims instead of guessing.',
@@ -511,12 +511,11 @@ export class ScanPipeline {
       return scene
     }
 
-    // Update-photo change audit: the broad scene pass is intentionally general and
-    // can occasionally miss a visually obvious operational object in a later state
-    // (for example newly introduced boxes or a re-positioned extinguisher). Re-read
-    // the CURRENT image only and recover high-salience current objects/anchors. Prior
-    // memory is naming context, never evidence, and recovered objects still require
-    // trusted current-frame grounding + high confidence.
+    // Update-photo integrity audit: the broad scene pass can miss a material current
+    // object, relationship, or condition in any kind of environment. Re-read the
+    // CURRENT image once without assuming a demo object list. Prior memory is naming
+    // context only, never evidence, and every recovered claim still requires trusted
+    // current-frame grounding.
     if (
       input.media.kind === 'image'
       && priorObjects.length > 0
@@ -533,20 +532,18 @@ export class ScanPipeline {
         .join(', ')
 
       const changeAuditPrompt = [
-        `Operational change recovery audit for scan ${scanId} in environment ${input.environmentId}.`,
+        `Current-state integrity audit for scan ${scanId} in environment ${input.environmentId}.`,
         `The scan source id is ${input.source.id}.`,
         `The trusted scan capturedAt is ${input.source.capturedAt}.`,
-        `Current scene pass already found these operationally relevant objects: ${currentSceneObjects || 'none'}.`,
-        `Previously remembered operational names (NAMING CONTEXT ONLY, NOT EVIDENCE): ${priorOperationalAnchors || 'none'}.`,
-        'Inspect the supplied CURRENT still image independently. Recover only directly visible, operationally salient physical objects that the broad scene pass may have missed or under-described.',
-        'Prioritize boxes/cartons/packages, fire extinguishers, movable chairs/carts/trolleys, doors, exit signage, barriers, ladders, equipment cases, and objects occupying a walkway/doorway/exit path.',
+        `Current scene pass already found these grounded objects: ${currentSceneObjects || 'none'}.`,
+        `Previously remembered names (NAMING CONTEXT ONLY, NOT EVIDENCE): ${priorOperationalAnchors || 'none'}.`,
+        'Inspect the supplied CURRENT still image independently. Recover any materially useful directly visible physical object, relationship, or environmental condition that the broad scene pass missed or under-described.',
+        'Do not use a fixed inventory or expected demo objects. Evaluate the actual image across access/circulation, safety, maintenance, damage, equipment/fixture state, electrical/HVAC context, compliance cues, and other visibly operational conditions supported by the scene.',
         'Re-observe a previously named anchor only when that physical object is directly visible in the CURRENT image. Never infer presence from prior memory.',
-        'For each recovered object, use a stable whole-object name and a concise semantic physical position when directly visible, such as "left wall beside Conference Room sign" or "in front of exit door".',
-        'If a box/carton/furniture/equipment item is visibly in front of/across/blocking a door, doorway, exit, or walking path, emit the direct placement in its description/position and a grounded spatial relation when visually defensible.',
-        'If a fire extinguisher is visible, call it "fire extinguisher" rather than generic equipment.',
-        'Do not enumerate walls, floors, ceilings, decor, plants, tiny desk items, door hardware, or other low-salience inventory in this audit.',
+        'Use stable whole-object names and concise semantic physical positions when directly visible. If the physical relationship between objects matters operationally, encode the supported relation and condition rather than relying on vague prose.',
         'Do not claim an object is new, moved, removed, resolved, or changed. This pass describes CURRENT visible state only; SENTINEL compares states later.',
-        'Omit anything ambiguous. Do not use filenames, metadata, prior memory, or expected demo changes as evidence.',
+        'Do not force a condition. Ordinary scene arrangement remains ordinary unless current visual evidence supports an operational condition.',
+        'Omit anything ambiguous. Do not use filenames, metadata, prior memory, room labels, or expected changes as evidence.',
         'Reference only exact supplied FRAME_ID values in evidenceIds. Return the full SENTINEL PerceptionResult JSON schema.',
       ].join('\n')
 
