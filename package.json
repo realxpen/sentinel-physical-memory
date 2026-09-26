@@ -18,6 +18,7 @@
     "check:condition-audit": "node --experimental-strip-types ./scripts/check-condition-audit.mjs",
     "check:phase5-conditions": "node --experimental-strip-types ./scripts/check-phase5-condition-model.mjs",
     "check:condition-derivation": "node ./scripts/check-condition-derivation.mjs",
+    "check:access-geometry-guard": "node ./scripts/check-access-geometry-guard.mjs",
     "check:diff-position": "node ./scripts/check-diff-position.mjs",
     "check:object-identity": "node ./scripts/check-object-identity.mjs",
     "build": "tsc -b && vite build",
