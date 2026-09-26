@@ -59,11 +59,11 @@ expect('generic box-in-room statement keeps normal effective kind', effectiveCon
 const doorwayBox = condition({
   kind: 'normal',
   title: 'Supply Box',
-  description: "A cardboard box labeled 'SUPPLIES' is visible in the doorway.",
+  description: "A physical item labeled 'SUPPLIES' is visibly blocking the doorway.",
   confidence: 0.60,
 })
 const doorwayAssessment = assessCondition(doorwayBox)
-expect('explicit physical obstacle in doorway is policy-classified as access', effectiveConditionKind(doorwayBox) === 'access')
+expect('explicit blocking of a doorway is policy-classified as access without depending on an object noun', effectiveConditionKind(doorwayBox) === 'access')
 expect('grounded observed doorway obstruction can become operational at bounded 0.60 threshold', doorwayAssessment.operational === true)
 expect('explicit doorway obstruction maps to access issue type', doorwayAssessment.issueType === 'access')
 expect('explicit doorway obstruction remains medium severity', doorwayAssessment.severity === 'medium')
@@ -71,7 +71,7 @@ expect('explicit doorway obstruction remains medium severity', doorwayAssessment
 const weakDoorwayBox = assessCondition(condition({
   kind: 'normal',
   title: 'Supply Box',
-  description: 'A cardboard box is visible in the doorway.',
+  description: 'A physical item is visibly blocking the doorway.',
   confidence: 0.59,
 }))
 expect('explicit doorway obstruction below bounded threshold stays context-only', weakDoorwayBox.operational === false)
