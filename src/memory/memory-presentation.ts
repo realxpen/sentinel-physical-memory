@@ -1,4 +1,5 @@
 import type { SpatialObject } from '../domain/sentinel.js'
+import { isTransientEnvironmentalObject } from '../domain/object-policy.js'
 
 export interface MemoryObjectRow {
   object: SpatialObject
@@ -11,6 +12,7 @@ export function buildMemoryObjectRows(objects: SpatialObject[]): MemoryObjectRow
   const groups = new Map<string, MemoryObjectRow>()
 
   for (const object of objects) {
+    if (isTransientEnvironmentalObject(object)) continue
     const key = `${normalize(object.category)}::${normalize(object.name)}`
     const lowSalience = isLowSalienceMemoryObject(object)
     const score = memoryObjectScore(object, lowSalience)
