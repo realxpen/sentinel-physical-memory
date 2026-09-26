@@ -1,4 +1,4 @@
-import type { EnvironmentalStateSnapshot, SpatialObject } from '../domain/sentinel.js'
+import type { EnvironmentalCondition, EnvironmentalStateSnapshot, SpatialObject } from '../domain/sentinel.js'
 import { isUnconfirmedPersonObject } from '../domain/object-policy.js'
 
 export interface MemoryObjectRow {
@@ -12,15 +12,47 @@ export function memorySnapshotForPresentation(snapshot: EnvironmentalStateSnapsh
   const hiddenPersonIds = new Set(
     snapshot.objects.filter(isUnconfirmedPersonObject).map((item) => item.id),
   )
-  if (hiddenPersonIds.size === 0) return snapshot
+  const visibleConditions = snapshot.conditions.filter((item) => !item.objectIds.some((id) => hiddenPersonIds.has(id)))
 
   return {
     ...snapshot,
     objects: snapshot.objects.filter((item) => !hiddenPersonIds.has(item.id)),
-    conditions: snapshot.conditions.filter((item) => !item.objectIds.some((id) => hiddenPersonIds.has(id))),
+    conditions: collapseEquivalentConditionsForPresentation(visibleConditions),
     issues: snapshot.issues.filter((item) => !item.objectIds.some((id) => hiddenPersonIds.has(id))),
     relations: snapshot.relations.filter((item) => !hiddenPersonIds.has(item.fromId) && !hiddenPersonIds.has(item.toId)),
   }
+}
+
+export function collapseEquivalentConditionsForPresentation(
+  conditions: EnvironmentalCondition[],
+): EnvironmentalCondition[] {
+  const presented: EnvironmentalCondition[] = []
+
+  for (const condition of conditions) {
+    const existing = presented.find((candidate) =>
+      normalize(candidate.title) === normalize(condition.title) &&
+      candidate.kind === condition.kind &&
+      candidate.status === condition.status &&
+      candidate.basis === condition.basis &&
+      candidate.objectIds.some((id) => condition.objectIds.includes(id)) &&
+      candidate.evidenceIds.some((id) => condition.evidenceIds.includes(id)),
+    )
+
+    if (!existing) {
+      presented.push({
+        ...condition,
+        objectIds: [...condition.objectIds],
+        evidenceIds: [...condition.evidenceIds],
+      })
+      continue
+    }
+
+    existing.objectIds = [...new Set([...existing.objectIds, ...condition.objectIds])]
+    existing.evidenceIds = [...new Set([...existing.evidenceIds, ...condition.evidenceIds])]
+    existing.confidence = Math.max(existing.confidence, condition.confidence)
+  }
+
+  return presented
 }
 
 export function buildMemoryObjectRows(objects: SpatialObject[]): MemoryObjectRow[] {
