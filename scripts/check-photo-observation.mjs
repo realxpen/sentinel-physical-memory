@@ -35,6 +35,10 @@ try {
         return { sourceId, observations: [], objects: [], conditions: [], relations: [], evidence: [] }
       }
 
+      if (request.prompt.includes('Person confirmation audit for scan')) {
+        return { sourceId, observations: [], objects: [], conditions: [], relations: [], evidence: [] }
+      }
+
       return {
         sourceId,
         observations: [
@@ -47,7 +51,7 @@ try {
           { id: `plant_alias_${calls}`, environmentId, category: 'furniture', name: 'plant pot', position: { description: 'on shelf' }, confidence: 0.95, firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: [frameId] },
           { id: `plant_desk_${calls}`, environmentId, category: 'furniture', name: 'potted plant', position: { description: 'on desk' }, confidence: 0.95, firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: [frameId] },
           { id: `door_${calls}`, environmentId, category: 'door', name: 'white door', position: { description: 'back wall' }, confidence: 0.95, firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: [frameId] },
-          { id: `person_${calls}`, environmentId, category: 'person', name: 'person', description: 'false-positive distant person candidate', confidence: 1, firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: [frameId] },
+          { id: `person_${calls}`, environmentId, category: 'person', name: 'person', description: 'false-positive distant person candidate', boundingBox: { x: 0.72, y: 0.18, width: 0.08, height: 0.2 }, confidence: 1, firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: [frameId] },
         ],
         conditions: [], relations: [], evidence: [],
       }
@@ -82,7 +86,7 @@ try {
   console.log('PASS  explicit visible door state survives canonicalization')
   console.log('PASS  one targeted state audit can update an existing openable object')
   console.log('PASS  state-audit hardware/inventory leakage is rejected before memory')
-  console.log('PASS  transient/possibly hallucinated people are excluded before persistent memory')
+  console.log('PASS  independently rejected person candidates are excluded before persistent memory')
   console.log('PASS  still photo creates durable environmental State v1')
   console.log('PASS  image observation remains grounded through the normal perception pipeline')
   console.log('SENTINEL PHOTO OBSERVATION VERIFIED')
