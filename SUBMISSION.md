@@ -68,7 +68,7 @@ The AI runtime is Nebius Token Factory.
 
 Production responsibilities are split deliberately:
 
-- **MiniCPM-V** handles multimodal scene perception and paired temporal visual checks.
+- **MiniCPM-V** handles multimodal scene perception and paired temporal visual checks. The configured perception model is now the direct primary route; SENTINEL does not waste a request probing an unavailable default model first.
 - **NVIDIA Nemotron 3 Nano 30B-A3B** handles Ask the Building reasoning and Action Planner reasoning.
 - visual condition verification runs through Token Factory using the configured multimodal verification model.
 
@@ -100,6 +100,8 @@ We solved these by keeping immutable history and adding conservative server-owne
 - evidence-backed Action Planner;
 - closed-loop positive/negative Verification Agent behavior;
 - repeated controlled Scan A → B → C demo;
+- end-to-end verification proven in two different environments: the original hallway and a separate office-lounge generalization test;
+- office-lounge proof closed with 1 resolved / 0 remaining / 0 inconclusive from positive current evidence;
 - reliability guards for timeouts, malformed output, missing state/evidence, network failure, duplicate conditions and cold start;
 - live Nebius/NVIDIA model-role/latency runtime proof.
 

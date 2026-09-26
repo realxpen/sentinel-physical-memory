@@ -288,26 +288,28 @@ Full testing guide: [docs/JUDGE_TESTING.md](docs/JUDGE_TESTING.md)
 The controlled hackathon story is:
 
 ```text
-Scan A
-clear exit + extinguisher at position A
+Scan A / State v1
+clean office lounge, exit clear
         ↓
-Scan B
-boxes obstruct exit + extinguisher moved
+Scan B / State v2
+cardboard boxes obstruct exit
         ↓
 Reality Diff
-obstruction / movement / attention
+Emergency exit access obstructed
+New: Cardboard Boxes
         ↓
 Ask
 Which change matters most?
         ↓
 Action Plan
-evidence-backed recommended steps
+Clear obstruction
+Rescan to verify
         ↓
-Scan C
-boxes removed
+Scan C / State v3
+boxes removed, same exit context visible
         ↓
 Verification
-Verified — exit path clear from positive current evidence
+Verified — 1 resolved / 0 remaining / 0 inconclusive
 ```
 
 Detailed rehearsal guide: [docs/DEMO_SCENARIO.md](docs/DEMO_SCENARIO.md)
@@ -364,6 +366,7 @@ Beyond the hackathon MVP:
 - [Devpost submission draft](SUBMISSION.md)
 - [Submission checklist](SUBMISSION_CHECKLIST.md)
 - [Final 2:58 demo script](docs/FINAL_DEMO_VIDEO.md)
+- [Final submission runbook](docs/FINAL_SUBMISSION_RUNBOOK.md)
 - [Recording checklist](docs/RECORDING_CHECKLIST.md)
 - [YouTube upload copy](docs/YOUTUBE_COPY.md)
 - [Project state](PROJECT_STATE.md)

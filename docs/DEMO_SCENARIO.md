@@ -8,72 +8,110 @@ Demonstrate the complete physical-memory loop in under three minutes:
 observe → remember → detect → ask → plan → change → rescan → verify
 ```
 
-## Controlled environment
+The final hackathon story is deliberately narrow: **one office lounge, one obvious physical obstruction, one verified correction.**
 
-Use one hallway/office area with stable visual anchors:
+Do not add extra movement or secondary issues just to make the demo look busier.
 
-- visible exit/door;
-- visible exit sign if available;
-- wall-mounted or portable fire extinguisher;
-- clear walking path;
-- fixed poster/sign/plant/chair that help visual localization.
+## Proven reference environment
 
-Keep camera viewpoint as consistent as practical.
+The production generalization proof is:
+
+**Office Lounge Test 4**
+
+It already completed the full loop on a scene different from the original hallway:
+
+- State v1 — clean office lounge / exit clear;
+- State v2 — cardboard boxes physically obstruct the exit;
+- Reality Diff — one needs-attention exit obstruction + one real physical addition: Cardboard Boxes;
+- Ask — the exit obstruction is the change that matters most;
+- Action Plan — clear obstruction + deterministic rescan-to-verify handoff;
+- State v3 — boxes removed, same exit area visible;
+- Verification — **1 resolved / 0 remaining / 0 inconclusive / 0 new** from positive current evidence.
+
+This environment is the safest source for final presentation footage because it is already persisted and proven. Do **not** mutate it during recording.
 
 ## Scan A — baseline
 
 Physical state:
 
-- exit route clear;
-- no boxes in the path;
-- extinguisher at position A.
+- exit route visibly clear;
+- no cardboard boxes in the path;
+- stable office anchors remain visible: exit door/signage, furniture, plants, kitchen area and safety equipment.
 
-Show:
+Product story:
 
-1. **Give this place a memory.**
-2. Observe/upload Scan A.
-3. Memory becomes **Your space remembers.**
-4. Briefly show Spatial Memory / state history.
+1. Open State v1 / Memory.
+2. Show that the place has an immutable remembered state.
+3. Briefly expose the remembered objects/evidence without turning the video into an inventory tour.
 
-## Scan B — meaningful change
+Narration:
 
-Make two obvious changes:
+> Physical places usually have no persistent machine memory. SENTINEL gives them one.
 
-- add stacked cardboard boxes in/near the exit path;
-- move the fire extinguisher.
+## Scan B — one meaningful change
 
-Observe again.
+Physical state:
+
+- same office context;
+- stacked cardboard boxes now occupy the exit access area.
 
 Target product story:
 
-- new obstruction / access concern;
-- boxes added;
-- extinguisher moved;
-- low-salience inventory noise suppressed.
+- **Needs attention:** Emergency exit access obstructed;
+- **Physical change:** New: Cardboard Boxes;
+- no person hallucination;
+- no furniture-as-obstruction noise;
+- no fake architectural churn;
+- no false resolution.
 
-Show **What changed.**
+Show **What changed. / Reality Diff** with State v1 and State v2 side by side.
 
 Then Ask:
 
-1. **What changed since the last scan?**
-2. **Which change matters most?**
-3. **What should I do?**
+> **Which change matters most?**
 
-Show the evidence-backed answer and Recommended Action Plan.
+Target reasoning:
+
+- prioritize the exit obstruction;
+- connect it to Cardboard Boxes + Exit Door;
+- cite grounded evidence from State v2.
+
+## Action Plan
+
+Create the grounded action plan from State v2.
+
+Target plan:
+
+1. **Clear obstruction** — remove the cardboard boxes from in front of the exit.
+2. **Rescan to verify** — capture the same area after the physical change.
+
+Trust gate:
+
+- all steps remain **Recommended**;
+- nothing is marked completed;
+- there is only one verification handoff.
 
 ## Scan C — physical correction
 
-Remove the boxes so the exit path is visibly clear.
+Physical state:
 
-Keep the same physical area and stable visual anchors visible.
+- boxes removed;
+- same exit door / EXIT-area context clearly visible;
+- access path visibly clear.
 
-Observe again.
+The important verification rule is not “boxes disappeared.”
 
-The latest state may show no new material change relative to another clean state; that is valid. The earlier condition remains available for direct verification.
+The important rule is:
 
-Choose **Verify prior condition**.
+> **Not re-observed is not resolved.**
 
-Target result:
+Resolution requires positive current evidence from the same physical context.
+
+## Verification
+
+Run Phase 12 against State v2 → State v3.
+
+Locked success target:
 
 ```text
 Verified.
@@ -81,11 +119,21 @@ Verified.
 Emergency exit access obstructed
 RESOLVED
 
+1 resolved
 0 remaining
 0 inconclusive
+0 new
 ```
 
-The verifier receives baseline imagery only for localization and uses positive current evidence to prove the current path is clear.
+The current image should positively show the exit area clear and unobstructed, anchored by the same durable exit context.
+
+## Final recording strategy
+
+For the submission video, prefer the already-proven persisted **Office Lounge Test 4** states rather than creating another high-variance environment during the final take.
+
+You may re-run Ask / Action / Verification on those immutable states and cut inference waiting time in editing.
+
+If you want a fresh Observe interaction as B-roll, use a disposable rehearsal environment. Do not create State v4 in Office Lounge Test 4.
 
 ## Demo narration idea
 
@@ -93,25 +141,25 @@ The verifier receives baseline imagery only for localization and uses positive c
 
 > Physical places usually have no persistent machine memory. SENTINEL gives them one.
 
-**After Scan A**
+**Memory**
 
-> This hallway is now a remembered environmental state, grounded to evidence.
+> This office is now an immutable remembered environmental state grounded to visual evidence.
 
-**After Scan B**
+**Reality Diff**
 
-> I changed reality, not a database. SENTINEL created a new immutable state and generated a Reality Diff.
+> I changed reality, not a database. SENTINEL compared two remembered states and found the new exit obstruction.
 
 **Ask**
 
-> Because it remembers previous states, I can ask the place what changed and what matters.
+> Because it remembers the environment, I can ask which change matters most.
 
 **Action**
 
-> Recommendations are grounded to the selected state. SENTINEL never claims the work happened.
+> SENTINEL recommends the smallest grounded next step, but never pretends the work already happened.
 
 **Verification**
 
-> After the physical correction, SENTINEL compares the old and current visual context. Missing is not enough—positive current evidence is required.
+> After the correction, SENTINEL does not treat disappearance as proof. It verifies that the same exit area is visibly clear.
 
 **Close**
 
