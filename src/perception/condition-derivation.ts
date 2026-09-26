@@ -114,13 +114,38 @@ export function deriveOperationalConditions(
   }
   if (derivedConditions.length === 0) return { result: perception, derivedConditions }
 
+  const consolidated = consolidateDoorAccessConditions(derivedConditions)
   return {
     result: {
       ...perception,
-      conditions: [...perception.conditions, ...derivedConditions],
+      conditions: [...perception.conditions, ...consolidated],
     },
-    derivedConditions,
+    derivedConditions: consolidated,
   }
+}
+
+function consolidateDoorAccessConditions(conditions: EnvironmentalCondition[]): EnvironmentalCondition[] {
+  const grouped = new Map<string, EnvironmentalCondition>()
+
+  for (const condition of conditions) {
+    const doorId = condition.objectIds.at(-1) ?? ''
+    const key = `${condition.title}::${doorId}`
+    const existing = grouped.get(key)
+    if (!existing) {
+      grouped.set(key, {
+        ...condition,
+        objectIds: [...condition.objectIds],
+        evidenceIds: [...condition.evidenceIds],
+      })
+      continue
+    }
+
+    existing.objectIds = unique([...existing.objectIds, ...condition.objectIds])
+    existing.evidenceIds = unique([...existing.evidenceIds, ...condition.evidenceIds])
+    existing.confidence = Math.max(existing.confidence, condition.confidence)
+  }
+
+  return [...grouped.values()]
 }
 
 type GroundedFact = {

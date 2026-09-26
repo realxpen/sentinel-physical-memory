@@ -134,6 +134,34 @@ try {
   const negative = deriveOperationalConditions(safePlacement, capturedAt)
   if (negative.derivedConditions.length !== 0) throw new Error('safe placement must not derive an access obstruction')
 
+  const duplicateBoxAliases = structuredClone(base)
+  duplicateBoxAliases.objects[1] = {
+    id: 'boxes_a', environmentId, category: 'obstruction', name: 'Cardboard Boxes',
+    description: 'Cardboard Boxes in front of the green door', confidence: 0.95,
+    firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: ['frame_jack'],
+  }
+  duplicateBoxAliases.objects.push({
+    id: 'boxes_b', environmentId, category: 'obstruction', name: 'Stacked Cardboard Boxes',
+    description: 'Stacked Cardboard Boxes in front of the green door', confidence: 0.96,
+    firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: ['frame_jack'],
+  })
+  duplicateBoxAliases.observations[1].label = 'Cardboard Boxes'
+  duplicateBoxAliases.observations[1].description = 'Cardboard Boxes and stacked cartons are in front of the green door.'
+  duplicateBoxAliases.relations = [{
+    id: 'rel_boxes_a_front_door', environmentId, fromId: 'boxes_a', toId: 'door_1',
+    type: 'in_front_of', confidence: 0.96, evidenceIds: ['frame_jack'],
+  }, {
+    id: 'rel_boxes_b_front_door', environmentId, fromId: 'boxes_b', toId: 'door_1',
+    type: 'in_front_of', confidence: 0.95, evidenceIds: ['frame_jack'],
+  }]
+  const dedupedBoxConditions = deriveOperationalConditions(duplicateBoxAliases, capturedAt)
+  if (dedupedBoxConditions.derivedConditions.length !== 1) {
+    throw new Error(`duplicate same-door box representations must consolidate to one access condition, got ${dedupedBoxConditions.derivedConditions.length}`)
+  }
+  if (!dedupedBoxConditions.derivedConditions[0].objectIds.includes('boxes_a') || !dedupedBoxConditions.derivedConditions[0].objectIds.includes('boxes_b')) {
+    throw new Error('consolidated same-door access condition must retain both grounded obstacle object ids')
+  }
+
   const relationPlacement = structuredClone(base)
   relationPlacement.observations[1].description = 'An orange pallet jack with visible wheels and handle.'
   relationPlacement.objects[1].description = 'orange pallet jack with visible wheels and handle'
@@ -181,6 +209,7 @@ try {
   console.log('PASS  ordinary evidence-backed chair-in-front-of-door geometry derives a medium doorway access issue')
   console.log('PASS  ordinary chair beside the doorway does not create an access issue')
   console.log('PASS  safe obstacle placement does not create an access condition')
+  console.log('PASS  duplicate same-door obstruction representations consolidate to one access condition while retaining their grounded object ids')
   console.log('PASS  grounded obstacle -> door in_front_of relation supports derivation when text omits placement')
   console.log('PASS  reversed spatial direction does not derive an access obstruction')
   console.log('PASS  door naming alone cannot self-ground emergency-exit identity')

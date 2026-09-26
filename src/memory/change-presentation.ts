@@ -1,16 +1,23 @@
-import type { Change } from '../domain/sentinel.js'
+import type { Change, SpatialObject } from '../domain/sentinel.js'
 import { isLowSalienceObjectChange } from './change-salience.js'
+import { hasGroundedExplicitExitSignMention, isExitSignObject } from './object-identity.js'
 
 /**
  * Historical diffs are immutable. This presentation projection prevents an
  * already-persisted still-photo surface duplicate from rendering twice while
  * retaining the underlying evidence and conservative verification status.
  */
-export function changesForPresentation(changes: Change[]): Change[] {
+export interface ChangePresentationContext {
+  previousObjects?: SpatialObject[]
+  currentObjects?: SpatialObject[]
+}
+
+export function changesForPresentation(changes: Change[], context: ChangePresentationContext = {}): Change[] {
   const presented: Change[] = []
   const structuralVerification = new Map<string, Change[]>()
 
   for (const change of changes) {
+    if (isHistoricalExitSignRepresentationRefinement(change, context)) continue
     // Historical diffs are immutable. Hide already-persisted raw inventory
     // churn without mutating the underlying audit trail.
     if (isLowSalienceObjectChange(change)) continue
@@ -36,6 +43,19 @@ export function changesForPresentation(changes: Change[]): Change[] {
   }
 
   return presented
+}
+
+function isHistoricalExitSignRepresentationRefinement(
+  change: Change,
+  context: ChangePresentationContext,
+): boolean {
+  if (change.type !== 'added') return false
+  if (change.entityKind && change.entityKind !== 'object') return false
+  if (!change.entityId) return false
+
+  const current = context.currentObjects?.find((item) => item.id === change.entityId)
+  if (!current || !isExitSignObject(current)) return false
+  return hasGroundedExplicitExitSignMention(context.previousObjects ?? [])
 }
 
 function sharesEvidence(a: Change, b: Change): boolean {

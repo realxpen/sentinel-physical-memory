@@ -8,6 +8,8 @@ import type {
 } from '../domain/sentinel'
 import {
   collapseGroundedStructuralSurfaceDuplicates,
+  hasGroundedExplicitExitSignMention,
+  isExitSignObject,
   matchObjectsConservatively,
   objectsSemanticallyMatch,
   semanticObjectIdentityKey,
@@ -96,6 +98,11 @@ export class EnvironmentalDiffEngine implements DiffEngine {
 
       if (!previous) {
         if (hasUnresolvedFamilyCounterpart(current, normalizedFrom.objects)) continue
+        // A current scan may materialize exit signage as its own object even
+        // when the prior immutable snapshot already grounded that same sign
+        // inside another object's description (for example an exit door).
+        // Treat that as representation refinement, not a physical addition.
+        if (isExitSignObject(current) && hasGroundedExplicitExitSignMention(normalizedFrom.objects)) continue
         if (isLowSalienceInventoryObject(current) || isDurableArchitecturalAnchorObject(current)) continue
         changes.push(this.change(
           normalizedFrom,

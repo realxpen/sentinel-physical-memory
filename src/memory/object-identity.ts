@@ -34,6 +34,17 @@ export function semanticObjectIdentityKey(item: SpatialObject): string {
   return `${item.category}:${normalize(item.name)}`
 }
 
+export function isExitSignObject(item: SpatialObject): boolean {
+  return semanticFamily(item) === 'exit-sign'
+}
+
+export function hasGroundedExplicitExitSignMention(objects: SpatialObject[]): boolean {
+  return objects.some((item) =>
+    item.evidenceIds.length > 0 &&
+    explicitExitSignText(`${item.name} ${item.description ?? ''} ${item.position?.description ?? ''}`),
+  )
+}
+
 /**
  * Same-scan aliases may collapse only when they are semantic variants, share
  * at least one trusted evidence frame, and do not contradict structured or
@@ -213,6 +224,11 @@ export function matchObjectsConservatively(
   }
 
   return currentToPrevious
+}
+
+function explicitExitSignText(value: string): boolean {
+  const text = normalize(value)
+  return /\b(?:emergency )?exit (?:sign|symbol|signage)\b/.test(text)
 }
 
 function semanticFamily(item: SpatialObject): ObjectFamily | undefined {
