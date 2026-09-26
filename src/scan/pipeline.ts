@@ -952,7 +952,12 @@ function mergeOperationalChangeAudit(
       const exact = mergedObjects
         .map((item, index) => ({ item, index }))
         .filter(({ item }) => normalizeTemporalName(item.name) === candidateName)
-      if (exact.length === 1) sceneIndex = exact[0].index
+      if (exact.length === 1) {
+        sceneIndex = exact[0].index
+      } else {
+        const dynamicMatch = matchObjectsConservatively(mergedObjects, [candidate]).get(0)
+        if (dynamicMatch !== undefined) sceneIndex = dynamicMatch
+      }
     }
 
     if (sceneIndex !== undefined) {
