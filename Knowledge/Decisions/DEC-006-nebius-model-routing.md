@@ -38,6 +38,8 @@ The adapter remains provider-generic. The perception boundary supplies the exact
 ## Consequences
 
 - `NEBIUS_PERCEPTION_MODEL` configures the visual model and defaults to `openbmb/MiniCPM-V-4_5`.
+- The configured perception model is the **direct primary route by default**. SENTINEL does not probe another vision model before it.
+- `NEBIUS_PREFERRED_VISION_MODEL` is an optional expert override for a distinct primary vision route. It must be explicitly configured only after that model is verified available to the connected Token Factory account/region; the configured perception model remains the bounded fallback.
 - `NEBIUS_NEMOTRON_REASONING_MODEL` configures reasoning and defaults to `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B`.
 - The older global Token Factory URL is treated as legacy and resolves to the current regional endpoint.
 - Production verification must report the actual configured model path rather than the earlier Nano Omni assumption.

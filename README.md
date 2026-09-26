@@ -168,6 +168,8 @@ SENTINEL makes real runtime inference calls through **Nebius Token Factory**.
 
 **NVIDIA Nemotron 3 Nano 30B-A3B** is therefore on the critical reasoning and action-planning path, not a decorative chat layer.
 
+Perception routes directly to the proven configured `NEBIUS_PERCEPTION_MODEL` by default. A distinct `NEBIUS_PREFERRED_VISION_MODEL` is optional and only used when explicitly configured after availability is verified for the active Nebius account/region; SENTINEL does not probe an unavailable design-time model on every scan.
+
 Every Token Factory completion emits non-secret runtime telemetry:
 
 - provider;

@@ -17,7 +17,6 @@ const MAX_FRAME_DATA_URL_BYTES = 700 * 1024
 const ALLOWED_IMAGE_MIME = new Set(['image/jpeg', 'image/png', 'image/webp'])
 const ALLOWED_VIDEO_MIME = new Set(['video/mp4', 'video/webm', 'video/quicktime', 'video/x-m4v'])
 const DEFAULT_PERCEPTION_MODEL = 'openbmb/MiniCPM-V-4_5'
-const DEFAULT_PREFERRED_VISION_MODEL = 'Qwen/Qwen2.5-VL-72B-Instruct'
 const PREFERRED_VISION_TIMEOUT_MS = 55_000
 const CONFIGURED_VISION_FALLBACK_TIMEOUT_MS = 45_000
 // /api/scan has a 180s platform budget. Keep a 20s safety margin for persistence,
@@ -87,7 +86,11 @@ export default async function handler(req: Request, res: Response) {
 
     const inference: NebiusInferenceTrace[] = []
     const configuredPerceptionModel = process.env.NEBIUS_PERCEPTION_MODEL?.trim() || DEFAULT_PERCEPTION_MODEL
-    const preferredVisionModel = process.env.NEBIUS_PREFERRED_VISION_MODEL?.trim() || DEFAULT_PREFERRED_VISION_MODEL
+    // Production must never probe a design-time model that is not known to be
+    // available to the connected Token Factory account. A distinct preferred
+    // route is opt-in only; otherwise the proven configured perception model is
+    // the direct primary route with no wasted 404/timeout attempt.
+    const preferredVisionModel = process.env.NEBIUS_PREFERRED_VISION_MODEL?.trim() || configuredPerceptionModel
     const artifactResolver = {
       resolve: async (artifact: ScanArtifact) => ({
         artifactId: artifact.artifactId,
