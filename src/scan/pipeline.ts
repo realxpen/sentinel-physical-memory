@@ -613,49 +613,6 @@ export class ScanPipeline {
 
       if (
         !hasOperationalConditionCandidate(merged)
-        && shouldRunIdentityAudit(merged)
-        && this.hasRuntimeBudget(OPTIONAL_AUDIT_TIMEOUT_MS + reserveAfterPerceptionMs)
-      ) {
-        const ambiguousObjects = merged.objects
-          .filter((item) => item.category === 'other' && item.evidenceIds.length > 0)
-          .slice(0, 12)
-          .map((item) => `${item.name} (confidence=${item.confidence.toFixed(2)})`)
-          .join(', ')
-
-        const identityPrompt = [
-          `Targeted physical-object identity verification for scan ${scanId} in environment ${input.environmentId}.`,
-          `The scan source id is ${input.source.id}.`,
-          `The trusted scan capturedAt is ${input.source.capturedAt}.`,
-          `Current ambiguous objects: ${ambiguousObjects || 'none'}.`,
-          'The earlier grounded passes contain one or more current physical objects whose category or identity is too generic for reliable operational reasoning.',
-          'Inspect the supplied CURRENT evidence again and focus only on those ambiguous physical objects and the relationships that materially locate or contextualize them.',
-          'Classify by visible morphology, not by the earlier label and not by filenames or metadata. Do not assume a warehouse, office, demo object, expected change, or remembered answer.',
-          'Use a specific whole-object identity only when visible evidence supports it. Otherwise retain conservative generic wording rather than forcing a familiar noun.',
-          'If an operational condition depends on the object relationship to another visible object, path, opening, fixture, surface, or area, encode that supported relation and condition explicitly.',
-          'Do not force a hazard, access issue, maintenance issue, or other condition when the evidence is ambiguous.',
-          'Reference only exact supplied FRAME_ID values in evidenceIds. Return the full SENTINEL PerceptionResult JSON schema.',
-        ].join('\n')
-
-        console.warn('SENTINEL_IDENTITY_AUDIT_STARTED', { scanId, reason: 'ambiguous_current_object_identity' })
-        try {
-          const identityAudit = await this.inferPerceptionPass('identity-audit', identityPrompt, artifacts, frames, input)
-          merged = mergePerceptionPasses(merged, identityAudit, 'identity_')
-          console.warn('SENTINEL_IDENTITY_AUDIT_COMPLETED', {
-            scanId,
-            objects: identityAudit.objects.map((item) => ({ name: item.name, category: item.category, confidence: item.confidence })),
-            conditions: identityAudit.conditions.map((item) => ({ title: item.title, kind: item.kind, confidence: item.confidence })),
-          })
-        } catch (error) {
-          console.warn('SENTINEL_IDENTITY_AUDIT_SKIPPED', {
-            scanId,
-            code: errorCode(error),
-            message: error instanceof Error ? error.message : 'Unknown identity-audit failure',
-          })
-        }
-      }
-
-      if (
-        !hasOperationalConditionCandidate(merged)
         && shouldRunAccessGeometryAudit(merged)
         && this.hasRuntimeBudget(OPTIONAL_AUDIT_TIMEOUT_MS + reserveAfterPerceptionMs)
       ) {
@@ -728,7 +685,7 @@ export class ScanPipeline {
   }
 
   private async inferPerceptionPass(
-    pass: 'scene' | 'state-audit' | 'condition-audit' | 'identity-audit' | 'access-geometry-audit' | 'person-confirmation-audit',
+    pass: 'scene' | 'state-audit' | 'condition-audit' | 'access-geometry-audit' | 'person-confirmation-audit',
     prompt: string,
     artifacts: ScanArtifact[],
     frames: ScanFrame[],
@@ -1250,12 +1207,6 @@ function materializeExplicitGroundedObjects(
 function hasExplicitExitSignText(value: string): boolean {
   const text = normalizeSemanticText(value)
   return /\b(?:emergency )?exit (?:sign|symbol|signage)\b/.test(text)
-}
-
-function shouldRunIdentityAudit(result: PerceptionResult): boolean {
-  return result.objects.some((item) =>
-    item.category === 'other' && item.evidenceIds.length > 0 && item.confidence >= 0.75,
-  )
 }
 
 function shouldRunAccessGeometryAudit(result: PerceptionResult): boolean {
