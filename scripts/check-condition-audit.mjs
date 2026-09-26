@@ -156,11 +156,11 @@ try {
   if (!prompts[0].includes('Previously remembered object naming context (NOT evidence): none')) throw new Error('scene prompt must label prior memory as naming-only context')
   if (!prompts[0].includes('Repeated sightings of the same physical entity across frames should resolve to one object')) throw new Error('scene prompt must consolidate repeated cross-frame sightings')
   if (!prompts[0].includes('Do not emit the overall scene/environment itself')) throw new Error('scene prompt must reject the whole environment as a SpatialObject')
-  if (!prompts[0].includes('distinguish pallet jacks/carts/trolleys from ramps')) throw new Error('scene prompt is missing warehouse equipment disambiguation')
-  if (!prompts[0].includes('portable fire extinguisher')) throw new Error('scene prompt is missing extinguisher/hydrant disambiguation')
-  if (!prompts[1].includes('walking paths, doors, exits, floors')) throw new Error('condition audit prompt is missing facility-condition focus')
-  if (!prompts[1].includes('Re-check object identity independently instead of blindly copying the scene label')) throw new Error('condition audit must independently re-check scene taxonomy')
-  if (!prompts[1].includes('If an emergency/exit sign is visible, emit it as a signage object')) throw new Error('condition audit must keep exit signage in the durable object inventory')
+  if (!prompts[0].includes('Classify from visible morphology and context')) throw new Error('scene prompt must classify from current visual evidence rather than environment-specific assumptions')
+  if (!prompts[0].includes('never from an expected room type, prior demo scenario')) throw new Error('scene prompt must reject demo/room-type leakage')
+  if (!prompts[1].includes('Do not assume a particular building type, room type, object list, or demo scenario')) throw new Error('condition audit must be environment-agnostic')
+  if (!prompts[1].includes('Evaluate the physical scene broadly')) throw new Error('condition audit must inspect operational conditions broadly')
+  if (!prompts[1].includes('Classify objects from visible morphology and context')) throw new Error('condition audit must independently re-check scene taxonomy')
   if (!prompts[1].includes('supply box (obstruction)')) throw new Error('condition audit prompt is missing scene-object context')
   if (!prompts[1].includes('Normal office environment [normal]')) throw new Error('condition audit prompt is missing benign-condition context')
   if (!prompts[1].includes('Do not enumerate negative findings')) throw new Error('condition audit prompt must prohibit negative finding spam')
@@ -172,8 +172,8 @@ try {
   if (result.state.conditionIds.length !== 2) throw new Error('benign and audited conditions were not persisted into State v1')
   if (result.state.issueIds.length !== 1) throw new Error('supported observed access condition was not promoted by SENTINEL policy')
 
-  console.log('PASS  benign-only scene still triggers targeted facility-condition audit')
-  console.log('PASS  condition audit receives scene object + benign-condition context')
+  console.log('PASS  benign-only scene still triggers an environment-agnostic operational-condition audit')
+  console.log('PASS  condition audit receives scene object + benign-condition context without a fixed object list')
   console.log('PASS  audited condition remains grounded to SENTINEL-owned frame evidence')
   console.log('PASS  audited access condition persists and issue policy remains SENTINEL-owned')
   console.log('PASS  generic negative audit spam is pruned before memory')
@@ -420,9 +420,9 @@ try {
   if (warehouseResult.state.issueIds.length !== 1) throw new Error('derived warehouse access condition was not promoted')
   if (!warehouseResult.observations.some((item) => item.label === 'orange pallet jack')) throw new Error('identity audit pallet-jack fact did not survive merge')
 
-  console.log('PASS  ambiguous ramp-like warehouse object triggers one targeted identity audit')
-  console.log('PASS  identity audit uses visible morphology and explicitly rejects filename/metadata leakage')
-  console.log('PASS  corrected pallet-jack identity enables grounded derivation without lowering trust thresholds')
+  console.log('PASS  ambiguous category=other object triggers one generic identity audit')
+  console.log('PASS  identity audit uses visible morphology and explicitly rejects filename/metadata/demo leakage')
+  console.log('PASS  clarified current-object identity enables grounded derivation without lowering trust thresholds')
 
   const geometryEnvironmentId = 'condition-audit-warehouse-geometry-test'
   const geometrySourceId = 'source-condition-audit-geometry'
