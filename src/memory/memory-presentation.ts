@@ -1,4 +1,4 @@
-import type { SpatialObject } from '../domain/sentinel.js'
+import type { EnvironmentalStateSnapshot, SpatialObject } from '../domain/sentinel.js'
 import { isUnconfirmedPersonObject } from '../domain/object-policy.js'
 
 export interface MemoryObjectRow {
@@ -6,6 +6,21 @@ export interface MemoryObjectRow {
   count: number
   lowSalience: boolean
   score: number
+}
+
+export function memorySnapshotForPresentation(snapshot: EnvironmentalStateSnapshot): EnvironmentalStateSnapshot {
+  const hiddenPersonIds = new Set(
+    snapshot.objects.filter(isUnconfirmedPersonObject).map((item) => item.id),
+  )
+  if (hiddenPersonIds.size === 0) return snapshot
+
+  return {
+    ...snapshot,
+    objects: snapshot.objects.filter((item) => !hiddenPersonIds.has(item.id)),
+    conditions: snapshot.conditions.filter((item) => !item.objectIds.some((id) => hiddenPersonIds.has(id))),
+    issues: snapshot.issues.filter((item) => !item.objectIds.some((id) => hiddenPersonIds.has(id))),
+    relations: snapshot.relations.filter((item) => !hiddenPersonIds.has(item.fromId) && !hiddenPersonIds.has(item.toId)),
+  }
 }
 
 export function buildMemoryObjectRows(objects: SpatialObject[]): MemoryObjectRow[] {
