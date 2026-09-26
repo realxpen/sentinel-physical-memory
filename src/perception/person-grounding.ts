@@ -65,13 +65,6 @@ export function resolvePersonGrounding(
     })
   }
 
-  const rejectedEvidenceIds = new Set(
-    candidates.filter((item) => rejected.has(item.id)).flatMap((item) => item.evidenceIds),
-  )
-  const confirmedEvidenceIds = new Set(
-    candidates.filter((item) => confirmed.has(item.id)).flatMap((item) => item.evidenceIds),
-  )
-
   const objects = scene.objects.flatMap((item) => {
     if (!isPersonObject(item)) return [item]
     const grounding = confirmed.get(item.id)
@@ -89,20 +82,23 @@ export function resolvePersonGrounding(
 
   const keptObjectIds = new Set(objects.map((item) => item.id))
 
-  const observations = scene.observations.filter((item) => {
-    if (!PERSON_TEXT.test(`${item.label} ${item.description}`)) return true
-    const overlapsRejected = item.evidenceIds.some((id) => rejectedEvidenceIds.has(id))
-    if (!overlapsRejected) return true
-    return item.evidenceIds.some((id) => confirmedEvidenceIds.has(id))
-  })
+  // Person prose does not carry object identity, so a shared still-frame evidence
+  // ID cannot tell us whether a sentence refers to a confirmed human or to a
+  // rejected silhouette. Keep the confirmed object itself as the durable claim
+  // and remove free-form person observations whenever this gate runs.
+  const observations = scene.observations.filter((item) =>
+    !PERSON_TEXT.test(`${item.label} ${item.description}`),
+  )
 
   const conditions = scene.conditions.filter((item) => {
     if (item.objectIds.some((id) => rejected.has(id))) return false
     if (item.objectIds.some((id) => !keptObjectIds.has(id))) return false
     if (!PERSON_TEXT.test(`${item.title} ${item.description}`)) return true
-    const overlapsRejected = item.evidenceIds.some((id) => rejectedEvidenceIds.has(id))
-    if (!overlapsRejected) return true
-    return item.evidenceIds.some((id) => confirmedEvidenceIds.has(id))
+
+    // A person-related condition may survive only when it is explicitly tied to
+    // an independently confirmed person object. Text-only occupancy claims are
+    // too ambiguous to retain after a person candidate needed confirmation.
+    return item.objectIds.some((id) => confirmed.has(id))
   })
 
   const relations = scene.relations.filter((item) =>
