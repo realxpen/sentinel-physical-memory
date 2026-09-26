@@ -327,11 +327,10 @@ export class ScanPipeline {
     // Exact unique-name identity is preferred and does not depend on position
     // wording, because movement is one of the things this pass exists to test.
     for (const [currentIndex, current] of perception.objects.entries()) {
-      if (!temporalCandidateAllowed(undefined, current)) continue
       const nameKey = normalizeTemporalName(current.name)
       if ((currentNameCounts.get(nameKey) ?? 0) !== 1 || (previousNameCounts.get(nameKey) ?? 0) !== 1) continue
       const previous = priorSnapshot.objects.find((item) => normalizeTemporalName(item.name) === nameKey)
-      if (!previous) continue
+      if (!previous || !temporalCandidateAllowed(previous, current)) continue
       addCandidate(previous, current)
       pairedCurrent.add(currentIndex)
       if (candidates.length >= 8) break
