@@ -12,6 +12,8 @@ try {
   const { createLatencyResilientPerceptionAdapter } = await vite.ssrLoadModule('/api/scan.ts')
 
   await verifyOutputContractRetry(ScanPipeline, ModelAdapterError)
+  await verifySparseStillInventoryRetry(ScanPipeline)
+  await verifyPersistentSparseStillFailsClosed(ScanPipeline, ModelAdapterError)
   await verifyTransientProviderRetry(ScanPipeline, ModelAdapterError)
   await verifyRecoveredUpdateSkipsTemporal(ScanPipeline, ModelAdapterError)
   await verifySoftBudgetSkipsOptional(ScanPipeline)
@@ -20,6 +22,8 @@ try {
   console.log('PASS  malformed first scene perception response retries automatically once')
   console.log('PASS  retry uses trusted frame grounding and still creates State v1')
   console.log('PASS  zero-condition normal result continues into one grounded condition-audit pass')
+  console.log('PASS  sparse still-photo inventory retries before State v1 can be persisted')
+  console.log('PASS  persistently empty still-photo inventory fails closed without writing memory')
   console.log('PASS  transient provider timeout retries the primary scene once')
   console.log('PASS  recovered timeout persists the grounded scene without spending runtime on optional audits')
   console.log('PASS  recovered update timeout also skips temporal verification and persists before platform timeout')
@@ -81,6 +85,168 @@ async function verifyOutputContractRetry(ScanPipeline, ModelAdapterError) {
   expect(auditAttempts === 1, `expected one post-scene condition audit, got ${auditAttempts}`)
   expect(result.state.version === 1, `expected State v1 after retry, got v${result.state.version}`)
   expect(result.observations.length === 1, `condition-audit prose must not persist as observations, got ${result.observations.length}`)
+}
+
+async function verifySparseStillInventoryRetry(ScanPipeline) {
+  const environmentId = 'sparse-still-retry-environment'
+  const sourceId = 'sparse-still-retry-source'
+  const capturedAt = '2026-09-26T12:30:00.000Z'
+  let sceneAttempts = 0
+  const prompts = []
+
+  const model = {
+    provider: 'test-provider',
+    model: 'test-model',
+    async infer(request) {
+      prompts.push(request.prompt)
+      const frameId = request.artifacts.find((artifact) => artifact.kind === 'frame')?.frameId ?? 'frame_0'
+      sceneAttempts += 1
+
+      if (sceneAttempts === 1) {
+        return {
+          sourceId,
+          observations: [{
+            id: 'obs-exit-sign-only',
+            environmentId,
+            sourceId,
+            modality: 'image',
+            capturedAt,
+            label: 'EXIT sign visible',
+            description: 'A green EXIT sign is visible above the doorway.',
+            confidence: 0.95,
+            basis: 'observed',
+            evidenceIds: [frameId],
+          }],
+          objects: [],
+          conditions: [],
+          relations: [],
+          evidence: [],
+        }
+      }
+
+      return {
+        sourceId,
+        observations: [{
+          id: 'obs-office-lounge',
+          environmentId,
+          sourceId,
+          modality: 'image',
+          capturedAt,
+          label: 'Office lounge visible',
+          description: 'A glass door, chair, table, and plant are directly visible.',
+          confidence: 0.97,
+          basis: 'observed',
+          evidenceIds: [frameId],
+        }],
+        objects: [{
+          id: 'glass-door',
+          environmentId,
+          category: 'door',
+          name: 'glass door',
+          description: 'Black-framed glass door.',
+          state: 'closed',
+          confidence: 0.97,
+          firstSeenAt: capturedAt,
+          lastSeenAt: capturedAt,
+          evidenceIds: [frameId],
+        }, {
+          id: 'round-table',
+          environmentId,
+          category: 'furniture',
+          name: 'round table',
+          description: 'Round white table in the lounge.',
+          confidence: 0.96,
+          firstSeenAt: capturedAt,
+          lastSeenAt: capturedAt,
+          evidenceIds: [frameId],
+        }, {
+          id: 'green-chair',
+          environmentId,
+          category: 'furniture',
+          name: 'green chair',
+          description: 'Green lounge chair beside the table.',
+          confidence: 0.96,
+          firstSeenAt: capturedAt,
+          lastSeenAt: capturedAt,
+          evidenceIds: [frameId],
+        }],
+        conditions: [{
+          id: 'normal-office-lounge',
+          environmentId,
+          kind: 'normal',
+          title: 'Office lounge visible',
+          description: 'No operational condition is asserted.',
+          status: 'present',
+          basis: 'observed',
+          confidence: 0.9,
+          objectIds: [],
+          evidenceIds: [frameId],
+          observedAt: capturedAt,
+        }],
+        relations: [],
+        evidence: [],
+      }
+    },
+  }
+
+  const pipeline = new ScanPipeline({ model })
+  const result = await runImageScan(pipeline, environmentId, sourceId, capturedAt)
+
+  expect(sceneAttempts === 2, `expected one sparse-inventory retry, got ${sceneAttempts} scene calls`)
+  expect(prompts[1]?.includes('SPARSE STILL-PHOTO RETRY'), 'second scene attempt must receive the sparse still-photo recovery instruction')
+  expect(result.state.version === 1, 'successful retry must create exactly State v1')
+  const memory = await pipeline.getMemory(environmentId)
+  const snapshot = memory?.snapshots.find((item) => item.stateId === result.state.id)
+  expect((snapshot?.objects.length ?? 0) >= 3, 'recovered State v1 must contain the grounded physical inventory')
+}
+
+async function verifyPersistentSparseStillFailsClosed(ScanPipeline, ModelAdapterError) {
+  const environmentId = 'persistent-sparse-still-environment'
+  const sourceId = 'persistent-sparse-still-source'
+  const capturedAt = '2026-09-26T12:35:00.000Z'
+  let sceneAttempts = 0
+
+  const model = {
+    provider: 'test-provider',
+    model: 'test-model',
+    async infer(request) {
+      sceneAttempts += 1
+      const frameId = request.artifacts.find((artifact) => artifact.kind === 'frame')?.frameId ?? 'frame_0'
+      return {
+        sourceId,
+        observations: [{
+          id: `obs-sparse-${sceneAttempts}`,
+          environmentId,
+          sourceId,
+          modality: 'image',
+          capturedAt,
+          label: 'EXIT sign visible',
+          description: 'An EXIT sign is visible, but no grounded physical-object inventory was returned.',
+          confidence: 0.95,
+          basis: 'observed',
+          evidenceIds: [frameId],
+        }],
+        objects: [],
+        conditions: [],
+        relations: [],
+        evidence: [],
+      }
+    },
+  }
+
+  const pipeline = new ScanPipeline({ model })
+  let thrown
+  try {
+    await runImageScan(pipeline, environmentId, sourceId, capturedAt)
+  } catch (error) {
+    thrown = error
+  }
+
+  expect(thrown instanceof ModelAdapterError, 'persistent sparse still must reject with a model output error')
+  expect(thrown?.code === 'INSUFFICIENT_SCENE_INVENTORY', `expected INSUFFICIENT_SCENE_INVENTORY, got ${thrown?.code}`)
+  expect(sceneAttempts === 2, `persistent sparse still must use exactly two scene attempts, got ${sceneAttempts}`)
+  const memory = await pipeline.getMemory(environmentId)
+  expect(memory === undefined, 'failed sparse still must not persist an environment or State v1')
 }
 
 async function verifyTransientProviderRetry(ScanPipeline, ModelAdapterError) {

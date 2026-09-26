@@ -143,6 +143,11 @@ export default async function handler(req: Request, res: Response) {
       return res.status(error.status).json({ error: error.code, message: error.message })
     }
     if (error instanceof ModelAdapterError) {
+      if (error.code === 'INSUFFICIENT_SCENE_INVENTORY') {
+        console.warn('SENTINEL_SCAN_REJECTED', { code: error.code, message: error.message })
+        res.setHeader?.('X-Sentinel-Server-Retry', 'exhausted')
+        return res.status(422).json({ error: error.code, message: error.message })
+      }
       const timedOut = /timeout/i.test(error.code) || /timed out/i.test(error.message)
       const status = timedOut ? 504 : 502
       console.error('SENTINEL_SCAN_PROVIDER_FAILED', summarizeError(error))
