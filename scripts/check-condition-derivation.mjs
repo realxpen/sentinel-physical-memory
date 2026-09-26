@@ -142,7 +142,7 @@ try {
   }
   duplicateBoxAliases.objects.push({
     id: 'boxes_b', environmentId, category: 'obstruction', name: 'Stacked Cardboard Boxes',
-    description: 'Stacked Cardboard Boxes in front of the green door', confidence: 0.94,
+    description: 'Stacked Cardboard Boxes in front of the green door', confidence: 0.96,
     firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: ['frame_jack'],
   })
   duplicateBoxAliases.observations[1].label = 'Cardboard Boxes'
