@@ -1378,35 +1378,6 @@ function normalizeSemanticText(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim()
 }
 
-function mergePerceptionPasses(scene: PerceptionResult, audit: PerceptionResult, prefix = 'audit_'): PerceptionResult {
-  const objectIdMap = new Map(audit.objects.map((item) => [item.id, `${prefix}${item.id}`]))
-  const prefixId = (id: string) => `${prefix}${id}`
-  const mapObjectId = (id: string) => objectIdMap.get(id) ?? id
-
-  const auditObservations = audit.observations.map((item) => ({ ...item, id: prefixId(item.id) }))
-  const auditObjects = audit.objects.map((item) => ({ ...item, id: mapObjectId(item.id) }))
-  const auditConditions = audit.conditions.map((item) => ({
-    ...item,
-    id: prefixId(item.id),
-    objectIds: item.objectIds.map(mapObjectId),
-  }))
-  const auditRelations = audit.relations.map((item) => ({
-    ...item,
-    id: prefixId(item.id),
-    fromId: mapObjectId(item.fromId),
-    toId: mapObjectId(item.toId),
-  }))
-
-  return {
-    sourceId: scene.sourceId,
-    observations: uniqueById([...scene.observations, ...auditObservations]),
-    objects: uniqueById([...scene.objects, ...auditObjects]),
-    conditions: uniqueById([...scene.conditions, ...auditConditions]),
-    relations: uniqueById([...scene.relations, ...auditRelations]),
-    evidence: uniqueById([...scene.evidence, ...audit.evidence]),
-  }
-}
-
 function uniqueById<T extends { id: string }>(values: T[]): T[] {
   const seen = new Set<string>()
   return values.filter((value) => {
