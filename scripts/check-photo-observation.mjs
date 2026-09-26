@@ -50,7 +50,7 @@ try {
           ...Array.from({ length: 12 }, (_, index) => ({ id: `plant_${calls}_${index}`, environmentId, category: 'furniture', name: 'potted plant', position: { description: 'on shelf' }, confidence: 0.95, firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: [frameId] })),
           { id: `plant_alias_${calls}`, environmentId, category: 'furniture', name: 'plant pot', position: { description: 'on shelf' }, confidence: 0.95, firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: [frameId] },
           { id: `plant_desk_${calls}`, environmentId, category: 'furniture', name: 'potted plant', position: { description: 'on desk' }, confidence: 0.95, firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: [frameId] },
-          { id: `door_${calls}`, environmentId, category: 'door', name: 'white door', position: { description: 'back wall' }, confidence: 0.95, firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: [frameId] },
+          { id: `door_${calls}`, environmentId, category: 'door', name: 'white door', description: 'white door below a green "EXIT" sign', position: { description: 'back wall' }, confidence: 0.95, firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: [frameId] },
           { id: `person_${calls}`, environmentId, category: 'person', name: 'person', description: 'false-positive distant person candidate', boundingBox: { x: 0.72, y: 0.18, width: 0.08, height: 0.2 }, confidence: 1, firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: [frameId] },
         ],
         conditions: [], relations: [], evidence: [],
@@ -72,6 +72,9 @@ try {
   if (plants.length !== 2) throw new Error(`expected duplicate/alias still-photo plants to collapse to 2 grounded locations, got ${plants.length}`)
   const door = snapshot?.objects.find((item) => item.name === 'white door')
   if (door?.state !== 'open') throw new Error(`expected confirmed visible door state to persist, got ${door?.state ?? 'missing'}`)
+  if (!snapshot?.objects.some((item) => /exit sign/i.test(item.name))) {
+    throw new Error('punctuated grounded "EXIT" sign mention must materialize a durable exit-sign object')
+  }
   if (snapshot?.objects.some((item) => /door handle|door hinge|desk \(furniture\)/i.test(item.name))) {
     throw new Error('state-audit inventory leakage must never enter durable memory')
   }
@@ -84,6 +87,7 @@ try {
   console.log('PASS  still photo becomes one trusted perception frame')
   console.log('PASS  repeated same-frame duplicate and plant aliases collapse by grounded location')
   console.log('PASS  explicit visible door state survives canonicalization')
+  console.log('PASS  punctuated grounded "EXIT" sign wording materializes stable signage')
   console.log('PASS  one targeted state audit can update an existing openable object')
   console.log('PASS  state-audit hardware/inventory leakage is rejected before memory')
   console.log('PASS  independently rejected person candidates are excluded before persistent memory')
