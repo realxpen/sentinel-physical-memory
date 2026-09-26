@@ -140,6 +140,21 @@ try {
   ])
   if (closetDoorUncertainty.length !== 1) throw new Error('furniture/closet door uncertainty must remain distinct from architectural re-segmentation')
 
+  const transientPersonPresentation = changesForPresentation([
+    change('person-old', 'Not re-observed: person', 'person_old'),
+    {
+      id: 'boxes-still-visible', environmentId: 'office', fromStateId: 'state_1', toStateId: 'state_2',
+      type: 'added', entityKind: 'object', entityId: 'boxes_still_visible', title: 'New: stacked cardboard boxes',
+      description: 'Stacked cardboard boxes were added.', confidence: 0.98, evidenceIds: ['e_boxes'],
+    },
+  ])
+  if (transientPersonPresentation.some((item) => /person/i.test(item.title))) {
+    throw new Error('persisted transient person churn must be hidden at presentation time')
+  }
+  if (!transientPersonPresentation.some((item) => item.title === 'New: stacked cardboard boxes')) {
+    throw new Error('person filtering must not hide real operational object changes')
+  }
+
   const genericStickerNoise = changesForPresentation([
     change('sticker-old', 'Not re-observed: sticker', 'sticker_a'),
     {
@@ -164,7 +179,7 @@ try {
   console.log('PASS  persisted raw structural-surface churn is hidden from Reality Diff presentation')
   console.log('PASS  distinct operational object changes remain visible')
   console.log('PASS  independently grounded structural surfaces remain in immutable history but not headline diff cards')
-  console.log('PASS  historical micro-inventory and architectural re-segmentation churn are filtered without hiding obstruction, extinguisher, or access-condition changes')
+  console.log('PASS  historical micro-inventory, architectural re-segmentation, and transient-person churn are filtered without hiding operational changes')
   console.log('SENTINEL PHASE 8 CHANGE PRESENTATION VERIFIED')
 } finally {
   await vite.close()
