@@ -6,6 +6,7 @@ import { EnvironmentalMemoryStore } from '../memory/store.js'
 import { matchObjectsConservatively } from '../memory/object-identity.js'
 import { InMemoryEnvironmentalMemoryRepository, type EnvironmentalMemoryRepository } from '../memory/repository.js'
 import { deriveOperationalConditions } from '../perception/condition-derivation.js'
+import { assessCondition } from '../perception/condition-model.js'
 import { resolvePersonGrounding } from '../perception/person-grounding.js'
 import { isPersonObject, isUnconfirmedPersonObject } from '../domain/object-policy.js'
 import type { ScanArtifact, ScanError, ScanFrame, ScanInput, ScanProgress, ScanResult } from './types.js'
@@ -1142,7 +1143,7 @@ function shouldRunStillImageConditionAudit(result: PerceptionResult): boolean {
 }
 
 function hasOperationalConditionCandidate(result: PerceptionResult): boolean {
-  return result.conditions.some((item) => OPERATIONAL_CONDITION_KINDS.has(item.kind))
+  return result.conditions.some((item) => assessCondition(item).operational)
 }
 
 function materializeDirectlyObservedRememberedObjects(
