@@ -774,8 +774,12 @@ export class ScanPipeline {
     const maxAttempts = pass === 'scene' ? MAX_PERCEPTION_ATTEMPTS : 1
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       try {
+        const sparseStillRetry = lastError instanceof ModelAdapterError
+          && lastError.code === 'INSUFFICIENT_SCENE_INVENTORY'
         const retryInstruction = attempt > 1
-          ? 'FAST STRICT RETRY: Return one complete JSON object only. Prioritize operationally meaningful visible objects and anchors; for a still image keep the inventory concise (prefer at most 12 objects). Use canonical enum values, finite numeric confidences, arrays for reference fields, and reference only supplied FRAME_ID evidence. Omit decorative micro-inventory and unsupported optional claims instead of guessing.'
+          ? sparseStillRetry
+            ? 'SPARSE STILL-PHOTO RETRY: The prior grounded result contained no usable physical objects. Re-inspect the CURRENT still image from scratch and return a concise inventory of the major directly visible physical objects needed to represent this environment. Include stable whole-object entries for clearly visible doors, furniture, safety equipment, signage, fixtures, storage/cabinet units, plants, and other substantial scene anchors when actually visible. Do not invent objects, do not recover from memory, do not pad with decorative micro-items, and do not repeat aliases. Every object must reference the supplied FRAME_ID evidence. Return one complete JSON object only.'
+            : 'FAST STRICT RETRY: Return one complete JSON object only. Prioritize operationally meaningful visible objects and anchors; for a still image keep the inventory concise (prefer at most 12 objects). Use canonical enum values, finite numeric confidences, arrays for reference fields, and reference only supplied FRAME_ID evidence. Omit decorative micro-inventory and unsupported optional claims instead of guessing.'
           : undefined
         const result = await this.model!.infer({
           role: 'perception',
@@ -808,6 +812,26 @@ export class ScanPipeline {
           + grounded.result.conditions.length
         if (pass === 'person-confirmation-audit' && groundedItemCount === 0) {
           return grounded.result
+        }
+
+        if (pass === 'scene' && input.media.kind === 'image') {
+          const groundedPhysicalObjects = grounded.result.objects.filter((item) => !isPersonObject(item))
+          if (groundedPhysicalObjects.length === 0) {
+            const willRetry = attempt < maxAttempts
+            console.warn(willRetry ? 'SENTINEL_SPARSE_SCENE_RETRY' : 'SENTINEL_SPARSE_SCENE_REJECTED', {
+              attempt,
+              nextAttempt: willRetry ? attempt + 1 : undefined,
+              observations: grounded.result.observations.length,
+              conditions: grounded.result.conditions.length,
+              people: grounded.result.objects.filter(isPersonObject).length,
+              message: 'Still-photo scene produced no grounded non-person physical objects',
+            })
+            throw new ModelAdapterError({
+              code: 'INSUFFICIENT_SCENE_INVENTORY',
+              message: 'SENTINEL could not establish a grounded physical-object inventory from this still image. No environmental state was saved; try the observation again.',
+              retryable: willRetry,
+            })
+          }
         }
 
         return validatePerceptionForScan(grounded.result, input.environmentId, input.source.id)
@@ -1327,7 +1351,10 @@ function uniqueById<T extends { id: string }>(values: T[]): T[] {
 function isRetryablePerceptionOutputError(error: unknown): boolean {
   if (error instanceof PerceptionValidationError) return true
   if (!(error instanceof ModelAdapterError)) return false
-  return error.code === 'INVALID_MODEL_JSON' || error.code === 'INVALID_PERCEPTION_SCHEMA' || error.code === 'EMPTY_MODEL_RESPONSE'
+  return error.code === 'INVALID_MODEL_JSON'
+    || error.code === 'INVALID_PERCEPTION_SCHEMA'
+    || error.code === 'EMPTY_MODEL_RESPONSE'
+    || error.code === 'INSUFFICIENT_SCENE_INVENTORY'
 }
 
 function isTransientPerceptionProviderError(error: unknown): boolean {
