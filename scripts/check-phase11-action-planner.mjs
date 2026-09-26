@@ -83,6 +83,15 @@ try {
             evidenceIds: ['e2','invented_evidence'],
           },
           {
+            title: 'Verify clearance',
+            description: 'Re-scan to confirm the cart is removed and exit access is unobstructed.',
+            priority: 'medium',
+            relatedConditionIds: ['condition_access'],
+            relatedIssueIds: ['issue_access'],
+            relatedObjectIds: ['cart','door'],
+            evidenceIds: ['e2'],
+          },
+          {
             title: 'Invented ungrounded work',
             description: 'This step has no real condition or issue.',
             priority: 'high',
