@@ -147,6 +147,13 @@ try {
   })
   duplicateBoxAliases.observations[1].label = 'Cardboard Boxes'
   duplicateBoxAliases.observations[1].description = 'Cardboard Boxes and stacked cartons are in front of the green door.'
+  duplicateBoxAliases.relations = [{
+    id: 'rel_boxes_a_front_door', environmentId, fromId: 'boxes_a', toId: 'door_1',
+    type: 'in_front_of', confidence: 0.96, evidenceIds: ['frame_jack'],
+  }, {
+    id: 'rel_boxes_b_front_door', environmentId, fromId: 'boxes_b', toId: 'door_1',
+    type: 'in_front_of', confidence: 0.95, evidenceIds: ['frame_jack'],
+  }]
   const dedupedBoxConditions = deriveOperationalConditions(duplicateBoxAliases, capturedAt)
   if (dedupedBoxConditions.derivedConditions.length !== 1) {
     throw new Error(`duplicate same-door box representations must consolidate to one access condition, got ${dedupedBoxConditions.derivedConditions.length}`)
