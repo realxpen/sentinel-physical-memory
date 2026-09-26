@@ -169,6 +169,33 @@ try {
     throw new Error('historical exit-sign cleanup must preserve the real cardboard-box addition')
   }
 
+  const directlyReobservedOmission = changesForPresentation([
+    change('round-table-old', 'Not re-observed: Round Table', 'round_table_previous'),
+    change('boxes-old', 'Not re-observed: Cardboard Boxes', 'boxes_previous'),
+  ], {
+    previousObjects: [{
+      id: 'round_table_previous', environmentId: 'office', category: 'furniture', name: 'Round Table',
+      description: 'White round table.', confidence: 1,
+      firstSeenAt: '2026-09-26T12:00:00.000Z', lastSeenAt: '2026-09-26T12:05:00.000Z', evidenceIds: ['e_previous_table'],
+    }, {
+      id: 'boxes_previous', environmentId: 'office', category: 'obstruction', name: 'Cardboard Boxes',
+      description: 'Boxes in front of exit.', confidence: 0.95,
+      firstSeenAt: '2026-09-26T12:05:00.000Z', lastSeenAt: '2026-09-26T12:05:00.000Z', evidenceIds: ['e_previous_boxes'],
+    }],
+    currentObjects: [],
+    currentObservations: [{
+      id: 'obs_round_table_current', environmentId: 'office', sourceId: 'source_current', modality: 'image',
+      capturedAt: '2026-09-26T12:10:00.000Z', label: 'Round Table', description: 'A white round table is directly visible.',
+      confidence: 1, basis: 'observed', evidenceIds: ['e_current_table'],
+    }],
+  })
+  if (directlyReobservedOmission.some((item) => item.title === 'Not re-observed: Round Table')) {
+    throw new Error('current direct observation must suppress a false object-disappearance card when object materialization was omitted')
+  }
+  if (!directlyReobservedOmission.some((item) => item.title === 'Not re-observed: Cardboard Boxes')) {
+    throw new Error('absence-only cardboard-box uncertainty must remain when there is no current direct observation of the boxes')
+  }
+
   const closetDoorUncertainty = changesForPresentation([
     change('closet_door', 'Not re-observed: closet door', 'closet_door_a'),
   ])
@@ -214,6 +241,7 @@ try {
   console.log('PASS  distinct operational object changes remain visible')
   console.log('PASS  independently grounded structural surfaces remain in immutable history but not headline diff cards')
   console.log('PASS  historical exit-sign object splitting is filtered only when prior grounded memory already described the sign')
+  console.log('PASS  current direct observations suppress false Not re-observed cards caused only by object materialization omission')
   console.log('PASS  historical micro-inventory, architectural re-segmentation, and transient-person churn are filtered without hiding operational changes')
   console.log('SENTINEL PHASE 8 CHANGE PRESENTATION VERIFIED')
 } finally {
