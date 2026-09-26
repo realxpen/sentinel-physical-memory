@@ -1261,23 +1261,6 @@ function hasExplicitExitSignText(value: string): boolean {
   return /\b(?:emergency )?exit (?:sign|symbol|signage)\b/.test(text)
 }
 
-function shouldRunIdentityAudit(result: PerceptionResult): boolean {
-  const hasExitContext = [...result.observations, ...result.objects].some((item) => {
-    const text = 'label' in item
-      ? `${item.label} ${item.description}`
-      : `${item.name} ${item.description ?? ''}`
-    return /\b(?:emergency\s+)?exit\b/i.test(text) && /\b(?:sign|door)\b/i.test(text)
-  })
-  if (!hasExitContext) return false
-
-  return result.objects.some((item) => {
-    const text = `${item.name} ${item.description ?? ''}`
-    const ambiguousTaxonomy = /\b(?:ramp|equipment|object|device|cart|trolley|pallet(?:\s+jack)?)\b/i.test(text)
-    const accessPlacement = /\b(?:in front of|directly in front of|across|blocking|obstructing|near)\b.{0,48}\b(?:door|exit)\b/i.test(text)
-    return ambiguousTaxonomy && accessPlacement
-  })
-}
-
 function shouldRunAccessGeometryAudit(result: PerceptionResult): boolean {
   const doors = result.objects.filter((item) =>
     item.category === 'door' &&
