@@ -32,7 +32,7 @@ try {
       },
       {
         id: 'jack_1', environmentId, category: 'equipment', name: 'orange pallet jack',
-        description: 'orange pallet jack in front of the green door', confidence: 1,
+        description: 'orange pallet jack directly in front of the green door', confidence: 1,
         firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: ['frame_jack'],
       },
     ],
@@ -44,7 +44,7 @@ try {
       },
       {
         id: 'obs_jack', environmentId, sourceId, modality: 'image', capturedAt,
-        label: 'orange pallet jack', description: 'An orange pallet jack in front of the green door.',
+        label: 'orange pallet jack', description: 'An orange pallet jack directly in front of the green door.',
         confidence: 1, basis: 'observed', evidenceIds: ['frame_jack'],
       },
     ],
@@ -151,12 +151,12 @@ try {
   const duplicateBoxAliases = structuredClone(base)
   duplicateBoxAliases.objects[1] = {
     id: 'boxes_a', environmentId, category: 'obstruction', name: 'Cardboard Boxes',
-    description: 'Cardboard Boxes in front of the green door', confidence: 0.95,
+    description: 'Cardboard Boxes directly in front of the green door', confidence: 0.95,
     firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: ['frame_jack'],
   }
   duplicateBoxAliases.objects.push({
     id: 'boxes_b', environmentId, category: 'obstruction', name: 'Stacked Cardboard Boxes',
-    description: 'Stacked Cardboard Boxes in front of the green door', confidence: 0.96,
+    description: 'Stacked Cardboard Boxes directly in front of the green door', confidence: 0.96,
     firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: ['frame_jack'],
   })
   duplicateBoxAliases.observations[1].label = 'Cardboard Boxes'
