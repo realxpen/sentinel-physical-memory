@@ -24,6 +24,7 @@ export function isDurableArchitecturalAnchorObject(
 export function isLowSalienceInventoryObject(
   item: Pick<SpatialObject, 'name' | 'description' | 'category'>,
 ): boolean {
+  if (isTransientEnvironmentalObject(item)) return true
   const name = normalize(item.name)
   const text = normalize(`${item.name} ${item.description ?? ''}`)
 
@@ -48,6 +49,7 @@ export function isLowSalienceInventoryObject(
  */
 export function isLowSalienceObjectChange(change: Change): boolean {
   if (change.entityKind && change.entityKind !== 'object') return false
+  if (isTransientPersonChangeTitle(change.title)) return true
 
   const text = normalize(`${stripChangePrefix(change.title)} ${change.description}`)
   if (SAFETY_SIGNAGE.test(text) && /\bsign\b/.test(text)) return false
