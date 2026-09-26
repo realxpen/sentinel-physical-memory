@@ -6,52 +6,78 @@ Produce one public YouTube video **under three minutes** that proves the working
 
 Target runtime: **2:58**.
 
-The story is:
+The final story is:
 
 ```text
-Give the place a memory
-→ change reality
-→ show Reality Diff
+give the place a memory
+→ show a real physical change
+→ Reality Diff
 → ask what matters
-→ recommend action
-→ correct the physical state
-→ verify from new evidence
+→ grounded Action Plan
+→ show the corrected state
+→ verify from positive current evidence
 ```
+
+## Locked environment
+
+Use the already-proven **Office Lounge Test 4** as the core presentation environment.
+
+Its persisted production proof is:
+
+```text
+State v1 — exit clear
+State v2 — cardboard boxes obstruct exit
+Reality Diff — obstruction + New: Cardboard Boxes
+Ask — exit obstruction matters most
+Action Plan — clear obstruction + rescan to verify
+State v3 — boxes removed / same exit area visible
+Verification — 1 resolved / 0 remaining / 0 inconclusive
+```
+
+Do **not** create State v4 during final recording.
+
+This is demo hardening, not fakery: every state and verdict shown came from the real production loop and immutable environmental memory.
 
 ## Recording strategy
 
-Record the raw product run first. Do the voiceover afterward.
+Record the product footage first. Do the voiceover afterward.
 
-Do **not** try to narrate live while waiting for inference.
+The final take should avoid depending on another full perception run. Use the persisted State v1/v2/v3 history for the core story, then re-run only bounded interactions such as Ask, Action Plan or Verification when useful.
+
+If a live inference call takes 10–30 seconds, keep recording and remove the waiting section in editing.
 
 ### Capture setup
 
 - Desktop capture: 1920×1080 or another 16:9 canvas.
-- Browser zoom: **100%** before recording. Do not use the heavily zoomed-out view used during debugging.
+- Browser zoom: **100%** before recording.
 - Hide bookmarks bar and unrelated tabs if possible.
 - Use the production app only.
-- Start already on the prepared SENTINEL location.
+- Start already inside Office Lounge Test 4.
 - Disable notifications/popups.
 - Keep mouse movement deliberate.
 - Preserve the real SENTINEL UI; do not add fake overlays that imply product behavior.
 - Keep original system audio off unless needed.
 - No copyrighted music.
+- Show no secrets, API keys, private console output, email, or unrelated browser content.
 
-### Raw capture
+## Raw clips to capture
 
-Record more than you need:
+Capture more than the final edit needs:
 
-1. clean baseline/Memory;
-2. Scan A flow;
-3. Ask/evidence;
-4. Scan B;
-5. Reality Diff;
-6. priority Ask;
-7. Action Plan;
-8. Scan C;
-9. final Verification.
+1. Office Lounge Test 4 Memory / State v1.
+2. State history showing immutable v1/v2/v3.
+3. State v1 → v2 Reality Diff with before/after images.
+4. Ask: **Which change matters most?**
+5. Grounded Action Plan.
+6. State v2 → v3 physical comparison.
+7. Final **Verified** result.
+8. A 2–3 second `/api/health` technology proof showing Nebius Token Factory + model role map.
+9. Clean Memory / product close.
 
-If an inference call takes 10–30 seconds, keep recording. Remove the waiting section in editing.
+Optional B-roll:
+
+- a separate disposable-environment Observe/file-selection interaction;
+- never mutate Office Lounge Test 4 for B-roll.
 
 ## Locked 2:58 timeline
 
@@ -59,19 +85,18 @@ The machine-readable timeline lives in `docs/demo-timeline.json`.
 
 | Time | Product moment | What the viewer must understand |
 | --- | --- | --- |
-| 0:00–0:08 | Give this place a memory | SENTINEL is physical memory, not a dashboard |
-| 0:08–0:25 | Observe | real visual input becomes grounded state |
-| 0:25–0:38 | Remembered | state persists with history/evidence |
-| 0:38–0:55 | Ask attention | reasoning is over remembered state |
-| 0:55–1:10 | Evidence | claims remain grounded |
-| 1:10–1:20 | Change reality | boxes + extinguisher change |
-| 1:20–1:40 | Observe again | new immutable state |
-| 1:40–1:56 | Reality Diff | signature “Git diff for reality” |
-| 1:56–2:12 | Priority | exit obstruction becomes the important change |
-| 2:12–2:28 | Action Plan | recommended, bounded, evidence-backed |
-| 2:28–2:43 | Fix + Scan C | user changes physical world |
-| 2:43–2:55 | Verified | positive current evidence closes the loop |
-| 2:55–2:58 | Close | “AI memory for the physical world” |
+| 0:00–0:08 | Give this place a memory | SENTINEL is persistent physical memory |
+| 0:08–0:24 | Observe | visual evidence becomes an immutable state |
+| 0:24–0:38 | Remembered | the place now has state history |
+| 0:38–0:50 | Evidence | claims stay connected to grounded evidence |
+| 0:50–1:08 | Change reality | boxes appear in the exit area |
+| 1:08–1:30 | Reality Diff | signature state-to-state physical diff |
+| 1:30–1:48 | Priority | Ask identifies the obstruction as most important |
+| 1:48–2:06 | Action Plan | one corrective action + deterministic verification handoff |
+| 2:06–2:25 | Fix and rescan | State v3 shows the corrected physical context |
+| 2:25–2:45 | Verified | positive current evidence closes the loop |
+| 2:45–2:55 | Nebius/NVIDIA proof | runtime model/provider map |
+| 2:55–2:58 | Close | AI memory for the physical world |
 
 ## Voiceover script
 
@@ -81,109 +106,107 @@ The machine-readable timeline lives in `docs/demo-timeline.json`.
 
 ### 0:08
 
-**“I observe this hallway once. SENTINEL grounds visible evidence and turns the scene into a remembered environmental state.”**
+**“A visual observation becomes an immutable environmental state, grounded to evidence rather than a disposable image description.”**
 
-### 0:25
+### 0:24
 
-**“Now the place remembers what was here, with evidence and immutable history behind it.”**
+**“Now this office remembers what was here and keeps the earlier state intact.”**
 
 ### 0:38
 
-**“Ask is not a detached chatbot. It reasons over the selected physical state and can only cite evidence SENTINEL actually remembers.”**
+**“Objects, conditions and answers stay connected to the evidence that supports them.”**
 
-### 0:55
+### 0:50
 
-**“Every answer stays connected to the state, object and evidence that support it.”**
+**“Then reality changes: cardboard boxes enter the exit access area.”**
 
-### 1:10
+### 1:08
 
-**“Then I change reality itself: boxes enter the exit path and the extinguisher moves.”**
+**“SENTINEL compares remembered states. This is Reality Diff — a Git diff for the physical world.”**
 
-### 1:20
+### 1:30
 
-**“A second observation creates a new immutable state. SENTINEL compares it with what the space remembered before.”**
+**“Because the system has memory, I can ask which change matters most. It prioritizes the blocked exit from the current grounded state.”**
 
-### 1:40
+### 1:48
 
-**“This is Reality Diff — a Git diff for the physical world. It separates supported physical changes from uncertainty and operational attention.”**
+**“The Action Plan stays recommendation-only: clear the obstruction, then rescan. SENTINEL never pretends the work happened.”**
 
-### 1:56
+### 2:06
 
-**“Because SENTINEL has memory, I can ask which change matters most. The answer is grounded in the remembered state, not generated from an isolated screenshot.”**
+**“After the boxes are removed, the same exit context is observed again.”**
 
-### 2:12
+### 2:25
 
-**“SENTINEL recommends bounded next steps, but it does not pretend the work happened. The final step is always to rescan and verify.”**
+**“Verification requires positive current evidence. Missing is not enough. The path is visibly clear, so the earlier obstruction is Verified as resolved.”**
 
-### 2:28
+### 2:45
 
-**“I clear the obstruction and observe the same area again.”**
-
-### 2:43
-
-**“Verification compares the old condition with positive current evidence. Missing is not enough. Here, the exit path is visibly clear, so the condition is Verified.”**
+**“The live inference path runs through Nebius Token Factory, with NVIDIA Nemotron handling grounded reasoning and action planning.”**
 
 ### 2:55
 
-**“SENTINEL: the AI memory for the physical world.”**
+**“SENTINEL: AI memory for the physical world.”**
 
 ## Editing rules
 
 Cut:
 
+- inference waiting time;
 - upload picker delay;
-- model waiting time;
 - repeated scrolling;
 - accidental clicks;
 - debug/test screens;
-- browser chrome whenever it distracts from the product;
-- dead air.
+- dead air;
+- unrelated browser chrome.
 
 Keep:
 
-- at least one real Observe interaction;
-- Memory;
-- a grounded Ask answer;
+- Memory / immutable state history;
 - before/after Reality Diff;
+- grounded Ask;
 - Action Plan;
-- Scan C;
-- final Verified screen;
+- State v3 corrected physical context;
+- final Verified result;
+- a very short Nebius/NVIDIA runtime proof;
 - enough UI continuity that the result does not look pre-rendered.
 
 Do not speed through the final Verified result. Give it several seconds.
 
 ## Nebius / NVIDIA proof in the video
 
-The product experience should remain the main story.
-
-Add one very short technology proof near the architecture mention or in a lower-third/cutaway:
+Keep the technology proof short:
 
 > **Nebius Token Factory · NVIDIA Nemotron 3 Nano**
 
-Optional 2–3 second cutaway:
+Preferred visual proof:
 
-`/api/health` → provider/model role map.
+- open `/api/health` for 2–3 seconds;
+- show provider + role → model mapping;
+- return immediately to the product.
 
-Do not spend demo time reading implementation details.
+Do not show API keys, environment variables, request payloads, or private infrastructure pages.
 
 ## Final video quality gate
 
 Before uploading:
 
 - duration ≤ 2:59;
+- Browser zoom is 100%;
 - no secrets in DevTools, URLs, console or environment files;
 - no unrelated browser tabs/user data visible;
-- product readable at normal zoom;
-- voiceover audible and even;
+- product text is readable without zooming the final export;
+- voiceover is audible and even;
 - no copyrighted music;
 - no false claims about automated physical work;
 - final result visibly says **Verified**;
+- Verification shows positive current evidence, not disappearance-only reasoning;
 - NVIDIA/Nebius usage is stated at least once;
 - YouTube visibility is **Public**;
 - paste final URL into `SUBMISSION.md`.
 
 ## External handoff
 
-Phase 18 cannot manufacture the final public YouTube URL from repository code.
+The repository cannot manufacture the final public YouTube URL.
 
 After the video is uploaded, replace the TODO in `SUBMISSION.md` with the real URL and check the remaining boxes in `SUBMISSION_CHECKLIST.md`.
