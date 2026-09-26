@@ -753,8 +753,8 @@ try {
     },
   })
 
-  if (ordinaryGeometryPrompts.length !== 2) {
-    throw new Error(`expected scene + condition audit only for ordinary furniture, got ${ordinaryGeometryPrompts.length}`)
+  if (ordinaryGeometryPrompts.length !== 1) {
+    throw new Error(`expected only the grounded scene pass for ordinary furniture, got ${ordinaryGeometryPrompts.length}`)
   }
   if (ordinaryGeometryPrompts.some((prompt) => prompt.includes('Targeted access-geometry verification'))) {
     throw new Error('ordinary chair + door without explicit obstruction must not trigger targeted access geometry')
@@ -772,7 +772,7 @@ try {
     throw new Error('ordinary furniture baseline must not manufacture an in_front_of relation')
   }
 
-  console.log('PASS  ordinary chair + door without explicit obstruction does not trigger access-geometry auditing')
+  console.log('PASS  ordinary chair + door without explicit obstruction does not trigger unnecessary condition/access-geometry audits')
   console.log('PASS  ordinary perspective overlap cannot promote a doorway access issue')
   console.log('PASS  no manufactured in_front_of relation enters immutable memory')
   console.log('PASS  ordinary doorway obstruction persists exactly one inferred medium access issue')
