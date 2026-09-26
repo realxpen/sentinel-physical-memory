@@ -11,12 +11,12 @@ const DOOR_COLOR = /\b(green|red|blue|orange|yellow|white|black|brown|gray|grey)
 /**
  * Deterministic Phase 5 derivation from already-grounded perception facts.
  *
- * The model may correctly observe two facts without composing them into an
- * operational condition (for example, "pallet jack in front of the green
- * door" + "emergency exit sign above the green door"). SENTINEL may join
- * those facts only when both are explicit, evidence-backed, and point to the
- * same named door. The derived condition remains an inference; confidence is
- * bounded below the source observations and evidence is inherited unchanged.
+ * The model may correctly observe separate physical facts without composing
+ * them into an operational condition. SENTINEL may join those facts only when
+ * current evidence independently grounds the relevant objects and blocking
+ * geometry. No environment name or object-noun whitelist participates in the
+ * decision. The derived condition remains an inference; confidence is bounded
+ * below the source observations and evidence is inherited unchanged.
  */
 export function deriveOperationalConditions(
   perception: PerceptionResult,
@@ -251,7 +251,7 @@ function explicitObstaclePlacement(text: string, obstacleNames: string[], doorNa
     for (const doorName of doorNames) {
       const obstacle = escapedPhrase(obstacleName)
       const door = escapedPhrase(doorName)
-      const forward = new RegExp(`\\b${obstacle}\\b.{0,48}\\b(in front of|directly in front of|parked in front of|positioned in front of|across|blocking|obstructing)\\b.{0,32}\\b${door}\\b`)
+      const forward = new RegExp(`\\b${obstacle}\\b.{0,64}\\b(directly in front of|across|blocking|obstructing|occupying|narrowing)\\b.{0,48}\\b${door}\\b`)
       const passive = new RegExp(`\\b${door}\\b.{0,32}\\b(blocked|obstructed)\\s+by\\b.{0,32}\\b${obstacle}\\b`)
       const forwardMatch = text.match(forward)
       if (forwardMatch) return normalizePlacementPhrase(forwardMatch[1])
@@ -263,9 +263,9 @@ function explicitObstaclePlacement(text: string, obstacleNames: string[], doorNa
 }
 
 function normalizePlacementPhrase(value: string): string {
-  if (value === 'blocking' || value === 'blocked' || value === 'obstructing' || value === 'obstructed') return 'blocking'
+  if (/block|obstruct|occup|narrow/i.test(value)) return 'blocking'
   if (value === 'across') return 'across'
-  return 'in front of'
+  return 'directly in front of'
 }
 
 function escapedPhrase(value: string): string {
