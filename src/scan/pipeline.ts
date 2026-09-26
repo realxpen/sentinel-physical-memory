@@ -512,60 +512,6 @@ export class ScanPipeline {
       return scene
     }
 
-    // Update-photo integrity audit: the broad scene pass can miss a material current
-    // object, relationship, or condition in any kind of environment. Re-read the
-    // CURRENT image once without assuming a demo object list. Prior memory is naming
-    // context only, never evidence, and every recovered claim still requires trusted
-    // current-frame grounding.
-    if (
-      input.media.kind === 'image'
-      && priorObjects.length > 0
-      && this.hasRuntimeBudget(OPTIONAL_AUDIT_TIMEOUT_MS + reserveAfterPerceptionMs)
-    ) {
-      const priorOperationalAnchors = priorObjects
-        .filter(isOperationalChangeAuditObject)
-        .slice(0, 20)
-        .map((item) => `${item.name} (${item.category})`)
-        .join(', ')
-      const currentSceneObjects = scene.objects
-        .filter(isOperationalChangeAuditObject)
-        .map((item) => `${item.name} (${item.category})`)
-        .join(', ')
-
-      const changeAuditPrompt = [
-        `Current-state integrity audit for scan ${scanId} in environment ${input.environmentId}.`,
-        `The scan source id is ${input.source.id}.`,
-        `The trusted scan capturedAt is ${input.source.capturedAt}.`,
-        `Current scene pass already found these grounded objects: ${currentSceneObjects || 'none'}.`,
-        `Previously remembered names (NAMING CONTEXT ONLY, NOT EVIDENCE): ${priorOperationalAnchors || 'none'}.`,
-        'Inspect the supplied CURRENT still image independently. Recover any materially useful directly visible physical object, relationship, or environmental condition that the broad scene pass missed or under-described.',
-        'Do not use a fixed inventory or expected demo objects. Evaluate the actual image across access/circulation, safety, maintenance, damage, equipment/fixture state, electrical/HVAC context, compliance cues, and other visibly operational conditions supported by the scene.',
-        'Re-observe a previously named anchor only when that physical object is directly visible in the CURRENT image. Never infer presence from prior memory.',
-        'Use stable whole-object names and concise semantic physical positions when directly visible. If the physical relationship between objects matters operationally, encode the supported relation and condition rather than relying on vague prose.',
-        'Do not claim an object is new, moved, removed, resolved, or changed. This pass describes CURRENT visible state only; SENTINEL compares states later.',
-        'Do not force a condition. Ordinary scene arrangement remains ordinary unless current visual evidence supports an operational condition.',
-        'Omit anything ambiguous. Do not use filenames, metadata, prior memory, room labels, or expected changes as evidence.',
-        'Reference only exact supplied FRAME_ID values in evidenceIds. Return the full SENTINEL PerceptionResult JSON schema.',
-      ].join('\n')
-
-      try {
-        const changeAudit = await this.inferPerceptionPass('operational-change-audit', changeAuditPrompt, artifacts, frames, input)
-        const recovered = mergeOperationalChangeAudit(scene, changeAudit)
-        scene = recovered.scene
-        console.warn('SENTINEL_OPERATIONAL_CHANGE_AUDIT_COMPLETED', {
-          scanId,
-          recovered: recovered.added.map((item) => ({ name: item.name, category: item.category, confidence: item.confidence })),
-          enriched: recovered.enriched.map((item) => ({ name: item.name, category: item.category, confidence: item.confidence })),
-        })
-      } catch (error) {
-        console.warn('SENTINEL_OPERATIONAL_CHANGE_AUDIT_SKIPPED', {
-          scanId,
-          code: errorCode(error),
-          message: error instanceof Error ? error.message : 'Unknown operational change audit failure',
-        })
-      }
-    }
-
     // Still-photo state audit: open/closed is operationally important but the broad
     // scene pass can omit it. Re-inspect only visible openable objects whose state
     // is missing; this pass may confirm state but must not invent unseen objects.
@@ -638,7 +584,7 @@ export class ScanPipeline {
       `The scene inventory already identified these visible objects: ${sceneObjectSummary}.`,
       `The scene inventory reported these conditions: ${sceneConditionSummary}. Benign/normal conditions do not count as a completed operational-condition audit.`,
       `Previously remembered object naming context (NOT evidence): ${priorNamingContext}.`,
-      'Inspect the supplied CURRENT evidence from scratch for any visually defensible operational condition. Do not assume a particular building type, room type, object list, or demo scenario.',
+      'Inspect the supplied CURRENT evidence from scratch. Recover any materially useful directly visible object, relation, or operational condition that the broad scene pass missed or under-described. Do not assume a particular building type, room type, object list, or demo scenario.',
       'Evaluate the physical scene broadly: access/circulation, safety, visible damage, maintenance state, equipment/fixture state, electrical/HVAC context, compliance cues, storage/placement, cleanliness only when operationally meaningful, and any other condition that materially affects use of the environment.',
       'Classify objects from visible morphology and context. If identity is uncertain, keep the label generic rather than forcing a familiar object name.',
       'When a condition depends on a spatial relationship, encode the grounded relation and bind the condition to the relevant current object IDs. Do not rely on vague narrative wording alone.',
@@ -656,7 +602,8 @@ export class ScanPipeline {
         sceneConditions: scene.conditions.map((item) => ({ kind: item.kind, title: item.title })),
       })
       const audit = pruneNegativeAuditObservations(await this.inferPerceptionPass('condition-audit', auditPrompt, artifacts, frames, input))
-      let merged = mergePerceptionPasses(scene, audit, 'audit_')
+      const recovered = mergeOperationalChangeAudit(scene, audit)
+      let merged = recovered.scene
       console.warn('SENTINEL_CONDITION_AUDIT_COMPLETED', {
         scanId,
         auditConditions: audit.conditions.length,
@@ -781,7 +728,7 @@ export class ScanPipeline {
   }
 
   private async inferPerceptionPass(
-    pass: 'scene' | 'state-audit' | 'condition-audit' | 'identity-audit' | 'access-geometry-audit' | 'operational-change-audit' | 'person-confirmation-audit',
+    pass: 'scene' | 'state-audit' | 'condition-audit' | 'identity-audit' | 'access-geometry-audit' | 'person-confirmation-audit',
     prompt: string,
     artifacts: ScanArtifact[],
     frames: ScanFrame[],
