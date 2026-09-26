@@ -134,12 +134,16 @@ export class AskBuildingService {
       ).join(' -> ')}`]
     })
 
-    const historicalIssues = uniqueById(historySnapshots.flatMap((item) => item.issues))
+    // The selected state's claims already have dedicated CURRENT sections below.
+    // Historical sections should contain only earlier snapshots; repeating the
+    // selected claims there gives the reasoning model artificial extra weight.
+    const priorHistorySnapshots = historySnapshots.filter((item) => item.stateId !== state.id)
+    const historicalIssues = uniqueById(priorHistorySnapshots.flatMap((item) => item.issues))
       .filter((item) => !item.objectIds.some((id) => hiddenPersonIds.has(id)))
       .sort((a, b) => this.issueRelevance(b, tokens, intent) - this.issueRelevance(a, tokens, intent) || b.confidence - a.confidence)
       .slice(0, MAX_CONTEXT_ISSUES)
     const historicalConditions = collapseEquivalentConditionsForPresentation(
-      uniqueById(historySnapshots.flatMap((item) => item.conditions))
+      uniqueById(priorHistorySnapshots.flatMap((item) => item.conditions))
         .filter((item) => !item.objectIds.some((id) => hiddenPersonIds.has(id))),
     )
       .sort((a, b) => this.claimRelevance(b, tokens, intent) - this.claimRelevance(a, tokens, intent) || b.confidence - a.confidence)
