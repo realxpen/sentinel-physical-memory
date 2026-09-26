@@ -217,6 +217,7 @@ export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapte
       'remaining = positive current visual evidence still supports the earlier condition.',
       'inconclusive = the relevant object/area was not clearly re-observed or current evidence cannot distinguish resolved from remaining.',
       'Use only CURRENT_EVIDENCE IDs and CURRENT_OBJECT IDs from the context. Link visual claims to the CURRENT_EVIDENCE ID whose source matches the supplied image source.',
+      'Return exactly one verdict for every condition listed under BASELINE CONDITIONS TO VERIFY. Never omit a listed condition and never return an empty verdict list when at least one baseline condition is supplied; use inconclusive when positive evidence is insufficient.',
       'Never infer resolution from an action plan, issue disappearance, generic normal wording, or lack of detection alone.',
       'Keep each reason concise and factual.',
       'Return ONLY JSON with shape: {"verdicts":[{"conditionId":"id","status":"resolved|remaining|inconclusive","confidence":0.0,"reason":"string","evidenceIds":["id"],"relatedObjectIds":["id"]}]}.',

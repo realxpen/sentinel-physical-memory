@@ -1,4 +1,4 @@
-import type { Change, SpatialObject } from '../domain/sentinel.js'
+import type { Change, Observation, SpatialObject } from '../domain/sentinel.js'
 import { isLowSalienceObjectChange } from './change-salience.js'
 import { hasGroundedExplicitExitSignMention, isExitSignObject } from './object-identity.js'
 
@@ -10,6 +10,7 @@ import { hasGroundedExplicitExitSignMention, isExitSignObject } from './object-i
 export interface ChangePresentationContext {
   previousObjects?: SpatialObject[]
   currentObjects?: SpatialObject[]
+  currentObservations?: Observation[]
 }
 
 export function changesForPresentation(changes: Change[], context: ChangePresentationContext = {}): Change[] {
@@ -18,6 +19,7 @@ export function changesForPresentation(changes: Change[], context: ChangePresent
 
   for (const change of changes) {
     if (isHistoricalExitSignRepresentationRefinement(change, context)) continue
+    if (isDirectlyReobservedObjectOmission(change, context)) continue
     // Historical diffs are immutable. Hide already-persisted raw inventory
     // churn without mutating the underlying audit trail.
     if (isLowSalienceObjectChange(change)) continue
@@ -56,6 +58,26 @@ function isHistoricalExitSignRepresentationRefinement(
   const current = context.currentObjects?.find((item) => item.id === change.entityId)
   if (!current || !isExitSignObject(current)) return false
   return hasGroundedExplicitExitSignMention(context.previousObjects ?? [])
+}
+
+function isDirectlyReobservedObjectOmission(
+  change: Change,
+  context: ChangePresentationContext,
+): boolean {
+  if (change.type !== 'uncertain') return false
+  if (change.entityKind && change.entityKind !== 'object') return false
+  if (!change.entityId) return false
+
+  const previous = context.previousObjects?.find((item) => item.id === change.entityId)
+  if (!previous) return false
+  const expected = normalize(previous.name)
+
+  return (context.currentObservations ?? []).some((observation) =>
+    observation.basis === 'observed'
+      && observation.confidence >= 0.9
+      && observation.evidenceIds.length > 0
+      && normalize(observation.label) === expected,
+  )
 }
 
 function sharesEvidence(a: Change, b: Change): boolean {

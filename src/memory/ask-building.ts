@@ -276,9 +276,14 @@ export class AskBuildingService {
   private presentedDiffChanges(memory: EnvironmentalMemory, diff: EnvironmentalDiff) {
     const previousSnapshot = memory.snapshots.find((snapshot) => snapshot.stateId === diff.fromStateId)
     const currentSnapshot = memory.snapshots.find((snapshot) => snapshot.stateId === diff.toStateId)
+    const currentState = memory.states.find((state) => state.id === diff.toStateId)
+    const currentObservations = currentState
+      ? memory.observations.filter((observation) => currentState.sourceIds.includes(observation.sourceId))
+      : []
     return changesForPresentation(diff.changes, {
       previousObjects: previousSnapshot?.objects,
       currentObjects: currentSnapshot?.objects,
+      currentObservations,
     }).slice(0, 24)
   }
 

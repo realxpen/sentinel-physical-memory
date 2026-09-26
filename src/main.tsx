@@ -110,19 +110,23 @@ function App() {
   const activeEnvironment = environments.find((item) => item.id === activeEnvironmentId) ?? environments[0] ?? DEFAULT_ENVIRONMENT
   const isWorking = status.startsWith('Observing') || status.startsWith('Understanding') || status.startsWith('Remembering')
   const latestDiff = result?.diff ?? memory?.diffs.at(-1)
+  const previousDiffState = latestDiff ? memory?.states.find((state) => state.id === latestDiff.fromStateId) : undefined
+  const currentDiffState = latestDiff ? memory?.states.find((state) => state.id === latestDiff.toStateId) : undefined
   const previousDiffSnapshot = latestDiff ? memory?.snapshots.find((snapshot) => snapshot.stateId === latestDiff.fromStateId) : undefined
   const currentDiffSnapshot = latestDiff ? memory?.snapshots.find((snapshot) => snapshot.stateId === latestDiff.toStateId) : undefined
+  const currentDiffObservations = currentDiffState
+    ? memory?.observations.filter((observation) => currentDiffState.sourceIds.includes(observation.sourceId)) ?? []
+    : []
   const presentedChanges = latestDiff ? changesForPresentation(latestDiff.changes, {
     previousObjects: previousDiffSnapshot?.objects,
     currentObjects: currentDiffSnapshot?.objects,
+    currentObservations: currentDiffObservations,
   }) : []
   const selectedChange = selectedChangeId ? presentedChanges.find((change) => change.id === selectedChangeId) ?? null : null
   const attentionChanges = presentedChanges.filter((change) => changeBucket(change) === 'attention')
   const physicalChanges = presentedChanges.filter((change) => changeBucket(change) === 'physical')
   const resolvedChanges = presentedChanges.filter((change) => changeBucket(change) === 'resolved')
   const verificationChanges = presentedChanges.filter((change) => changeBucket(change) === 'verification')
-  const previousDiffState = latestDiff ? memory?.states.find((state) => state.id === latestDiff.fromStateId) : undefined
-  const currentDiffState = latestDiff ? memory?.states.find((state) => state.id === latestDiff.toStateId) : undefined
   const previousDiffImage = previousDiffState ? memory?.sources.find((source) => previousDiffState.sourceIds.includes(source.id) && source.modality === 'image')?.uri : undefined
   const currentDiffImage = currentDiffState ? memory?.sources.find((source) => currentDiffState.sourceIds.includes(source.id) && source.modality === 'image')?.uri : undefined
   const rawCurrentSnapshot = memory?.environment.currentStateId
