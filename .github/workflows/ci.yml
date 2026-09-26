@@ -30,6 +30,8 @@ jobs:
         run: npm run check:phase5-conditions
       - name: Verify grounded operational condition derivation
         run: npm run check:condition-derivation
+      - name: Verify conservative access geometry
+        run: npm run check:access-geometry-guard
       - name: Verify Reality Diff position semantics
         run: npm run check:diff-position
       - name: Verify conservative object identity

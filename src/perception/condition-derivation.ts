@@ -189,7 +189,7 @@ function findObstaclePlacementEvidence(
   const candidates: Array<Observation | SpatialObject> = [
     ...perception.observations,
     ...perception.objects,
-  ]
+  ].filter((item) => !isGeometryAuditProse(item))
 
   for (const item of candidates) {
     const text = semanticText(item)
@@ -200,6 +200,15 @@ function findObstaclePlacementEvidence(
   }
 
   return undefined
+}
+
+function isGeometryAuditProse(item: Observation | SpatialObject): boolean {
+  // The targeted access-geometry audit is asked to prove placement with an
+  // explicit obstacle -> door in_front_of relation. Its free-form prose is
+  // intentionally non-authoritative because perspective overlap in a single
+  // still image can make ordinary foreground furniture look like it blocks a
+  // distant doorway. The relation path above remains eligible.
+  return item.id.startsWith('geometry_')
 }
 
 function hasExistingAccessCondition(conditions: EnvironmentalCondition[], objectIds: string[]): boolean {
