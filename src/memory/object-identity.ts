@@ -266,20 +266,27 @@ function genericCrossScanIdentityCompatible(a: SpatialObject, b: SpatialObject):
   const nameA = normalize(a.name)
   const nameB = normalize(b.name)
   if (!nameA || !nameB) return false
-  if (namesHaveLexicalBridge(nameA, nameB)) return true
-
-  return groundedLocationsMatch(a, b)
+  return namesHaveLexicalBridge(nameA, nameB)
 }
 
+const GENERIC_IDENTITY_ATTRIBUTES = new Set([
+  'black','white','green','red','blue','orange','yellow','brown','gray','grey',
+  'small','large','little','big','tall','short','round','square','rectangular',
+  'wood','wooden','metal','metallic','plastic','glass','fabric','leather',
+  'light','dark','bright','plain','portable','fixed',
+])
+
 function namesHaveLexicalBridge(a: string, b: string): boolean {
-  const left = a.split(' ').filter((token) => token.length >= 4)
-  const right = b.split(' ').filter((token) => token.length >= 4)
+  const meaningful = (value: string) => value
+    .split(' ')
+    .filter((token) => token.length >= 4 && !GENERIC_IDENTITY_ATTRIBUTES.has(token))
+  const left = meaningful(a)
+  const right = meaningful(b)
 
   return left.some((aToken) =>
     right.some((bToken) =>
       aToken === bToken ||
-      aToken.includes(bToken) ||
-      bToken.includes(aToken),
+      (Math.min(aToken.length, bToken.length) >= 5 && (aToken.includes(bToken) || bToken.includes(aToken))),
     ),
   )
 }
