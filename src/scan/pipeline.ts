@@ -6,6 +6,7 @@ import { EnvironmentalMemoryStore } from '../memory/store.js'
 import { matchObjectsConservatively } from '../memory/object-identity.js'
 import { InMemoryEnvironmentalMemoryRepository, type EnvironmentalMemoryRepository } from '../memory/repository.js'
 import { deriveOperationalConditions } from '../perception/condition-derivation.js'
+import { assessCondition } from '../perception/condition-model.js'
 import { resolvePersonGrounding } from '../perception/person-grounding.js'
 import { isPersonObject, isUnconfirmedPersonObject } from '../domain/object-policy.js'
 import type { ScanArtifact, ScanError, ScanFrame, ScanInput, ScanProgress, ScanResult } from './types.js'
@@ -308,7 +309,7 @@ export class ScanPipeline {
     const pairedCurrent = new Set<number>()
 
     const addCandidate = (previous: SpatialObject, current: SpatialObject) => {
-      if (!temporalCandidateAllowed(current)) return
+      if (!temporalCandidateAllowed(previous, current)) return
       const key = `candidate_${candidates.length}`
       candidates.push({
         key,
@@ -326,11 +327,10 @@ export class ScanPipeline {
     // Exact unique-name identity is preferred and does not depend on position
     // wording, because movement is one of the things this pass exists to test.
     for (const [currentIndex, current] of perception.objects.entries()) {
-      if (!temporalCandidateAllowed(current)) continue
       const nameKey = normalizeTemporalName(current.name)
       if ((currentNameCounts.get(nameKey) ?? 0) !== 1 || (previousNameCounts.get(nameKey) ?? 0) !== 1) continue
       const previous = priorSnapshot.objects.find((item) => normalizeTemporalName(item.name) === nameKey)
-      if (!previous) continue
+      if (!previous || !temporalCandidateAllowed(previous, current)) continue
       addCandidate(previous, current)
       pairedCurrent.add(currentIndex)
       if (candidates.length >= 8) break
@@ -343,7 +343,7 @@ export class ScanPipeline {
         if (pairedCurrent.has(currentIndex)) continue
         const previous = priorSnapshot.objects[previousIndex]
         const current = perception.objects[currentIndex]
-        if (!temporalCandidateAllowed(current)) continue
+        if (!temporalCandidateAllowed(previous, current)) continue
         if ((previousNameCounts.get(normalizeTemporalName(previous.name)) ?? 0) !== 1) continue
         if ((currentNameCounts.get(normalizeTemporalName(current.name)) ?? 0) !== 1) continue
         addCandidate(previous, current)
@@ -492,8 +492,8 @@ export class ScanPipeline {
       'Treat all supplied frames as one walkthrough of the same environment. Repeated sightings of the same physical entity across frames should resolve to one object, not one object per frame.',
       'Do not emit the overall scene/environment itself (for example "warehouse" or "office") as a SpatialObject. A room/area object requires a distinct bounded physical-space identity.',
       'For every durable physical item named in a direct observation, emit a corresponding object entry when the item is visually identifiable.',
-      'Prefer stable physical identity names over viewpoint-dependent phrases. In warehouses, distinguish pallet jacks/carts/trolleys from ramps: a pallet jack is wheeled material-handling equipment with fork arms and a handle; a ramp is a fixed or sloped walking/loading surface. Distinguish a portable fire extinguisher (cylinder/handle/hose) from a hydrant or standpipe. If uncertain, use a conservative generic equipment label instead of a wrong specific label.',
-      'If an emergency/exit sign is directly visible, emit both a grounded observation and a signage object for it.',
+      'Prefer stable whole-object identity names over viewpoint-dependent phrases. Classify from visible morphology and context, never from an expected room type, prior demo scenario, filename, or remembered change. If a specific identity is uncertain, use a conservative generic physical-object label instead of forcing a familiar noun.',
+      'For any directly visible operational signage, safety device, access feature, equipment, fixture, or other durable scene anchor, emit a corresponding grounded object when visually identifiable.',
       'Separate direct visual observations from condition interpretations.',
       'Reference only the exact supplied FRAME_ID values in evidenceIds. SENTINEL owns frame evidence records; do not manufacture replacement frame evidence IDs.',
       'Omit unsupported optional claims instead of guessing.',
@@ -509,63 +509,6 @@ export class ScanPipeline {
     if (this.recoveredSceneProviderFailure) {
       console.warn('SENTINEL_SECONDARY_AUDITS_SKIPPED_AFTER_PROVIDER_RETRY', { scanId })
       return scene
-    }
-
-    // Update-photo change audit: the broad scene pass is intentionally general and
-    // can occasionally miss a visually obvious operational object in a later state
-    // (for example newly introduced boxes or a re-positioned extinguisher). Re-read
-    // the CURRENT image only and recover high-salience current objects/anchors. Prior
-    // memory is naming context, never evidence, and recovered objects still require
-    // trusted current-frame grounding + high confidence.
-    if (
-      input.media.kind === 'image'
-      && priorObjects.length > 0
-      && this.hasRuntimeBudget(OPTIONAL_AUDIT_TIMEOUT_MS + reserveAfterPerceptionMs)
-    ) {
-      const priorOperationalAnchors = priorObjects
-        .filter(isOperationalChangeAuditObject)
-        .slice(0, 20)
-        .map((item) => `${item.name} (${item.category})`)
-        .join(', ')
-      const currentSceneObjects = scene.objects
-        .filter(isOperationalChangeAuditObject)
-        .map((item) => `${item.name} (${item.category})`)
-        .join(', ')
-
-      const changeAuditPrompt = [
-        `Operational change recovery audit for scan ${scanId} in environment ${input.environmentId}.`,
-        `The scan source id is ${input.source.id}.`,
-        `The trusted scan capturedAt is ${input.source.capturedAt}.`,
-        `Current scene pass already found these operationally relevant objects: ${currentSceneObjects || 'none'}.`,
-        `Previously remembered operational names (NAMING CONTEXT ONLY, NOT EVIDENCE): ${priorOperationalAnchors || 'none'}.`,
-        'Inspect the supplied CURRENT still image independently. Recover only directly visible, operationally salient physical objects that the broad scene pass may have missed or under-described.',
-        'Prioritize boxes/cartons/packages, fire extinguishers, movable chairs/carts/trolleys, doors, exit signage, barriers, ladders, equipment cases, and objects occupying a walkway/doorway/exit path.',
-        'Re-observe a previously named anchor only when that physical object is directly visible in the CURRENT image. Never infer presence from prior memory.',
-        'For each recovered object, use a stable whole-object name and a concise semantic physical position when directly visible, such as "left wall beside Conference Room sign" or "in front of exit door".',
-        'If a box/carton/furniture/equipment item is visibly in front of/across/blocking a door, doorway, exit, or walking path, emit the direct placement in its description/position and a grounded spatial relation when visually defensible.',
-        'If a fire extinguisher is visible, call it "fire extinguisher" rather than generic equipment.',
-        'Do not enumerate walls, floors, ceilings, decor, plants, tiny desk items, door hardware, or other low-salience inventory in this audit.',
-        'Do not claim an object is new, moved, removed, resolved, or changed. This pass describes CURRENT visible state only; SENTINEL compares states later.',
-        'Omit anything ambiguous. Do not use filenames, metadata, prior memory, or expected demo changes as evidence.',
-        'Reference only exact supplied FRAME_ID values in evidenceIds. Return the full SENTINEL PerceptionResult JSON schema.',
-      ].join('\n')
-
-      try {
-        const changeAudit = await this.inferPerceptionPass('operational-change-audit', changeAuditPrompt, artifacts, frames, input)
-        const recovered = mergeOperationalChangeAudit(scene, changeAudit)
-        scene = recovered.scene
-        console.warn('SENTINEL_OPERATIONAL_CHANGE_AUDIT_COMPLETED', {
-          scanId,
-          recovered: recovered.added.map((item) => ({ name: item.name, category: item.category, confidence: item.confidence })),
-          enriched: recovered.enriched.map((item) => ({ name: item.name, category: item.category, confidence: item.confidence })),
-        })
-      } catch (error) {
-        console.warn('SENTINEL_OPERATIONAL_CHANGE_AUDIT_SKIPPED', {
-          scanId,
-          code: errorCode(error),
-          message: error instanceof Error ? error.message : 'Unknown operational change audit failure',
-        })
-      }
     }
 
     // Still-photo state audit: open/closed is operationally important but the broad
@@ -638,20 +581,17 @@ export class ScanPipeline {
       `The scan source id is ${input.source.id}.`,
       `The trusted scan capturedAt is ${input.source.capturedAt}.`,
       `The scene inventory already identified these visible objects: ${sceneObjectSummary}.`,
-      `The scene inventory reported these conditions: ${sceneConditionSummary}. Benign/normal conditions do not count as a completed facility-condition audit.`,
+      `The scene inventory reported these conditions: ${sceneConditionSummary}. Benign/normal conditions do not count as a completed operational-condition audit.`,
       `Previously remembered object naming context (NOT evidence): ${priorNamingContext}.`,
-      'Inspect every supplied frame specifically for visually defensible environmental conditions that a facility or operations manager would care about.',
-      'Re-check object identity independently instead of blindly copying the scene label. In warehouses, verify whether wheeled/forked material-handling equipment is a pallet jack/cart/trolley rather than a ramp, and whether a portable red cylinder is a fire extinguisher rather than a hydrant. If uncertain, use a conservative generic equipment label.',
-      'When a visible movable object is directly in front of, across, blocking, or obstructing a door/exit, state that relative placement explicitly in the observation/object description. If an emergency/exit sign is visible, emit it as a signage object as well as an observation.',
-      'Check walking paths, doors, exits, floors, desks, furniture, boxes/packages, cables, electrical items, equipment, and visible maintenance state.',
-      'Pay special attention to newly introduced or misplaced objects and whether their placement narrows, blocks, or changes a normal circulation path.',
-      'Examples of relevant visible conditions include a blocked or narrowed passage, furniture or a box obstructing a normal walkway, a loose cable on a walking surface, a spill/wet floor, visible physical damage, unstable or misplaced equipment, a blocked door/exit, or an obvious maintenance defect.',
-      'Do NOT force a condition. Ordinary furniture arrangement or a box stored safely out of the walking path is not a hazard unless the visual evidence supports obstruction or another condition.',
-      'Use basis="observed" only for the directly visible state. Use basis="inferred" and status="uncertain" when interpreting what the visible state may mean.',
-      'Do not recommend actions and do not infer invisible causes or risks.',
+      'Inspect the supplied CURRENT evidence from scratch. Recover any materially useful directly visible object, relation, or operational condition that the broad scene pass missed or under-described. Do not assume a particular building type, room type, object list, or demo scenario.',
+      'Evaluate the physical scene broadly: access/circulation, safety, visible damage, maintenance state, equipment/fixture state, electrical/HVAC context, compliance cues, storage/placement, cleanliness only when operationally meaningful, and any other condition that materially affects use of the environment.',
+      'Classify objects from visible morphology and context. If identity is uncertain, keep the label generic rather than forcing a familiar object name.',
+      'When a condition depends on a spatial relationship, encode the grounded relation and bind the condition to the relevant current object IDs. Do not rely on vague narrative wording alone.',
+      'Use basis="observed" only for directly visible physical state. Use basis="inferred" and status="uncertain" for interpretations that go beyond what is directly visible.',
+      'Do not recommend actions, diagnose invisible causes, predict hidden risk, or infer facts from filenames, metadata, prior memory, or expected changes.',
       'Reference only the exact supplied FRAME_ID values in evidenceIds. SENTINEL owns frame evidence records.',
-      'Do not enumerate negative findings. Never emit observations such as "no visible damage", "no visible obstruction", "no visible hazard", "area is clear", or statements about rooms/areas that are not directly visible. If there is no concrete operational condition, return conditions=[] and do not add audit observations.',
-      'Return the full SENTINEL PerceptionResult JSON schema. It is acceptable for conditions to be empty if no operational condition is visually supported.',
+      'Do not enumerate negative findings. If there is no concrete operational condition, return conditions=[] and do not add filler observations.',
+      'Return the full SENTINEL PerceptionResult JSON schema. It is acceptable for conditions to be empty.',
     ].join('\n')
 
     try {
@@ -661,51 +601,14 @@ export class ScanPipeline {
         sceneConditions: scene.conditions.map((item) => ({ kind: item.kind, title: item.title })),
       })
       const audit = pruneNegativeAuditObservations(await this.inferPerceptionPass('condition-audit', auditPrompt, artifacts, frames, input))
-      let merged = mergePerceptionPasses(scene, audit, 'audit_')
+      const recovered = mergeCurrentStateAudit(scene, audit, 'audit_')
+      let merged = recovered.scene
       console.warn('SENTINEL_CONDITION_AUDIT_COMPLETED', {
         scanId,
         auditConditions: audit.conditions.length,
         mergedConditions: merged.conditions.length,
         providerOperationalConditions: merged.conditions.filter((item) => OPERATIONAL_CONDITION_KINDS.has(item.kind)).length,
       })
-
-      if (
-        !hasOperationalConditionCandidate(merged)
-        && shouldRunIdentityAudit(merged)
-        && this.hasRuntimeBudget(OPTIONAL_AUDIT_TIMEOUT_MS + reserveAfterPerceptionMs)
-      ) {
-        const identityPrompt = [
-          `Targeted physical-object identity verification for scan ${scanId} in environment ${input.environmentId}.`,
-          `The scan source id is ${input.source.id}.`,
-          `The trusted scan capturedAt is ${input.source.capturedAt}.`,
-          'The earlier grounded passes found an emergency/exit context and an access-adjacent object whose taxonomy is ambiguous.',
-          'Inspect the supplied frames again, focusing specifically on the physical object directly in front of/across/near the door or exit.',
-          'Classify by visible morphology, not by the earlier label and not by filenames or metadata.',
-          'For warehouse material-handling equipment: a pallet jack/trolley/cart is movable and normally has wheels/casters, fork arms/platform and/or a steering handle; a ramp is a sloped or bridging surface and does not have those handling features.',
-          'Return a specific pallet jack/trolley/cart label only when those visible features support it. If the evidence really supports a ramp, keep ramp. If neither is clear, use conservative generic equipment/object wording.',
-          'State the object-to-door placement explicitly when visible (for example in front of, across, blocking, or beside).',
-          'If exit signage is visible, include a grounded exit-sign observation/object so the access role remains independently evidenced.',
-          'Do not force a hazard or access condition. Emit an operational condition only if the visible evidence itself supports one.',
-          'Reference only exact supplied FRAME_ID values in evidenceIds. Return the full SENTINEL PerceptionResult JSON schema.',
-        ].join('\n')
-
-        console.warn('SENTINEL_IDENTITY_AUDIT_STARTED', { scanId, reason: 'ambiguous_access_adjacent_object' })
-        try {
-          const identityAudit = await this.inferPerceptionPass('identity-audit', identityPrompt, artifacts, frames, input)
-          merged = mergePerceptionPasses(merged, identityAudit, 'identity_')
-          console.warn('SENTINEL_IDENTITY_AUDIT_COMPLETED', {
-            scanId,
-            objects: identityAudit.objects.map((item) => ({ name: item.name, category: item.category, confidence: item.confidence })),
-            conditions: identityAudit.conditions.map((item) => ({ title: item.title, kind: item.kind, confidence: item.confidence })),
-          })
-        } catch (error) {
-          console.warn('SENTINEL_IDENTITY_AUDIT_SKIPPED', {
-            scanId,
-            code: errorCode(error),
-            message: error instanceof Error ? error.message : 'Unknown identity-audit failure',
-          })
-        }
-      }
 
       if (
         !hasOperationalConditionCandidate(merged)
@@ -745,7 +648,7 @@ export class ScanPipeline {
         })
         try {
           const geometryAudit = await this.inferPerceptionPass('access-geometry-audit', geometryPrompt, artifacts, frames, input)
-          merged = mergePerceptionPasses(merged, geometryAudit, 'geometry_')
+          merged = mergeCurrentStateAudit(merged, geometryAudit, 'geometry_').scene
           console.warn('SENTINEL_ACCESS_GEOMETRY_AUDIT_COMPLETED', {
             scanId,
             relations: geometryAudit.relations.map((item) => ({
@@ -781,7 +684,7 @@ export class ScanPipeline {
   }
 
   private async inferPerceptionPass(
-    pass: 'scene' | 'state-audit' | 'condition-audit' | 'identity-audit' | 'access-geometry-audit' | 'operational-change-audit' | 'person-confirmation-audit',
+    pass: 'scene' | 'state-audit' | 'condition-audit' | 'access-geometry-audit' | 'person-confirmation-audit',
     prompt: string,
     artifacts: ScanArtifact[],
     frames: ScanFrame[],
@@ -1024,18 +927,15 @@ function pruneNegativeAuditObservations(result: PerceptionResult): PerceptionRes
 }
 
 
-const OPERATIONAL_CHANGE_AUDIT_TERMS = /\b(?:box|boxes|carton|package|fire extinguisher|extinguisher|chair|stool|bench|cart|trolley|pallet jack|hand truck|dolly|wheelchair|ladder|barrier|cone|toolbox|bag|suitcase|equipment case|door|doorway|exit|egress|walkway|walking path|passage|aisle|obstruction|blocking|blocked|obstructing|obstructed)\b/i
-
 function isOperationalChangeAuditObject(item: SpatialObject): boolean {
-  if (item.confidence < 0.9) return false
-  if (item.category === 'obstruction' || item.category === 'safety' || item.category === 'door') return true
-  const text = `${item.name} ${item.description ?? ''}`
-  return OPERATIONAL_CHANGE_AUDIT_TERMS.test(text)
+  if (item.confidence < 0.9 || item.evidenceIds.length === 0) return false
+  return item.category !== 'room' && item.category !== 'person'
 }
 
-function mergeOperationalChangeAudit(
+function mergeCurrentStateAudit(
   scene: PerceptionResult,
   audit: PerceptionResult,
+  prefix = 'audit_',
 ): { scene: PerceptionResult; added: SpatialObject[]; enriched: SpatialObject[] } {
   const matches = matchObjectsConservatively(scene.objects, audit.objects)
   const idMap = new Map<string, string>()
@@ -1052,7 +952,12 @@ function mergeOperationalChangeAudit(
       const exact = mergedObjects
         .map((item, index) => ({ item, index }))
         .filter(({ item }) => normalizeTemporalName(item.name) === candidateName)
-      if (exact.length === 1) sceneIndex = exact[0].index
+      if (exact.length === 1) {
+        sceneIndex = exact[0].index
+      } else {
+        const dynamicMatch = matchObjectsConservatively(mergedObjects, [candidate]).get(0)
+        if (dynamicMatch !== undefined) sceneIndex = dynamicMatch
+      }
     }
 
     if (sceneIndex !== undefined) {
@@ -1070,22 +975,21 @@ function mergeOperationalChangeAudit(
       continue
     }
 
-    const nextId = `change_audit_${candidate.id}`
+    const nextId = `${prefix}${candidate.id}`
     idMap.set(candidate.id, nextId)
     const next = { ...candidate, id: nextId }
     mergedObjects.push(next)
     added.push(next)
   }
 
-  const mappedObservationText = audit.observations.filter((item) =>
-    item.confidence >= 0.9 && OPERATIONAL_CHANGE_AUDIT_TERMS.test(`${item.label} ${item.description}`),
-  ).map((item) => ({ ...item, id: `change_audit_${item.id}` }))
+  const mappedObservationText = audit.observations
+    .filter((item) => item.confidence >= 0.9 && item.evidenceIds.length > 0)
+    .map((item) => ({ ...item, id: `${prefix}${item.id}` }))
 
   const mappedConditions = audit.conditions.flatMap((item) => {
-    if (item.confidence < 0.85 || !OPERATIONAL_CHANGE_AUDIT_TERMS.test(`${item.title} ${item.description}`)) return []
     const objectIds = item.objectIds.map((id) => idMap.get(id)).filter((id): id is string => Boolean(id))
     if (item.objectIds.length > 0 && objectIds.length !== item.objectIds.length) return []
-    return [{ ...item, id: `change_audit_${item.id}`, objectIds }]
+    return [{ ...item, id: `${prefix}${item.id}`, objectIds }]
   })
 
   const knownIds = new Set(mergedObjects.map((item) => item.id))
@@ -1093,7 +997,7 @@ function mergeOperationalChangeAudit(
     const fromId = idMap.get(item.fromId)
     const toId = idMap.get(item.toId)
     if (!fromId || !toId || !knownIds.has(fromId) || !knownIds.has(toId)) return []
-    return [{ ...item, id: `change_audit_${item.id}`, fromId, toId }]
+    return [{ ...item, id: `${prefix}${item.id}`, fromId, toId }]
   })
 
   const existingConditionKeys = new Set(scene.conditions.map((item) =>
@@ -1133,8 +1037,10 @@ function countObjectNames(objects: SpatialObject[]): Map<string, number> {
   return counts
 }
 
-function temporalCandidateAllowed(item: SpatialObject): boolean {
-  return temporalStateCandidateAllowed(item) || temporalMovementCandidateAllowed(item)
+function temporalCandidateAllowed(previous: SpatialObject | undefined, current: SpatialObject): boolean {
+  if (temporalStateCandidateAllowed(current)) return true
+  if (!previous || !temporalMovementCandidateAllowed(current)) return false
+  return movementCandidateWorthVerifying(previous, current)
 }
 
 function temporalStateCandidateAllowed(item: SpatialObject): boolean {
@@ -1142,8 +1048,51 @@ function temporalStateCandidateAllowed(item: SpatialObject): boolean {
 }
 
 function temporalMovementCandidateAllowed(item: SpatialObject): boolean {
-  const name = normalizeTemporalName(item.name)
-  return /\b(?:chair|stool|bench|cart|trolley|pallet jack|hand truck|dolly|wheelchair|ladder|box|crate|bin|barrier|cone|toolbox|bag|suitcase|equipment case|fire extinguisher|extinguisher)\b/.test(name)
+  if (item.category === 'room' || item.category === 'window' || item.category === 'signage' || item.category === 'document') return false
+  if (item.category === 'door') return false
+  return item.category === 'furniture'
+    || item.category === 'equipment'
+    || item.category === 'safety'
+    || item.category === 'obstruction'
+    || item.category === 'other'
+}
+
+function movementCandidateWorthVerifying(previous: SpatialObject, current: SpatialObject): boolean {
+  const previousPosition = normalizeSemanticText(previous.position?.description ?? '')
+  const currentPosition = normalizeSemanticText(current.position?.description ?? '')
+
+  if (previousPosition && currentPosition) {
+    return !positionDescriptionsEquivalent(previousPosition, currentPosition)
+  }
+
+  if (previousPosition || currentPosition) return true
+
+  // Without any textual placement cue, reserve paired-image movement checks for
+  // operational object categories instead of maintaining a noun whitelist.
+  return current.category === 'equipment'
+    || current.category === 'safety'
+    || current.category === 'obstruction'
+}
+
+function positionDescriptionsEquivalent(a: string, b: string): boolean {
+  if (a === b || a.includes(b) || b.includes(a)) return true
+
+  const stop = new Set([
+    'the','and','with','from','near','beside','next','left','right','front','back','center','centre',
+    'wall','floor','room','area','side','door','doorway','window','corner','middle','inside','outside',
+  ])
+  const tokens = (value: string) => value
+    .split(' ')
+    .filter((token) => token.length >= 4 && !stop.has(token))
+  const left = tokens(a)
+  const right = tokens(b)
+
+  return left.some((aToken) =>
+    right.some((bToken) =>
+      aToken === bToken ||
+      (Math.min(aToken.length, bToken.length) >= 5 && (aToken.includes(bToken) || bToken.includes(aToken))),
+    ),
+  )
 }
 
 function isCompositeOpenable(item: SpatialObject): boolean {
@@ -1182,17 +1131,11 @@ function shouldRunOpenableStateAudit(result: PerceptionResult): boolean {
 }
 
 function shouldRunStillImageConditionAudit(result: PerceptionResult): boolean {
-  const text = normalizeSemanticText([
-    ...result.observations.flatMap((item) => [item.label, item.description]),
-    ...result.objects.flatMap((item) => [item.name, item.description ?? '', item.position?.description ?? '']),
-    ...result.conditions.flatMap((item) => [item.title, item.description]),
-  ].join(' '))
-
-  return /\b(?:emergency exit|exit sign|blocked|blocking|obstruction|obstructed|walkway|access route|spill|leak|smoke|fire|broken|cracked|damaged|damage|loose cable|exposed wire|unstable|fallen|pallet jack|trolley|cart in front|box in doorway|across walkway)\b/.test(text)
+  return result.objects.some((item) => item.evidenceIds.length > 0)
 }
 
 function hasOperationalConditionCandidate(result: PerceptionResult): boolean {
-  return result.conditions.some((item) => OPERATIONAL_CONDITION_KINDS.has(item.kind))
+  return result.conditions.some((item) => assessCondition(item).operational)
 }
 
 function materializeDirectlyObservedRememberedObjects(
@@ -1311,23 +1254,6 @@ function hasExplicitExitSignText(value: string): boolean {
   return /\b(?:emergency )?exit (?:sign|symbol|signage)\b/.test(text)
 }
 
-function shouldRunIdentityAudit(result: PerceptionResult): boolean {
-  const hasExitContext = [...result.observations, ...result.objects].some((item) => {
-    const text = 'label' in item
-      ? `${item.label} ${item.description}`
-      : `${item.name} ${item.description ?? ''}`
-    return /\b(?:emergency\s+)?exit\b/i.test(text) && /\b(?:sign|door)\b/i.test(text)
-  })
-  if (!hasExitContext) return false
-
-  return result.objects.some((item) => {
-    const text = `${item.name} ${item.description ?? ''}`
-    const ambiguousTaxonomy = /\b(?:ramp|equipment|object|device|cart|trolley|pallet(?:\s+jack)?)\b/i.test(text)
-    const accessPlacement = /\b(?:in front of|directly in front of|across|blocking|obstructing|near)\b.{0,48}\b(?:door|exit)\b/i.test(text)
-    return ambiguousTaxonomy && accessPlacement
-  })
-}
-
 function shouldRunAccessGeometryAudit(result: PerceptionResult): boolean {
   const doors = result.objects.filter((item) =>
     item.category === 'door' &&
@@ -1336,23 +1262,24 @@ function shouldRunAccessGeometryAudit(result: PerceptionResult): boolean {
   if (doors.length === 0) return false
 
   return accessGeometryCandidates(result).some((candidate) =>
-    !hasExplicitPlacementForCandidate(result, candidate, doors) &&
-    sharesTrustedEvidenceWithAnyDoor(candidate, doors),
+    !hasAuthoritativeBlockingPlacement(result, candidate, doors) &&
+    sharesTrustedEvidenceWithAnyDoor(candidate, doors) &&
+    hasAccessProximityHint(result, candidate, doors),
   )
 }
 
 function accessGeometryCandidates(result: PerceptionResult): SpatialObject[] {
-  return result.objects.filter((item) => {
-    if (item.evidenceIds.length === 0) return false
-    if (item.category === 'obstruction') return true
-
-    const text = `${item.name} ${item.description ?? ''}`
-    // Do not proactively reinterpret ordinary office furniture as an access
-    // obstacle from a single perspective. If a chair/table/desk truly blocks
-    // a doorway, the broad scene or condition audit may state that directly;
-    // this targeted geometry pass is reserved for obstruction-like objects.
-    return /\b(?:pallet\s+jack|pallet|trolley|cart|forklift|box|carton|barrier|cone|ladder|equipment\s+case|material[-\s]+handling\s+equipment)\b/i.test(text)
-  })
+  return result.objects
+    .filter((item) =>
+      item.evidenceIds.length > 0 &&
+      item.category !== 'room' &&
+      item.category !== 'door' &&
+      item.category !== 'person' &&
+      item.category !== 'signage' &&
+      item.category !== 'window',
+    )
+    .sort((a, b) => b.confidence - a.confidence)
+    .slice(0, 12)
 }
 
 function sharesTrustedEvidenceWithAnyDoor(candidate: SpatialObject, doors: SpatialObject[]): boolean {
@@ -1360,7 +1287,7 @@ function sharesTrustedEvidenceWithAnyDoor(candidate: SpatialObject, doors: Spati
   return doors.some((door) => door.evidenceIds.some((id) => evidence.has(id)))
 }
 
-function hasExplicitPlacementForCandidate(
+function hasAuthoritativeBlockingPlacement(
   result: PerceptionResult,
   candidate: SpatialObject,
   doors: SpatialObject[],
@@ -1369,10 +1296,12 @@ function hasExplicitPlacementForCandidate(
     item.type === 'in_front_of' &&
     item.fromId === candidate.id &&
     doors.some((door) => door.id === item.toId) &&
-    item.evidenceIds.length > 0,
+    item.evidenceIds.length > 0 &&
+    (item.id.startsWith('geometry_') || candidate.category === 'obstruction'),
   )) return true
 
-  const candidateName = normalizeSemanticText(candidate.name)
+  const candidateAliases = objectAliases(candidate)
+  const doorAliases = doors.flatMap(objectAliases)
   const texts = [...result.observations, ...result.objects].map((item) =>
     normalizeSemanticText('label' in item
       ? `${item.label} ${item.description}`
@@ -1380,42 +1309,76 @@ function hasExplicitPlacementForCandidate(
   )
 
   return texts.some((text) =>
-    text.includes(candidateName) &&
-    /\b(?:in front of|directly in front of|across|blocking|obstructing)\b.{0,48}\b(?:door|exit)\b/.test(text),
+    candidateAliases.some((name) => text.includes(name)) &&
+    doorAliases.some((name) => text.includes(name)) &&
+    /\b(?:directly in front of|across|blocking|blocked|obstructing|obstructed|occupying|occupied|narrowing|narrowed)\b/.test(text),
   )
+}
+
+function hasAccessProximityHint(
+  result: PerceptionResult,
+  candidate: SpatialObject,
+  doors: SpatialObject[],
+): boolean {
+  const doorIds = new Set(doors.map((door) => door.id))
+
+  if (result.relations.some((item) =>
+    item.fromId === candidate.id &&
+    doorIds.has(item.toId) &&
+    (item.type === 'near' || item.type === 'adjacent_to' || item.type === 'in_front_of') &&
+    item.evidenceIds.length > 0,
+  )) return true
+
+  if (candidate.position?.relativeToId && doorIds.has(candidate.position.relativeToId)) return true
+
+  const candidateAliases = objectAliases(candidate)
+  const doorAliases = doors.flatMap(objectAliases)
+  const texts = [
+    `${candidate.name} ${candidate.description ?? ''} ${candidate.position?.description ?? ''}`,
+    ...result.observations.map((item) => `${item.label} ${item.description}`),
+  ].map(normalizeSemanticText)
+
+  if (texts.some((text) =>
+    candidateAliases.some((name) => text.includes(name)) &&
+    doorAliases.some((name) => text.includes(name)) &&
+    /\b(?:in front of|directly in front of|across|near|beside|next to|by|at|toward|towards)\b/.test(text),
+  )) return true
+
+  return doors.some((door) =>
+    Boolean(candidate.boundingBox && door.boundingBox && boundingBoxesInteract(candidate.boundingBox, door.boundingBox)),
+  )
+}
+
+function objectAliases(item: SpatialObject): string[] {
+  const name = normalizeSemanticText(item.name)
+  const aliases = [name]
+  if (item.category === 'door') {
+    aliases.push('door', 'doorway')
+    if (/\bexit\b/.test(name)) aliases.push('exit')
+  }
+  return [...new Set(aliases.filter((value) => value.length >= 3))]
+}
+
+function boundingBoxesInteract(
+  a: NonNullable<SpatialObject['boundingBox']>,
+  b: NonNullable<SpatialObject['boundingBox']>,
+): boolean {
+  if (
+    a.frameWidth && b.frameWidth && a.frameWidth !== b.frameWidth ||
+    a.frameHeight && b.frameHeight && a.frameHeight !== b.frameHeight
+  ) return false
+
+  const paddingX = Math.max(a.width, b.width) * 0.15
+  const paddingY = Math.max(a.height, b.height) * 0.15
+  const left = Math.max(a.x - paddingX, b.x - paddingX)
+  const top = Math.max(a.y - paddingY, b.y - paddingY)
+  const right = Math.min(a.x + a.width + paddingX, b.x + b.width + paddingX)
+  const bottom = Math.min(a.y + a.height + paddingY, b.y + b.height + paddingY)
+  return right > left && bottom > top
 }
 
 function normalizeSemanticText(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim()
-}
-
-function mergePerceptionPasses(scene: PerceptionResult, audit: PerceptionResult, prefix = 'audit_'): PerceptionResult {
-  const objectIdMap = new Map(audit.objects.map((item) => [item.id, `${prefix}${item.id}`]))
-  const prefixId = (id: string) => `${prefix}${id}`
-  const mapObjectId = (id: string) => objectIdMap.get(id) ?? id
-
-  const auditObservations = audit.observations.map((item) => ({ ...item, id: prefixId(item.id) }))
-  const auditObjects = audit.objects.map((item) => ({ ...item, id: mapObjectId(item.id) }))
-  const auditConditions = audit.conditions.map((item) => ({
-    ...item,
-    id: prefixId(item.id),
-    objectIds: item.objectIds.map(mapObjectId),
-  }))
-  const auditRelations = audit.relations.map((item) => ({
-    ...item,
-    id: prefixId(item.id),
-    fromId: mapObjectId(item.fromId),
-    toId: mapObjectId(item.toId),
-  }))
-
-  return {
-    sourceId: scene.sourceId,
-    observations: uniqueById([...scene.observations, ...auditObservations]),
-    objects: uniqueById([...scene.objects, ...auditObjects]),
-    conditions: uniqueById([...scene.conditions, ...auditConditions]),
-    relations: uniqueById([...scene.relations, ...auditRelations]),
-    evidence: uniqueById([...scene.evidence, ...audit.evidence]),
-  }
 }
 
 function uniqueById<T extends { id: string }>(values: T[]): T[] {

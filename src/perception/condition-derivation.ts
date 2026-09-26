@@ -5,19 +5,18 @@ export interface ConditionDerivationResult {
   derivedConditions: EnvironmentalCondition[]
 }
 
-const OBSTACLE_NAME = /\b(?:pallet jack|pallet|trolley|cart|box|carton|chair|cabinet|desk|table|equipment|object)\b/i
 const EXIT_CUE = /\b(?:emergency exit|exit sign|exit door)\b/i
 const DOOR_COLOR = /\b(green|red|blue|orange|yellow|white|black|brown|gray|grey)\b/i
 
 /**
  * Deterministic Phase 5 derivation from already-grounded perception facts.
  *
- * The model may correctly observe two facts without composing them into an
- * operational condition (for example, "pallet jack in front of the green
- * door" + "emergency exit sign above the green door"). SENTINEL may join
- * those facts only when both are explicit, evidence-backed, and point to the
- * same named door. The derived condition remains an inference; confidence is
- * bounded below the source observations and evidence is inherited unchanged.
+ * The model may correctly observe separate physical facts without composing
+ * them into an operational condition. SENTINEL may join those facts only when
+ * current evidence independently grounds the relevant objects and blocking
+ * geometry. No environment name or object-noun whitelist participates in the
+ * decision. The derived condition remains an inference; confidence is bounded
+ * below the source observations and evidence is inherited unchanged.
  */
 export function deriveOperationalConditions(
   perception: PerceptionResult,
@@ -27,7 +26,12 @@ export function deriveOperationalConditions(
 
   const doors = perception.objects.filter((item) => item.category === 'door')
   const obstacles = perception.objects.filter((item) =>
-    item.category === 'obstruction' || OBSTACLE_NAME.test(`${item.name} ${item.description ?? ''}`),
+    item.evidenceIds.length > 0 &&
+    item.category !== 'door' &&
+    item.category !== 'room' &&
+    item.category !== 'person' &&
+    item.category !== 'signage' &&
+    item.category !== 'window',
   )
 
   for (const door of doors) {
@@ -76,7 +80,6 @@ export function deriveOperationalConditions(
   // not silently fall back to this generic path.
   for (const door of doors) {
     if (findExitEvidenceForDoor(perception, door)) continue
-    if (EXIT_CUE.test(semanticText(door))) continue
     if (door.evidenceIds.length === 0) continue
 
     for (const obstacle of obstacles) {
@@ -199,13 +202,14 @@ function findObstaclePlacementEvidence(
     item.type === 'in_front_of' &&
     item.fromId === obstacle.id &&
     item.toId === door.id &&
-    item.evidenceIds.length > 0,
+    item.evidenceIds.length > 0 &&
+    (item.id.startsWith('geometry_') || obstacle.category === 'obstruction'),
   )
   if (explicitRelation) {
     return {
       confidence: explicitRelation.confidence,
       evidenceIds: explicitRelation.evidenceIds,
-      phrase: 'in front of',
+      phrase: 'blocking',
     }
   }
 
@@ -247,7 +251,7 @@ function explicitObstaclePlacement(text: string, obstacleNames: string[], doorNa
     for (const doorName of doorNames) {
       const obstacle = escapedPhrase(obstacleName)
       const door = escapedPhrase(doorName)
-      const forward = new RegExp(`\\b${obstacle}\\b.{0,48}\\b(in front of|directly in front of|parked in front of|positioned in front of|across|blocking|obstructing)\\b.{0,32}\\b${door}\\b`)
+      const forward = new RegExp(`\\b${obstacle}\\b.{0,64}\\b(directly in front of|across|blocking|obstructing|occupying|narrowing)\\b.{0,48}\\b${door}\\b`)
       const passive = new RegExp(`\\b${door}\\b.{0,32}\\b(blocked|obstructed)\\s+by\\b.{0,32}\\b${obstacle}\\b`)
       const forwardMatch = text.match(forward)
       if (forwardMatch) return normalizePlacementPhrase(forwardMatch[1])
@@ -259,9 +263,9 @@ function explicitObstaclePlacement(text: string, obstacleNames: string[], doorNa
 }
 
 function normalizePlacementPhrase(value: string): string {
-  if (value === 'blocking' || value === 'blocked' || value === 'obstructing' || value === 'obstructed') return 'blocking'
+  if (/block|obstruct|occup|narrow/i.test(value)) return 'blocking'
   if (value === 'across') return 'across'
-  return 'in front of'
+  return 'directly in front of'
 }
 
 function escapedPhrase(value: string): string {

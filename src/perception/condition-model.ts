@@ -12,12 +12,11 @@ const OBSERVED_ISSUE_THRESHOLD = 0.65
 const INFERRED_ISSUE_THRESHOLD = 0.85
 const EXPLICIT_OBSERVED_ACCESS_THRESHOLD = 0.60
 
-const PHYSICAL_OBSTACLE = '(?:box|carton|package|chair|furniture|equipment|object|item|cabinet|table|desk|trolley|cart)'
-const ACCESS_ROUTE = '(?:doorway|door|exit|walkway|passage|aisle|walking path|circulation path)'
+const ACCESS_ROUTE = '(?:doorway|door|exit|egress|walkway|passage|aisle|walking path|circulation path|access path|route)'
 const EXPLICIT_ACCESS_PATTERNS = [
-  new RegExp(`\\b${PHYSICAL_OBSTACLE}\\b.{0,80}\\b(?:in|inside|across|blocking|obstructing|occupying|narrowing)\\b.{0,80}\\b${ACCESS_ROUTE}\\b`, 'i'),
-  new RegExp(`\\b${ACCESS_ROUTE}\\b.{0,80}\\b(?:blocked|obstructed|occupied|narrowed)\\b`, 'i'),
-  new RegExp(`\\b(?:blocking|obstructing|narrowing)\\b.{0,80}\\b${ACCESS_ROUTE}\\b`, 'i'),
+  new RegExp(`\\b${ACCESS_ROUTE}\\b.{0,100}\\b(?:blocked|obstructed|occupied|narrowed|impeded|inaccessible)\\b`, 'i'),
+  new RegExp(`\\b(?:blocking|obstructing|occupying|narrowing|impeding)\\b.{0,100}\\b${ACCESS_ROUTE}\\b`, 'i'),
+  new RegExp(`\\b(?:directly in front of|across)\\b.{0,100}\\b${ACCESS_ROUTE}\\b`, 'i'),
 ]
 
 /**
@@ -31,10 +30,11 @@ const EXPLICIT_ACCESS_PATTERNS = [
  *
  * A provider can occasionally label an explicitly described obstruction as
  * "normal". SENTINEL corrects only a very narrow class of those conflicts:
- * grounded text that directly places a physical obstacle in/across a doorway,
- * exit, walkway, passage, aisle, or walking/circulation path. The policy never
- * raises confidence above the model's own value and does not treat a generic
- * "box visible in room" statement as an access problem.
+ * grounded text that explicitly describes an access route as blocked,
+ * obstructed, occupied, narrowed, impeded, or directly crossed by a physical
+ * object. The policy is noun-agnostic: it does not depend on a demo-specific
+ * list of boxes, chairs, carts, or equipment. The policy never raises
+ * confidence above the model's own value.
  */
 export function assessCondition(condition: EnvironmentalCondition): ConditionAssessment {
   const trustLabel = condition.basis === 'observed' ? 'Observed' : 'Inferred'

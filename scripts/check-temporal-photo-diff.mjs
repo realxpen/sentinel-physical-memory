@@ -43,11 +43,12 @@ try {
         }
       }
 
-      if (prompt.includes('Operational change recovery audit')) {
+      if (prompt.includes('Condition audit for scan')) {
+        if (!current) return { sourceId, observations: [], objects: [], conditions: [], relations: [], evidence: [] }
         return {
           sourceId,
           observations: [{
-            id: 'change-audit-box-observation',
+            id: 'condition-audit-box-observation',
             environmentId,
             sourceId,
             modality: 'image',
@@ -60,7 +61,7 @@ try {
           }],
           objects: [
             {
-              id: 'change-audit-extinguisher',
+              id: 'condition-audit-extinguisher',
               environmentId,
               category: 'safety',
               name: 'fire extinguisher',
@@ -72,7 +73,7 @@ try {
               evidenceIds: [frameId],
             },
             {
-              id: 'change-audit-boxes',
+              id: 'condition-audit-boxes',
               environmentId,
               category: 'obstruction',
               name: 'cardboard boxes',
@@ -84,7 +85,7 @@ try {
               evidenceIds: [frameId],
             },
             {
-              id: 'change-audit-chair',
+              id: 'condition-audit-chair',
               environmentId,
               category: 'furniture',
               name: 'office chair',
@@ -100,10 +101,6 @@ try {
           relations: [],
           evidence: [],
         }
-      }
-
-      if (prompt.includes('Condition audit for scan')) {
-        return { sourceId, observations: [], objects: [], conditions: [], relations: [], evidence: [] }
       }
 
       const object = (id, category, name, position, description, state) => ({
@@ -235,8 +232,8 @@ try {
   console.log('PASS  unverified single-photo openable states are discarded')
   console.log('PASS  free-form photo movement requires paired verification')
   console.log('PASS  portable fire extinguisher movement is eligible for paired temporal verification')
-  console.log('PASS  update-photo recovery audit restores a missed extinguisher and obvious new cardboard boxes from current evidence')
-  console.log('PASS  recovery audit merges an already-seen chair instead of duplicating it')
+  console.log('PASS  generic condition/integrity audit restores missed current objects without a dedicated demo-object recovery pass')
+  console.log('PASS  generic current-state audit merges an already-seen chair instead of duplicating it')
   console.log('PASS  structural surfaces and low-salience decor do not become operational diff cards')
   console.log('PASS  exact output is white door changed + office chair moved + fire extinguisher moved + duffle bag added + cardboard boxes added')
   console.log('SENTINEL TEMPORAL PHOTO DIFF VERIFIED')
