@@ -223,7 +223,65 @@ export function matchObjectsConservatively(
     }
   }
 
+  // Final generic fallback for provider wording drift that does not belong to
+  // SENTINEL's small semantic-family table. This remains one-to-one and only
+  // accepts same-category objects whose names have a strong lexical bridge
+  // (for example "green chair" ↔ "green armchair") or whose grounded semantic
+  // locations match. No environment- or demo-specific object noun is required.
+  let genericProgress = true
+  while (genericProgress) {
+    genericProgress = false
+    for (let currentIndex = 0; currentIndex < current.length; currentIndex += 1) {
+      if (currentToPrevious.has(currentIndex)) continue
+      const previousCandidates = previous
+        .map((candidate, index) => ({ candidate, index }))
+        .filter(({ candidate, index }) =>
+          !usedPrevious.has(index) &&
+          genericCrossScanIdentityCompatible(candidate, current[currentIndex]),
+        )
+      if (previousCandidates.length !== 1) continue
+
+      const [{ index: previousIndex }] = previousCandidates
+      const reciprocal = current
+        .map((candidate, index) => ({ candidate, index }))
+        .filter(({ candidate, index }) =>
+          !currentToPrevious.has(index) &&
+          genericCrossScanIdentityCompatible(previous[previousIndex], candidate),
+        )
+      if (reciprocal.length !== 1) continue
+
+      currentToPrevious.set(currentIndex, previousIndex)
+      usedPrevious.add(previousIndex)
+      genericProgress = true
+    }
+  }
+
   return currentToPrevious
+}
+
+function genericCrossScanIdentityCompatible(a: SpatialObject, b: SpatialObject): boolean {
+  if (a.category !== b.category) return false
+  if (a.category === 'person' || a.category === 'room') return false
+
+  const nameA = normalize(a.name)
+  const nameB = normalize(b.name)
+  if (!nameA || !nameB) return false
+  if (namesHaveLexicalBridge(nameA, nameB)) return true
+
+  return groundedLocationsMatch(a, b)
+}
+
+function namesHaveLexicalBridge(a: string, b: string): boolean {
+  const left = a.split(' ').filter((token) => token.length >= 4)
+  const right = b.split(' ').filter((token) => token.length >= 4)
+
+  return left.some((aToken) =>
+    right.some((bToken) =>
+      aToken === bToken ||
+      aToken.includes(bToken) ||
+      bToken.includes(aToken),
+    ),
+  )
 }
 
 function explicitExitSignText(value: string): boolean {
