@@ -602,7 +602,7 @@ export class ScanPipeline {
         sceneConditions: scene.conditions.map((item) => ({ kind: item.kind, title: item.title })),
       })
       const audit = pruneNegativeAuditObservations(await this.inferPerceptionPass('condition-audit', auditPrompt, artifacts, frames, input))
-      const recovered = mergeOperationalChangeAudit(scene, audit)
+      const recovered = mergeCurrentStateAudit(scene, audit, 'audit_')
       let merged = recovered.scene
       console.warn('SENTINEL_CONDITION_AUDIT_COMPLETED', {
         scanId,
@@ -649,7 +649,7 @@ export class ScanPipeline {
         })
         try {
           const geometryAudit = await this.inferPerceptionPass('access-geometry-audit', geometryPrompt, artifacts, frames, input)
-          merged = mergePerceptionPasses(merged, geometryAudit, 'geometry_')
+          merged = mergeCurrentStateAudit(merged, geometryAudit, 'geometry_').scene
           console.warn('SENTINEL_ACCESS_GEOMETRY_AUDIT_COMPLETED', {
             scanId,
             relations: geometryAudit.relations.map((item) => ({
@@ -933,9 +933,10 @@ function isOperationalChangeAuditObject(item: SpatialObject): boolean {
   return item.category !== 'room' && item.category !== 'person'
 }
 
-function mergeOperationalChangeAudit(
+function mergeCurrentStateAudit(
   scene: PerceptionResult,
   audit: PerceptionResult,
+  prefix = 'audit_',
 ): { scene: PerceptionResult; added: SpatialObject[]; enriched: SpatialObject[] } {
   const matches = matchObjectsConservatively(scene.objects, audit.objects)
   const idMap = new Map<string, string>()
@@ -975,7 +976,7 @@ function mergeOperationalChangeAudit(
       continue
     }
 
-    const nextId = `change_audit_${candidate.id}`
+    const nextId = `${prefix}${candidate.id}`
     idMap.set(candidate.id, nextId)
     const next = { ...candidate, id: nextId }
     mergedObjects.push(next)
@@ -984,12 +985,12 @@ function mergeOperationalChangeAudit(
 
   const mappedObservationText = audit.observations
     .filter((item) => item.confidence >= 0.9 && item.evidenceIds.length > 0)
-    .map((item) => ({ ...item, id: `change_audit_${item.id}` }))
+    .map((item) => ({ ...item, id: `${prefix}${item.id}` }))
 
   const mappedConditions = audit.conditions.flatMap((item) => {
     const objectIds = item.objectIds.map((id) => idMap.get(id)).filter((id): id is string => Boolean(id))
     if (item.objectIds.length > 0 && objectIds.length !== item.objectIds.length) return []
-    return [{ ...item, id: `change_audit_${item.id}`, objectIds }]
+    return [{ ...item, id: `${prefix}${item.id}`, objectIds }]
   })
 
   const knownIds = new Set(mergedObjects.map((item) => item.id))
@@ -997,7 +998,7 @@ function mergeOperationalChangeAudit(
     const fromId = idMap.get(item.fromId)
     const toId = idMap.get(item.toId)
     if (!fromId || !toId || !knownIds.has(fromId) || !knownIds.has(toId)) return []
-    return [{ ...item, id: `change_audit_${item.id}`, fromId, toId }]
+    return [{ ...item, id: `${prefix}${item.id}`, fromId, toId }]
   })
 
   const existingConditionKeys = new Set(scene.conditions.map((item) =>
