@@ -135,6 +135,40 @@ try {
     throw new Error(`expected only operational hallway changes, got ${hallwayTitles.join(' | ')}`)
   }
 
+  const historicalExitSignSplit = changesForPresentation([
+    {
+      id: 'exit-sign-split', environmentId: 'office', fromStateId: 'state_1', toStateId: 'state_2',
+      type: 'added', entityKind: 'object', entityId: 'exit_sign_new', title: 'New: Exit Sign',
+      description: 'Exit Sign was not present in the previous state.', confidence: 0.95, evidenceIds: ['e_current'],
+    },
+    {
+      id: 'boxes-exit', environmentId: 'office', fromStateId: 'state_1', toStateId: 'state_2',
+      type: 'added', entityKind: 'object', entityId: 'boxes_exit', title: 'New: Cardboard Boxes',
+      description: 'Cardboard Boxes were not present in the previous state.', confidence: 0.95, evidenceIds: ['e_boxes'],
+    },
+  ], {
+    previousObjects: [{
+      id: 'exit_door_old', environmentId: 'office', category: 'door', name: 'Exit Door',
+      description: 'Black glass door with a green "EXIT" sign above it.', confidence: 1,
+      firstSeenAt: '2026-09-26T12:00:00.000Z', lastSeenAt: '2026-09-26T12:00:00.000Z', evidenceIds: ['e_previous'],
+    }],
+    currentObjects: [{
+      id: 'exit_sign_new', environmentId: 'office', category: 'signage', name: 'Exit Sign',
+      description: 'Green EXIT sign above the exit door.', confidence: 0.95,
+      firstSeenAt: '2026-09-26T12:10:00.000Z', lastSeenAt: '2026-09-26T12:10:00.000Z', evidenceIds: ['e_current'],
+    }, {
+      id: 'boxes_exit', environmentId: 'office', category: 'obstruction', name: 'Cardboard Boxes',
+      description: 'Stacked boxes in front of the exit.', confidence: 0.95,
+      firstSeenAt: '2026-09-26T12:10:00.000Z', lastSeenAt: '2026-09-26T12:10:00.000Z', evidenceIds: ['e_boxes'],
+    }],
+  })
+  if (historicalExitSignSplit.some((item) => item.title === 'New: Exit Sign')) {
+    throw new Error('historical presentation must hide exit-sign object splitting when prior grounded memory already described the sign')
+  }
+  if (!historicalExitSignSplit.some((item) => item.title === 'New: Cardboard Boxes')) {
+    throw new Error('historical exit-sign cleanup must preserve the real cardboard-box addition')
+  }
+
   const closetDoorUncertainty = changesForPresentation([
     change('closet_door', 'Not re-observed: closet door', 'closet_door_a'),
   ])
@@ -179,6 +213,7 @@ try {
   console.log('PASS  persisted raw structural-surface churn is hidden from Reality Diff presentation')
   console.log('PASS  distinct operational object changes remain visible')
   console.log('PASS  independently grounded structural surfaces remain in immutable history but not headline diff cards')
+  console.log('PASS  historical exit-sign object splitting is filtered only when prior grounded memory already described the sign')
   console.log('PASS  historical micro-inventory, architectural re-segmentation, and transient-person churn are filtered without hiding operational changes')
   console.log('SENTINEL PHASE 8 CHANGE PRESENTATION VERIFIED')
 } finally {
