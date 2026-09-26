@@ -309,7 +309,7 @@ export class ScanPipeline {
     const pairedCurrent = new Set<number>()
 
     const addCandidate = (previous: SpatialObject, current: SpatialObject) => {
-      if (!temporalCandidateAllowed(current)) return
+      if (!temporalCandidateAllowed(previous, current)) return
       const key = `candidate_${candidates.length}`
       candidates.push({
         key,
@@ -327,7 +327,7 @@ export class ScanPipeline {
     // Exact unique-name identity is preferred and does not depend on position
     // wording, because movement is one of the things this pass exists to test.
     for (const [currentIndex, current] of perception.objects.entries()) {
-      if (!temporalCandidateAllowed(current)) continue
+      if (!temporalCandidateAllowed(undefined, current)) continue
       const nameKey = normalizeTemporalName(current.name)
       if ((currentNameCounts.get(nameKey) ?? 0) !== 1 || (previousNameCounts.get(nameKey) ?? 0) !== 1) continue
       const previous = priorSnapshot.objects.find((item) => normalizeTemporalName(item.name) === nameKey)
@@ -344,7 +344,7 @@ export class ScanPipeline {
         if (pairedCurrent.has(currentIndex)) continue
         const previous = priorSnapshot.objects[previousIndex]
         const current = perception.objects[currentIndex]
-        if (!temporalCandidateAllowed(current)) continue
+        if (!temporalCandidateAllowed(previous, current)) continue
         if ((previousNameCounts.get(normalizeTemporalName(previous.name)) ?? 0) !== 1) continue
         if ((currentNameCounts.get(normalizeTemporalName(current.name)) ?? 0) !== 1) continue
         addCandidate(previous, current)
@@ -1038,8 +1038,10 @@ function countObjectNames(objects: SpatialObject[]): Map<string, number> {
   return counts
 }
 
-function temporalCandidateAllowed(item: SpatialObject): boolean {
-  return temporalStateCandidateAllowed(item) || temporalMovementCandidateAllowed(item)
+function temporalCandidateAllowed(previous: SpatialObject | undefined, current: SpatialObject): boolean {
+  if (temporalStateCandidateAllowed(current)) return true
+  if (!previous || !temporalMovementCandidateAllowed(current)) return false
+  return movementCandidateWorthVerifying(previous, current)
 }
 
 function temporalStateCandidateAllowed(item: SpatialObject): boolean {
@@ -1054,6 +1056,41 @@ function temporalMovementCandidateAllowed(item: SpatialObject): boolean {
     || item.category === 'safety'
     || item.category === 'obstruction'
     || item.category === 'other'
+}
+
+function movementCandidateWorthVerifying(previous: SpatialObject, current: SpatialObject): boolean {
+  const previousPosition = normalizeSemanticText(previous.position?.description ?? '')
+  const currentPosition = normalizeSemanticText(current.position?.description ?? '')
+
+  if (previousPosition && currentPosition) {
+    return !positionDescriptionsEquivalent(previousPosition, currentPosition)
+  }
+
+  if (previousPosition || currentPosition) return true
+
+  // Without any textual placement cue, reserve paired-image movement checks for
+  // operational object categories instead of maintaining a noun whitelist.
+  return current.category === 'equipment'
+    || current.category === 'safety'
+    || current.category === 'obstruction'
+}
+
+function positionDescriptionsEquivalent(a: string, b: string): boolean {
+  if (a === b || a.includes(b) || b.includes(a)) return true
+
+  const stop = new Set(['the','and','with','from','near','beside','next','left','right','front','back','center','centre'])
+  const tokens = (value: string) => value
+    .split(' ')
+    .filter((token) => token.length >= 4 && !stop.has(token))
+  const left = tokens(a)
+  const right = tokens(b)
+
+  return left.some((aToken) =>
+    right.some((bToken) =>
+      aToken === bToken ||
+      (Math.min(aToken.length, bToken.length) >= 5 && (aToken.includes(bToken) || bToken.includes(aToken))),
+    ),
+  )
 }
 
 function isCompositeOpenable(item: SpatialObject): boolean {
