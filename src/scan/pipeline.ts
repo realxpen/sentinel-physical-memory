@@ -1217,8 +1217,9 @@ function shouldRunAccessGeometryAudit(result: PerceptionResult): boolean {
   if (doors.length === 0) return false
 
   return accessGeometryCandidates(result).some((candidate) =>
-    !hasExplicitPlacementForCandidate(result, candidate, doors) &&
-    sharesTrustedEvidenceWithAnyDoor(candidate, doors),
+    !hasAuthoritativeBlockingPlacement(result, candidate, doors) &&
+    sharesTrustedEvidenceWithAnyDoor(candidate, doors) &&
+    hasAccessProximityHint(result, candidate, doors),
   )
 }
 
@@ -1241,7 +1242,7 @@ function sharesTrustedEvidenceWithAnyDoor(candidate: SpatialObject, doors: Spati
   return doors.some((door) => door.evidenceIds.some((id) => evidence.has(id)))
 }
 
-function hasExplicitPlacementForCandidate(
+function hasAuthoritativeBlockingPlacement(
   result: PerceptionResult,
   candidate: SpatialObject,
   doors: SpatialObject[],
@@ -1250,10 +1251,12 @@ function hasExplicitPlacementForCandidate(
     item.type === 'in_front_of' &&
     item.fromId === candidate.id &&
     doors.some((door) => door.id === item.toId) &&
-    item.evidenceIds.length > 0,
+    item.evidenceIds.length > 0 &&
+    (item.id.startsWith('geometry_') || candidate.category === 'obstruction'),
   )) return true
 
-  const candidateName = normalizeSemanticText(candidate.name)
+  const candidateAliases = objectAliases(candidate)
+  const doorAliases = doors.flatMap(objectAliases)
   const texts = [...result.observations, ...result.objects].map((item) =>
     normalizeSemanticText('label' in item
       ? `${item.label} ${item.description}`
@@ -1261,9 +1264,72 @@ function hasExplicitPlacementForCandidate(
   )
 
   return texts.some((text) =>
-    text.includes(candidateName) &&
-    /\b(?:in front of|directly in front of|across|blocking|obstructing)\b.{0,48}\b(?:door|exit)\b/.test(text),
+    candidateAliases.some((name) => text.includes(name)) &&
+    doorAliases.some((name) => text.includes(name)) &&
+    /\b(?:directly in front of|across|blocking|blocked|obstructing|obstructed|occupying|occupied|narrowing|narrowed)\b/.test(text),
   )
+}
+
+function hasAccessProximityHint(
+  result: PerceptionResult,
+  candidate: SpatialObject,
+  doors: SpatialObject[],
+): boolean {
+  const doorIds = new Set(doors.map((door) => door.id))
+
+  if (result.relations.some((item) =>
+    item.fromId === candidate.id &&
+    doorIds.has(item.toId) &&
+    (item.type === 'near' || item.type === 'adjacent_to' || item.type === 'in_front_of') &&
+    item.evidenceIds.length > 0,
+  )) return true
+
+  if (candidate.position?.relativeToId && doorIds.has(candidate.position.relativeToId)) return true
+
+  const candidateAliases = objectAliases(candidate)
+  const doorAliases = doors.flatMap(objectAliases)
+  const texts = [
+    `${candidate.name} ${candidate.description ?? ''} ${candidate.position?.description ?? ''}`,
+    ...result.observations.map((item) => `${item.label} ${item.description}`),
+  ].map(normalizeSemanticText)
+
+  if (texts.some((text) =>
+    candidateAliases.some((name) => text.includes(name)) &&
+    doorAliases.some((name) => text.includes(name)) &&
+    /\b(?:in front of|directly in front of|across|near|beside|next to|by|at|toward|towards)\b/.test(text),
+  )) return true
+
+  return doors.some((door) =>
+    Boolean(candidate.boundingBox && door.boundingBox && boundingBoxesInteract(candidate.boundingBox, door.boundingBox)),
+  )
+}
+
+function objectAliases(item: SpatialObject): string[] {
+  const name = normalizeSemanticText(item.name)
+  const aliases = [name]
+  if (item.category === 'door') {
+    aliases.push('door', 'doorway')
+    if (/\bexit\b/.test(name)) aliases.push('exit')
+  }
+  return [...new Set(aliases.filter((value) => value.length >= 3))]
+}
+
+function boundingBoxesInteract(
+  a: NonNullable<SpatialObject['boundingBox']>,
+  b: NonNullable<SpatialObject['boundingBox']>,
+): boolean {
+  if (
+    a.frameWidth && b.frameWidth && a.frameWidth !== b.frameWidth ||
+    a.frameHeight && b.frameHeight && a.frameHeight !== b.frameHeight
+  ) return false
+
+  const paddingX = Math.max(a.width, b.width) * 0.15
+  const paddingY = Math.max(a.height, b.height) * 0.15
+  const left = Math.max(a.x - paddingX, b.x - paddingX)
+  const top = Math.max(a.y - paddingY, b.y - paddingY)
+  const right = Math.min(a.x + a.width + paddingX, b.x + b.width + paddingX)
+  const bottom = Math.min(a.y + a.height + paddingY, b.y + b.height + paddingY)
+  return right > left && bottom > top
 }
 
 function normalizeSemanticText(value: string): string {
