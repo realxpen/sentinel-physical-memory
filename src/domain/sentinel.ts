@@ -52,11 +52,18 @@ export type ClaimBasis = 'observed' | 'inferred'
 export type ConditionKind = 'normal' | 'attention' | 'hazard' | 'damage' | 'maintenance' | 'access' | 'compliance' | 'unknown'
 export type ConditionStatus = 'present' | 'uncertain'
 
+export interface PersonGrounding {
+  status: 'confirmed'
+  method: 'independent-visual-confirmation'
+  confidence: Confidence
+  cues: string[]
+}
+
 export interface SpatialPosition { description: string; x?: number; y?: number; z?: number; roomId?: ID; relativeToId?: ID }
 export interface BoundingBox { x: number; y: number; width: number; height: number; frameWidth?: number; frameHeight?: number }
 export interface Evidence { id: ID; type: EvidenceType; sourceId: ID; capturedAt: ISODateTime; frameIndex?: number; timestampMs?: number; uri?: string; excerpt?: string; boundingBox?: BoundingBox; confidence?: Confidence; description: string }
 export interface Observation { id: ID; environmentId: ID; sourceId: ID; modality: ObservationModality; capturedAt: ISODateTime; label: string; description: string; confidence: Confidence; basis: 'observed'; position?: SpatialPosition; evidenceIds: ID[] }
-export interface SpatialObject { id: ID; environmentId: ID; category: ObjectCategory; name: string; description?: string; position?: SpatialPosition; boundingBox?: BoundingBox; state?: string; confidence: Confidence; firstSeenAt: ISODateTime; lastSeenAt: ISODateTime; evidenceIds: ID[] }
+export interface SpatialObject { id: ID; environmentId: ID; category: ObjectCategory; name: string; description?: string; position?: SpatialPosition; boundingBox?: BoundingBox; state?: string; confidence: Confidence; firstSeenAt: ISODateTime; lastSeenAt: ISODateTime; evidenceIds: ID[]; personGrounding?: PersonGrounding }
 export interface EnvironmentalCondition { id: ID; environmentId: ID; kind: ConditionKind; title: string; description: string; status: ConditionStatus; basis: ClaimBasis; confidence: Confidence; objectIds: ID[]; evidenceIds: ID[]; observedAt: ISODateTime }
 export interface Issue { id: ID; environmentId: ID; type: IssueType; title: string; description: string; severity: IssueSeverity; status: IssueStatus; confidence: Confidence; objectIds: ID[]; roomId?: ID; evidenceIds: ID[]; firstDetectedAt: ISODateTime; lastObservedAt: ISODateTime; resolvedAt?: ISODateTime; resolutionNote?: string }
 export interface EnvironmentRelation { id: ID; environmentId: ID; fromId: ID; toId: ID; type: RelationType; confidence: Confidence; evidenceIds: ID[] }
