@@ -110,7 +110,12 @@ function App() {
   const activeEnvironment = environments.find((item) => item.id === activeEnvironmentId) ?? environments[0] ?? DEFAULT_ENVIRONMENT
   const isWorking = status.startsWith('Observing') || status.startsWith('Understanding') || status.startsWith('Remembering')
   const latestDiff = result?.diff ?? memory?.diffs.at(-1)
-  const presentedChanges = latestDiff ? changesForPresentation(latestDiff.changes) : []
+  const previousDiffSnapshot = latestDiff ? memory?.snapshots.find((snapshot) => snapshot.stateId === latestDiff.fromStateId) : undefined
+  const currentDiffSnapshot = latestDiff ? memory?.snapshots.find((snapshot) => snapshot.stateId === latestDiff.toStateId) : undefined
+  const presentedChanges = latestDiff ? changesForPresentation(latestDiff.changes, {
+    previousObjects: previousDiffSnapshot?.objects,
+    currentObjects: currentDiffSnapshot?.objects,
+  }) : []
   const selectedChange = selectedChangeId ? presentedChanges.find((change) => change.id === selectedChangeId) ?? null : null
   const attentionChanges = presentedChanges.filter((change) => changeBucket(change) === 'attention')
   const physicalChanges = presentedChanges.filter((change) => changeBucket(change) === 'physical')
