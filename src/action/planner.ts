@@ -14,6 +14,7 @@ import type {
 import type { ActionPlanningDraftStep, ActionPlanningModelAdapter } from '../ai/model.js'
 import { conditionTrustLabel } from '../perception/condition-model.js'
 import type { EnvironmentalMemoryReader } from '../memory/repository.js'
+import { collapseEquivalentConditionsForPresentation } from '../memory/memory-presentation.js'
 
 const ACTIVE_ISSUES = new Set(['open', 'acknowledged', 'in_progress'])
 
@@ -82,9 +83,11 @@ function selectConditions(items: EnvironmentalCondition[], requested?: string[])
   if (requested?.length) {
     const selected = items.filter((item) => requested.includes(item.id))
     if (selected.length !== new Set(requested).size) throw new ActionPlannerInputError('A requested condition does not belong to the selected immutable state.')
-    return selected
+    return collapseEquivalentConditionsForPresentation(selected)
   }
-  return items.filter((item) => item.kind !== 'normal').slice(0, 16)
+  return collapseEquivalentConditionsForPresentation(
+    items.filter((item) => item.kind !== 'normal'),
+  ).slice(0, 16)
 }
 
 function selectIssues(items: Issue[], requested?: string[]): Issue[] {
@@ -115,7 +118,8 @@ function buildContext(
     '- No costs, marketplace, contractor search, payments, procurement, invented diagnosis, or invented measurements.',
     '- Hazardous/specialist work: recommend safe isolation when directly possible and a qualified professional; do not give unqualified repair instructions.',
     '- Uncertain conditions: inspect or re-observe rather than assert a repair.',
-    '- End with a rescan/verification recommendation; Phase 12 decides resolution.',
+    '- Do not add a generic rescan/verification handoff step; SENTINEL appends one deterministic verification handoff after grounding. If observation itself is the corrective action for an uncertain condition, describe that specific inspection rather than generic post-work verification.',
+    '- Do not state that a path, repair, clearance, or action is legally/code required unless the supplied grounded condition or evidence explicitly says so.',
     'CONDITIONS:',
     ...conditions.map((item) => `- ${item.id} | ${item.title} | trust=${conditionTrustLabel(item)} | kind=${item.kind} | status=${item.status} | confidence=${item.confidence} | objects=${item.objectIds.join(',')} | evidence=${item.evidenceIds.join(',')} | ${item.description}`),
     'ISSUES:',
@@ -141,7 +145,7 @@ function groundPlan(
   const allowedObjects = new Set(objects.map((item) => item.id))
   const allowedEvidence = new Set(evidence.map((item) => item.id))
 
-  const steps = draft.steps.slice(0, 3).flatMap((raw, index) => {
+  const groundedDraftSteps = draft.steps.slice(0, 3).flatMap((raw, index) => {
     const relatedConditionIds = uniq(raw.relatedConditionIds.filter((id) => allowedConditions.has(id)))
     const relatedIssueIds = uniq(raw.relatedIssueIds.filter((id) => allowedIssues.has(id)))
     if (!relatedConditionIds.length && !relatedIssueIds.length) return []
@@ -164,12 +168,19 @@ function groundPlan(
       evidenceIds: [...groundedEvidence],
     }]
   })
-  if (!steps.length) throw new ActionPlannerInputError('No evidence-backed action step survived SENTINEL grounding validation.')
+  if (!groundedDraftSteps.length) throw new ActionPlannerInputError('No evidence-backed action step survived SENTINEL grounding validation.')
 
-  const evidenceIds = uniq(steps.flatMap((item) => item.evidenceIds))
-  const relatedConditionIds = uniq(steps.flatMap((item) => item.relatedConditionIds))
-  const relatedIssueIds = uniq(steps.flatMap((item) => item.relatedIssueIds))
-  const relatedObjectIds = uniq(steps.flatMap((item) => item.relatedObjectIds))
+  // The service owns the final verification handoff. If the model repeats a
+  // generic "verify/rescan" step after a real corrective action, drop that
+  // duplicate rather than presenting two verification steps to the user.
+  const correctiveSteps = groundedDraftSteps.filter((item) => !isGenericVerificationHandoff(item))
+  const groundingSteps = correctiveSteps.length > 0 ? correctiveSteps : groundedDraftSteps
+  const steps = [...correctiveSteps]
+
+  const evidenceIds = uniq(groundingSteps.flatMap((item) => item.evidenceIds))
+  const relatedConditionIds = uniq(groundingSteps.flatMap((item) => item.relatedConditionIds))
+  const relatedIssueIds = uniq(groundingSteps.flatMap((item) => item.relatedIssueIds))
+  const relatedObjectIds = uniq(groundingSteps.flatMap((item) => item.relatedObjectIds))
   steps.push({
     id: `action_${crypto.randomUUID()}`,
     title: 'Rescan to verify',
@@ -256,6 +267,13 @@ function snapshotFor(memory: EnvironmentalMemory, state: EnvironmentalState): En
     )
   }
   return snapshot
+}
+
+function isGenericVerificationHandoff(step: { title: string; description: string }): boolean {
+  const text = `${step.title} ${step.description}`.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+  return /\b(?:rescan|re scan|scan again)\b/.test(text)
+    || /\bverify (?:clearance|resolution|that .*\b(?:removed|resolved|clear|unobstructed)\b)/.test(text)
+    || /\bconfirm (?:that )?.*\b(?:removed|resolved|clear|unobstructed)\b/.test(text)
 }
 
 function capPriority(requested: ActionPriority, conditionIds: string[], issueIds: string[], conditions: EnvironmentalCondition[], issues: Issue[]): ActionPriority {
