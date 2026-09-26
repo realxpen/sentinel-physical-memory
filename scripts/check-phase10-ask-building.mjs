@@ -142,10 +142,10 @@ try {
     ['What changed since the last scan?', 'change'],
     ['Which change matters most?', 'priority'],
     ['What should I do?', 'action'],
-    ['What should I do from the changes page?', 'action'],
     ['Has it been resolved?', 'resolution'],
   ]
   for (const [question, expected] of intents) expect(classifyAskBuildingIntent(question) === expected, `Expected "${question}" to classify as ${expected}`)
+  expect(classifyAskBuildingIntent('What should I do from the changes page?') === 'action', 'action phrasing from Reality Diff must remain action intent')
 
   const [main, css] = await Promise.all([
     readFile(new URL('../src/main.tsx', import.meta.url), 'utf8'),
