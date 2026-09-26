@@ -5,7 +5,6 @@ export interface ConditionDerivationResult {
   derivedConditions: EnvironmentalCondition[]
 }
 
-const OBSTACLE_NAME = /\b(?:pallet jack|pallet|trolley|cart|box|carton|chair|cabinet|desk|table|equipment|object)\b/i
 const EXIT_CUE = /\b(?:emergency exit|exit sign|exit door)\b/i
 const DOOR_COLOR = /\b(green|red|blue|orange|yellow|white|black|brown|gray|grey)\b/i
 
@@ -27,7 +26,12 @@ export function deriveOperationalConditions(
 
   const doors = perception.objects.filter((item) => item.category === 'door')
   const obstacles = perception.objects.filter((item) =>
-    item.category === 'obstruction' || OBSTACLE_NAME.test(`${item.name} ${item.description ?? ''}`),
+    item.evidenceIds.length > 0 &&
+    item.category !== 'door' &&
+    item.category !== 'room' &&
+    item.category !== 'person' &&
+    item.category !== 'signage' &&
+    item.category !== 'window',
   )
 
   for (const door of doors) {
@@ -76,7 +80,6 @@ export function deriveOperationalConditions(
   // not silently fall back to this generic path.
   for (const door of doors) {
     if (findExitEvidenceForDoor(perception, door)) continue
-    if (EXIT_CUE.test(semanticText(door))) continue
     if (door.evidenceIds.length === 0) continue
 
     for (const obstacle of obstacles) {
@@ -199,13 +202,14 @@ function findObstaclePlacementEvidence(
     item.type === 'in_front_of' &&
     item.fromId === obstacle.id &&
     item.toId === door.id &&
-    item.evidenceIds.length > 0,
+    item.evidenceIds.length > 0 &&
+    (item.id.startsWith('geometry_') || obstacle.category === 'obstruction'),
   )
   if (explicitRelation) {
     return {
       confidence: explicitRelation.confidence,
       evidenceIds: explicitRelation.evidenceIds,
-      phrase: 'in front of',
+      phrase: 'blocking',
     }
   }
 
