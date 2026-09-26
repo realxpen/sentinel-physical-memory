@@ -1,4 +1,5 @@
 import type { Change, SpatialObject } from '../domain/sentinel.js'
+import { isTransientEnvironmentalObject, isTransientPersonChangeTitle } from '../domain/object-policy.js'
 
 const STRUCTURAL_SURFACE = /^(?:(?:white|painted|brick|concrete|interior|exterior) )?wall$|^(?:(?:wooden|wood|tile|tiled|concrete|vinyl|laminate|hardwood|carpeted) )?floor$|^(?:(?:white|painted|drop|suspended) )?ceiling$/
 const MICRO_INVENTORY = /^(?:cup|mug|pen holder|pencil holder|light switch|switch plate|books|book|globe|wicker basket|basket|potted plant|plant|rug|area rug|carpet)$/
