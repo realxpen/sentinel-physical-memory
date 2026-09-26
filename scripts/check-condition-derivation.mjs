@@ -166,7 +166,7 @@ try {
   relationPlacement.observations[1].description = 'An orange pallet jack with visible wheels and handle.'
   relationPlacement.objects[1].description = 'orange pallet jack with visible wheels and handle'
   relationPlacement.relations = [{
-    id: 'rel_jack_front_door',
+    id: 'geometry_rel_jack_front_door',
     environmentId,
     fromId: 'jack_1',
     toId: 'door_1',
@@ -188,8 +188,11 @@ try {
   const doorNameOnly = structuredClone(base)
   doorNameOnly.observations = doorNameOnly.observations.filter((item) => item.id !== 'obs_exit')
   const selfGrounded = deriveOperationalConditions(doorNameOnly, capturedAt)
-  if (selfGrounded.derivedConditions.length !== 0) {
+  if (selfGrounded.derivedConditions.some((item) => item.title === 'Emergency exit access obstructed')) {
     throw new Error('an emergency-exit phrase in the door object itself must not replace independent exit grounding')
+  }
+  if (!selfGrounded.derivedConditions.some((item) => item.title === 'Doorway access obstructed')) {
+    throw new Error('explicit blocking geometry may still support an ordinary doorway condition without emergency-exit elevation')
   }
 
   const inferredExitOnly = structuredClone(doorNameOnly)
@@ -199,7 +202,9 @@ try {
     confidence: 1, objectIds: ['door_1'], evidenceIds: ['frame_door'], observedAt: capturedAt,
   })
   const inferredOnly = deriveOperationalConditions(inferredExitOnly, capturedAt)
-  if (inferredOnly.derivedConditions.length !== 0) throw new Error('an inferred condition must not be reused as direct exit grounding')
+  if (inferredOnly.derivedConditions.some((item) => item.title === 'Emergency exit access obstructed')) {
+    throw new Error('an inferred condition must not be reused as direct emergency-exit grounding')
+  }
 
   console.log('PASS  independently grounded exit signage + obstacle placement derives one inferred access condition')
   console.log('PASS  green emergency exit door aliases to grounded green-door wording without lowering confidence policy')
@@ -210,10 +215,10 @@ try {
   console.log('PASS  ordinary chair beside the doorway does not create an access issue')
   console.log('PASS  safe obstacle placement does not create an access condition')
   console.log('PASS  duplicate same-door obstruction representations consolidate to one access condition while retaining their grounded object ids')
-  console.log('PASS  grounded obstacle -> door in_front_of relation supports derivation when text omits placement')
+  console.log('PASS  authoritative geometry relation supports derivation without relying on an object noun whitelist')
   console.log('PASS  reversed spatial direction does not derive an access obstruction')
-  console.log('PASS  door naming alone cannot self-ground emergency-exit identity')
-  console.log('PASS  inferred conditions are not reused as direct grounding facts')
+  console.log('PASS  door naming alone cannot self-ground emergency-exit identity, while ordinary doorway geometry remains usable')
+  console.log('PASS  inferred conditions are not reused as direct emergency-exit grounding facts')
   console.log('SENTINEL CONDITION DERIVATION GATE VERIFIED')
 } finally {
   await vite.close()
