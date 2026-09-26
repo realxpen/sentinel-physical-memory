@@ -37,13 +37,17 @@ try {
 
       return {
         sourceId,
-        observations: [{ id: `obs_${calls}`, environmentId, sourceId, modality: 'image', capturedAt, label: 'chair', description: 'A chair is visible beside the desk.', confidence: 0.95, basis: 'observed', evidenceIds: [frameId] }],
+        observations: [
+          { id: `obs_${calls}`, environmentId, sourceId, modality: 'image', capturedAt, label: 'chair', description: 'A chair is visible beside the desk.', confidence: 0.95, basis: 'observed', evidenceIds: [frameId] },
+          { id: `person_obs_${calls}`, environmentId, sourceId, modality: 'image', capturedAt, label: 'person visible', description: 'A distant shape was incorrectly interpreted as a person.', confidence: 1, basis: 'observed', evidenceIds: [frameId] },
+        ],
         objects: [
           { id: `chair_${calls}`, environmentId, category: 'furniture', name: 'chair', description: 'chair beside desk', position: { description: 'beside desk' }, confidence: 0.95, firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: [frameId] },
           ...Array.from({ length: 12 }, (_, index) => ({ id: `plant_${calls}_${index}`, environmentId, category: 'furniture', name: 'potted plant', position: { description: 'on shelf' }, confidence: 0.95, firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: [frameId] })),
           { id: `plant_alias_${calls}`, environmentId, category: 'furniture', name: 'plant pot', position: { description: 'on shelf' }, confidence: 0.95, firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: [frameId] },
           { id: `plant_desk_${calls}`, environmentId, category: 'furniture', name: 'potted plant', position: { description: 'on desk' }, confidence: 0.95, firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: [frameId] },
           { id: `door_${calls}`, environmentId, category: 'door', name: 'white door', position: { description: 'back wall' }, confidence: 0.95, firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: [frameId] },
+          { id: `person_${calls}`, environmentId, category: 'person', name: 'person', description: 'false-positive distant person candidate', confidence: 1, firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: [frameId] },
         ],
         conditions: [], relations: [], evidence: [],
       }
@@ -67,11 +71,18 @@ try {
   if (snapshot?.objects.some((item) => /door handle|door hinge|desk \(furniture\)/i.test(item.name))) {
     throw new Error('state-audit inventory leakage must never enter durable memory')
   }
+  if (snapshot?.objects.some((item) => item.category === 'person')) {
+    throw new Error('transient/possibly hallucinated people must not enter durable environmental memory')
+  }
+  if (result.observations.some((item) => /^person(?: visible)?$/i.test(item.label))) {
+    throw new Error('person-only transient observations must not persist in the scan result')
+  }
   console.log('PASS  still photo becomes one trusted perception frame')
   console.log('PASS  repeated same-frame duplicate and plant aliases collapse by grounded location')
   console.log('PASS  explicit visible door state survives canonicalization')
   console.log('PASS  one targeted state audit can update an existing openable object')
   console.log('PASS  state-audit hardware/inventory leakage is rejected before memory')
+  console.log('PASS  transient/possibly hallucinated people are excluded before persistent memory')
   console.log('PASS  still photo creates durable environmental State v1')
   console.log('PASS  image observation remains grounded through the normal perception pipeline')
   console.log('SENTINEL PHOTO OBSERVATION VERIFIED')

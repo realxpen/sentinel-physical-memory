@@ -6,6 +6,8 @@ import { EnvironmentalMemoryStore } from '../memory/store.js'
 import { matchObjectsConservatively } from '../memory/object-identity.js'
 import { InMemoryEnvironmentalMemoryRepository, type EnvironmentalMemoryRepository } from '../memory/repository.js'
 import { deriveOperationalConditions } from '../perception/condition-derivation.js'
+import { stripTransientEnvironmentalPeople } from '../perception/transient-object-policy.js'
+import { isTransientEnvironmentalObject } from '../domain/object-policy.js'
 import type { ScanArtifact, ScanError, ScanFrame, ScanInput, ScanProgress, ScanResult } from './types.js'
 
 export interface ScanPipelineDependencies {
@@ -67,7 +69,7 @@ export class ScanPipeline {
     const priorSnapshot = existingMemory?.environment.currentStateId
       ? existingMemory.snapshots.find((item) => item.stateId === existingMemory.environment.currentStateId)
       : undefined
-    const priorObjects = priorSnapshot?.objects ?? []
+    const priorObjects = (priorSnapshot?.objects ?? []).filter((item) => !isTransientEnvironmentalObject(item))
     const priorState = priorSnapshot ? existingMemory?.states.find((item) => item.id === priorSnapshot.stateId) : undefined
     const priorImageSource = priorState
       ? existingMemory?.sources.find((source) => priorState.sourceIds.includes(source.id) && source.modality === 'image')
@@ -77,7 +79,16 @@ export class ScanPipeline {
       ? TEMPORAL_VERIFICATION_TIMEOUT_MS + PERSISTENCE_RESERVE_MS
       : PERSISTENCE_RESERVE_MS
     const perceived = await this.perceive(scanId, artifacts, frames, input, priorObjects, reserveAfterPerceptionMs)
-    const completed = materializeExplicitGroundedObjects(perceived, input.source.capturedAt)
+    const transientFiltered = stripTransientEnvironmentalPeople(perceived)
+    if (transientFiltered.droppedObjectIds.length > 0 || transientFiltered.droppedObservationIds.length > 0) {
+      console.warn('SENTINEL_TRANSIENT_PEOPLE_EXCLUDED', {
+        scanId,
+        droppedObjectIds: transientFiltered.droppedObjectIds,
+        droppedObservationIds: transientFiltered.droppedObservationIds,
+        policy: 'people are transient and are not persisted as environmental memory in the MVP',
+      })
+    }
+    const completed = materializeExplicitGroundedObjects(transientFiltered.result, input.source.capturedAt)
     if (completed.materialized.length > 0) {
       console.warn('SENTINEL_GROUNDED_OBJECT_COMPLETION', {
         scanId,

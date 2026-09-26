@@ -1,4 +1,5 @@
 import type { Change, SpatialObject } from '../domain/sentinel.js'
+import { isTransientEnvironmentalObject, isTransientPersonChangeTitle } from '../domain/object-policy.js'
 
 const STRUCTURAL_SURFACE = /^(?:(?:white|painted|brick|concrete|interior|exterior) )?wall$|^(?:(?:wooden|wood|tile|tiled|concrete|vinyl|laminate|hardwood|carpeted) )?floor$|^(?:(?:white|painted|drop|suspended) )?ceiling$/
 const MICRO_INVENTORY = /^(?:cup|mug|pen holder|pencil holder|light switch|switch plate|books|book|globe|wicker basket|basket|potted plant|plant|rug|area rug|carpet)$/
@@ -23,6 +24,7 @@ export function isDurableArchitecturalAnchorObject(
 export function isLowSalienceInventoryObject(
   item: Pick<SpatialObject, 'name' | 'description' | 'category'>,
 ): boolean {
+  if (isTransientEnvironmentalObject(item)) return true
   const name = normalize(item.name)
   const text = normalize(`${item.name} ${item.description ?? ''}`)
 
@@ -47,6 +49,7 @@ export function isLowSalienceInventoryObject(
  */
 export function isLowSalienceObjectChange(change: Change): boolean {
   if (change.entityKind && change.entityKind !== 'object') return false
+  if (isTransientPersonChangeTitle(change.title)) return true
 
   const text = normalize(`${stripChangePrefix(change.title)} ${change.description}`)
   if (SAFETY_SIGNAGE.test(text) && /\bsign\b/.test(text)) return false
