@@ -9,7 +9,7 @@ import type { ActionPlanningResponse, AskBuildingResponse, Change, Environmental
 import type { EnvironmentalStateHistoryEntry, EnvironmentalStateHistoryRecord } from './memory/history'
 import { changesForPresentation, presentedChangeSummary } from './memory/change-presentation'
 import { buildSpatialObjectDisplayNames, buildSpatialRelationEdges, describeSpatialRelations } from './memory/spatial-memory'
-import { buildMemoryObjectRows, primaryMemoryObjectRows } from './memory/memory-presentation'
+import { buildMemoryObjectRows, memorySnapshotForPresentation, primaryMemoryObjectRows } from './memory/memory-presentation'
 import { createEnvironmentProfile, DEFAULT_ENVIRONMENT, ENVIRONMENT_TYPES, loadActiveEnvironmentId, loadEnvironmentDirectory, saveActiveEnvironmentId, saveEnvironmentDirectory, type EnvironmentProfile } from './environment/directory'
 import { ingestImageFile } from './scan/image-ingestion'
 import { ingestVideoFile } from './scan/video-ingestion'
@@ -120,9 +120,11 @@ function App() {
   const currentDiffState = latestDiff ? memory?.states.find((state) => state.id === latestDiff.toStateId) : undefined
   const previousDiffImage = previousDiffState ? memory?.sources.find((source) => previousDiffState.sourceIds.includes(source.id) && source.modality === 'image')?.uri : undefined
   const currentDiffImage = currentDiffState ? memory?.sources.find((source) => currentDiffState.sourceIds.includes(source.id) && source.modality === 'image')?.uri : undefined
-  const currentSnapshot = memory?.environment.currentStateId
+  const rawCurrentSnapshot = memory?.environment.currentStateId
     ? memory.snapshots.find((snapshot) => snapshot.stateId === memory.environment.currentStateId)
     : undefined
+  const currentSnapshot = rawCurrentSnapshot ? memorySnapshotForPresentation(rawCurrentSnapshot) : undefined
+  const historyPresentedSnapshot = historySelection ? memorySnapshotForPresentation(historySelection.snapshot) : undefined
   const spatialObjectDisplayNames = currentSnapshot ? buildSpatialObjectDisplayNames(currentSnapshot) : new Map<string, string>()
   const memoryObjectRows = currentSnapshot ? buildMemoryObjectRows(currentSnapshot.objects) : []
   const primaryMemoryRows = primaryMemoryObjectRows(memoryObjectRows)
@@ -936,7 +938,7 @@ function App() {
         </aside>
       </div>}
 
-      {historySelection && <div className="drawer-backdrop" role="presentation" onClick={() => setHistorySelection(null)}>
+      {historySelection && historyPresentedSnapshot && <div className="drawer-backdrop" role="presentation" onClick={() => setHistorySelection(null)}>
         <aside className="evidence-drawer history-drawer" role="dialog" aria-modal="true" aria-label={`State v${historySelection.state.version} historical snapshot`} onClick={(event) => event.stopPropagation()}>
           <button className="drawer-close" type="button" onClick={() => setHistorySelection(null)}>×</button>
           <span className="eyebrow">{historySelection.isCurrent ? 'CURRENT STATE' : 'HISTORICAL STATE'} / IMMUTABLE SNAPSHOT</span>
@@ -945,10 +947,10 @@ function App() {
           <p>{historySelection.state.summary}</p>
 
           <div className="history-snapshot-meta">
-            <span>{historySelection.snapshot.objects.length} objects</span>
-            <span>{historySelection.snapshot.conditions.length} conditions</span>
-            <span>{historySelection.snapshot.issues.length} issues</span>
-            <span>{historySelection.snapshot.relations.length} relations</span>
+            <span>{historyPresentedSnapshot.objects.length} objects</span>
+            <span>{historyPresentedSnapshot.conditions.length} conditions</span>
+            <span>{historyPresentedSnapshot.issues.length} issues</span>
+            <span>{historyPresentedSnapshot.relations.length} relations</span>
           </div>
 
           <div className="history-lock-note">
@@ -971,21 +973,21 @@ function App() {
           <div className="history-snapshot-section">
             <span className="eyebrow">OBJECTS AS REMEMBERED</span>
             <div className="history-snapshot-list">
-              {historySelection.snapshot.objects.length === 0 ? <p>No objects belonged to this state.</p> : historySelection.snapshot.objects.map((item) => <div key={item.id}><strong>{item.name}</strong><small>{item.category} · {Math.round(item.confidence * 100)}%</small><p>{item.description ?? item.state ?? 'No additional state description.'}</p></div>)}
+              {historyPresentedSnapshot.objects.length === 0 ? <p>No objects belonged to this state.</p> : historyPresentedSnapshot.objects.map((item) => <div key={item.id}><strong>{item.name}</strong><small>{item.category} · {Math.round(item.confidence * 100)}%</small><p>{item.description ?? item.state ?? 'No additional state description.'}</p></div>)}
             </div>
           </div>
 
           <div className="history-snapshot-section">
             <span className="eyebrow">CONDITIONS</span>
             <div className="history-snapshot-list">
-              {historySelection.snapshot.conditions.length === 0 ? <p>No conditions belonged to this state.</p> : historySelection.snapshot.conditions.map((item) => <div key={item.id}><strong>{item.title}</strong><small>{item.basis} · {item.kind} · {Math.round(item.confidence * 100)}%</small><p>{item.description}</p></div>)}
+              {historyPresentedSnapshot.conditions.length === 0 ? <p>No conditions belonged to this state.</p> : historyPresentedSnapshot.conditions.map((item) => <div key={item.id}><strong>{item.title}</strong><small>{item.basis} · {item.kind} · {Math.round(item.confidence * 100)}%</small><p>{item.description}</p></div>)}
             </div>
           </div>
 
-          {historySelection.snapshot.issues.length > 0 && <div className="history-snapshot-section">
+          {historyPresentedSnapshot.issues.length > 0 && <div className="history-snapshot-section">
             <span className="eyebrow">OPERATIONAL ISSUES</span>
             <div className="history-snapshot-list">
-              {historySelection.snapshot.issues.map((item) => <div key={item.id}><strong>{item.title}</strong><small>{item.severity} · {item.status} · {Math.round(item.confidence * 100)}%</small><p>{item.description}</p></div>)}
+              {historyPresentedSnapshot.issues.map((item) => <div key={item.id}><strong>{item.title}</strong><small>{item.severity} · {item.status} · {Math.round(item.confidence * 100)}%</small><p>{item.description}</p></div>)}
             </div>
           </div>}
         </aside>

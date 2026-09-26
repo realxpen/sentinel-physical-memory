@@ -6,8 +6,8 @@ import { EnvironmentalMemoryStore } from '../memory/store.js'
 import { matchObjectsConservatively } from '../memory/object-identity.js'
 import { InMemoryEnvironmentalMemoryRepository, type EnvironmentalMemoryRepository } from '../memory/repository.js'
 import { deriveOperationalConditions } from '../perception/condition-derivation.js'
-import { stripTransientEnvironmentalPeople } from '../perception/transient-object-policy.js'
-import { isTransientEnvironmentalObject } from '../domain/object-policy.js'
+import { resolvePersonGrounding } from '../perception/person-grounding.js'
+import { isPersonObject, isUnconfirmedPersonObject } from '../domain/object-policy.js'
 import type { ScanArtifact, ScanError, ScanFrame, ScanInput, ScanProgress, ScanResult } from './types.js'
 
 export interface ScanPipelineDependencies {
@@ -69,7 +69,7 @@ export class ScanPipeline {
     const priorSnapshot = existingMemory?.environment.currentStateId
       ? existingMemory.snapshots.find((item) => item.stateId === existingMemory.environment.currentStateId)
       : undefined
-    const priorObjects = (priorSnapshot?.objects ?? []).filter((item) => !isTransientEnvironmentalObject(item))
+    const priorObjects = (priorSnapshot?.objects ?? []).filter((item) => !isUnconfirmedPersonObject(item))
     const priorState = priorSnapshot ? existingMemory?.states.find((item) => item.id === priorSnapshot.stateId) : undefined
     const priorImageSource = priorState
       ? existingMemory?.sources.find((source) => priorState.sourceIds.includes(source.id) && source.modality === 'image')
@@ -79,16 +79,15 @@ export class ScanPipeline {
       ? TEMPORAL_VERIFICATION_TIMEOUT_MS + PERSISTENCE_RESERVE_MS
       : PERSISTENCE_RESERVE_MS
     const perceived = await this.perceive(scanId, artifacts, frames, input, priorObjects, reserveAfterPerceptionMs)
-    const transientFiltered = stripTransientEnvironmentalPeople(perceived)
-    if (transientFiltered.droppedObjectIds.length > 0 || transientFiltered.droppedObservationIds.length > 0) {
-      console.warn('SENTINEL_TRANSIENT_PEOPLE_EXCLUDED', {
-        scanId,
-        droppedObjectIds: transientFiltered.droppedObjectIds,
-        droppedObservationIds: transientFiltered.droppedObservationIds,
-        policy: 'people are transient and are not persisted as environmental memory in the MVP',
-      })
-    }
-    const completed = materializeExplicitGroundedObjects(transientFiltered.result, input.source.capturedAt)
+    const personGrounded = await this.confirmPersonCandidates(
+      scanId,
+      perceived,
+      artifacts,
+      frames,
+      input,
+      reserveAfterPerceptionMs,
+    )
+    const completed = materializeExplicitGroundedObjects(personGrounded, input.source.capturedAt)
     if (completed.materialized.length > 0) {
       console.warn('SENTINEL_GROUNDED_OBJECT_COMPLETION', {
         scanId,
@@ -191,6 +190,88 @@ export class ScanPipeline {
     const existing = await this.memoryRepository.get(environmentId)
     if (existing) store.hydrate(existing)
     return store
+  }
+
+  private async confirmPersonCandidates(
+    scanId: string,
+    scene: PerceptionResult,
+    artifacts: ScanArtifact[],
+    frames: ScanFrame[],
+    input: ScanInput,
+    reserveAfterPerceptionMs: number,
+  ): Promise<PerceptionResult> {
+    const candidates = scene.objects.filter(isPersonObject)
+    if (candidates.length === 0) return scene
+
+    const emptyAudit: PerceptionResult = {
+      sourceId: input.source.id,
+      observations: [],
+      objects: [],
+      conditions: [],
+      relations: [],
+      evidence: [],
+    }
+
+    if (!this.model || !this.hasRuntimeBudget(OPTIONAL_AUDIT_TIMEOUT_MS + reserveAfterPerceptionMs)) {
+      const resolution = resolvePersonGrounding(scene, emptyAudit)
+      console.warn('SENTINEL_PERSON_CONFIRMATION_FAIL_CLOSED', {
+        scanId,
+        reason: this.model ? 'insufficient-runtime-budget' : 'confirmation-model-unavailable',
+        rejectedObjectIds: resolution.rejectedObjectIds,
+        remainingMs: this.remainingRuntimeMs(),
+      })
+      return resolution.result
+    }
+
+    const candidateSummary = candidates.map((item, index) => [
+      `candidate_${index} id=${item.id} name="${item.name}" confidence=${item.confidence}`,
+      `description="${item.description ?? 'none'}"`,
+      `position="${item.position?.description ?? 'unspecified'}"`,
+      `boundingBox=${item.boundingBox ? JSON.stringify(item.boundingBox) : 'missing'}`,
+    ].join(' | ')).join('\n')
+
+    const prompt = [
+      `Person confirmation audit for scan ${scanId} in environment ${input.environmentId}.`,
+      `The scan source id is ${input.source.id}.`,
+      `The trusted scan capturedAt is ${input.source.capturedAt}.`,
+      'An earlier perception pass produced the following PERSON CANDIDATES. These candidate claims are NOT evidence and may be false positives:',
+      candidateSummary,
+      'Inspect the supplied CURRENT image/frame evidence independently. This is a conservative confirmation pass, not a general scene inventory.',
+      'Return a category="person" object only for an unmistakably visible real human being. Do not infer a person from a distant or ambiguous silhouette, reflection, poster/photo, signage, mannequin-like shape, foliage, furniture, shadows, or outdoor background detail.',
+      'For every confirmed person, boundingBox is REQUIRED and must tightly localize that same visible human. In description, explicitly name at least two directly visible human cue groups: head/face, torso/body/shoulders, or limbs such as arms/hands/legs/feet.',
+      'Use confidence >= 0.95 only when the human identity is visually unmistakable. If the candidate is small, blurry, occluded, distant, or otherwise ambiguous, omit it.',
+      'Do not return non-person objects. Do not create conditions, issues, relations, recommendations, demographics, identity, emotion, or other personal attributes.',
+      'If no candidate is independently confirmed, return the full SENTINEL PerceptionResult JSON shape with observations=[], objects=[], conditions=[], relations=[], evidence=[].',
+      'Reference only exact supplied FRAME_ID values in evidenceIds for any confirmed person object.',
+    ].join('\n')
+
+    try {
+      const audit = await this.inferPerceptionPass(
+        'person-confirmation-audit',
+        prompt,
+        artifacts,
+        frames,
+        input,
+      )
+      const resolution = resolvePersonGrounding(scene, audit)
+      console.warn('SENTINEL_PERSON_CONFIRMATION_COMPLETED', {
+        scanId,
+        candidates: candidates.length,
+        confirmedObjectIds: resolution.confirmedObjectIds,
+        rejectedObjectIds: resolution.rejectedObjectIds,
+      })
+      return resolution.result
+    } catch (error) {
+      const resolution = resolvePersonGrounding(scene, emptyAudit)
+      console.warn('SENTINEL_PERSON_CONFIRMATION_FAIL_CLOSED', {
+        scanId,
+        reason: 'confirmation-pass-failed',
+        code: errorCode(error),
+        message: error instanceof Error ? error.message : 'Unknown person-confirmation failure',
+        rejectedObjectIds: resolution.rejectedObjectIds,
+      })
+      return resolution.result
+    }
   }
 
   private async verifyTemporalPhotoChanges(
@@ -681,7 +762,7 @@ export class ScanPipeline {
   }
 
   private async inferPerceptionPass(
-    pass: 'scene' | 'state-audit' | 'condition-audit' | 'identity-audit' | 'access-geometry-audit' | 'operational-change-audit',
+    pass: 'scene' | 'state-audit' | 'condition-audit' | 'identity-audit' | 'access-geometry-audit' | 'operational-change-audit' | 'person-confirmation-audit',
     prompt: string,
     artifacts: ScanArtifact[],
     frames: ScanFrame[],
@@ -718,6 +799,13 @@ export class ScanPipeline {
             droppedUngroundedItems: grounded.droppedUngroundedItems,
             droppedDanglingRelations: grounded.droppedDanglingRelations,
           })
+        }
+
+        const groundedItemCount = grounded.result.observations.length
+          + grounded.result.objects.length
+          + grounded.result.conditions.length
+        if (pass === 'person-confirmation-audit' && groundedItemCount === 0) {
+          return grounded.result
         }
 
         return validatePerceptionForScan(grounded.result, input.environmentId, input.source.id)

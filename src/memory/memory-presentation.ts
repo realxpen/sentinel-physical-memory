@@ -1,5 +1,5 @@
-import type { SpatialObject } from '../domain/sentinel.js'
-import { isTransientEnvironmentalObject } from '../domain/object-policy.js'
+import type { EnvironmentalStateSnapshot, SpatialObject } from '../domain/sentinel.js'
+import { isUnconfirmedPersonObject } from '../domain/object-policy.js'
 
 export interface MemoryObjectRow {
   object: SpatialObject
@@ -8,11 +8,26 @@ export interface MemoryObjectRow {
   score: number
 }
 
+export function memorySnapshotForPresentation(snapshot: EnvironmentalStateSnapshot): EnvironmentalStateSnapshot {
+  const hiddenPersonIds = new Set(
+    snapshot.objects.filter(isUnconfirmedPersonObject).map((item) => item.id),
+  )
+  if (hiddenPersonIds.size === 0) return snapshot
+
+  return {
+    ...snapshot,
+    objects: snapshot.objects.filter((item) => !hiddenPersonIds.has(item.id)),
+    conditions: snapshot.conditions.filter((item) => !item.objectIds.some((id) => hiddenPersonIds.has(id))),
+    issues: snapshot.issues.filter((item) => !item.objectIds.some((id) => hiddenPersonIds.has(id))),
+    relations: snapshot.relations.filter((item) => !hiddenPersonIds.has(item.fromId) && !hiddenPersonIds.has(item.toId)),
+  }
+}
+
 export function buildMemoryObjectRows(objects: SpatialObject[]): MemoryObjectRow[] {
   const groups = new Map<string, MemoryObjectRow>()
 
   for (const object of objects) {
-    if (isTransientEnvironmentalObject(object)) continue
+    if (isUnconfirmedPersonObject(object)) continue
     const key = `${normalize(object.category)}::${normalize(object.name)}`
     const lowSalience = isLowSalienceMemoryObject(object)
     const score = memoryObjectScore(object, lowSalience)
