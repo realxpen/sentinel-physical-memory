@@ -43,66 +43,8 @@ try {
         }
       }
 
-      if (prompt.includes('Operational change recovery audit')) {
-        return {
-          sourceId,
-          observations: [{
-            id: 'change-audit-box-observation',
-            environmentId,
-            sourceId,
-            modality: 'image',
-            capturedAt,
-            label: 'cardboard boxes',
-            description: 'Three cardboard boxes are directly visible in the hallway.',
-            confidence: 0.99,
-            basis: 'observed',
-            evidenceIds: [frameId],
-          }],
-          objects: [
-            {
-              id: 'change-audit-extinguisher',
-              environmentId,
-              category: 'safety',
-              name: 'fire extinguisher',
-              description: 'Red portable fire extinguisher.',
-              position: { description: 'left wall beside conference room door' },
-              confidence: 0.99,
-              firstSeenAt: capturedAt,
-              lastSeenAt: capturedAt,
-              evidenceIds: [frameId],
-            },
-            {
-              id: 'change-audit-boxes',
-              environmentId,
-              category: 'obstruction',
-              name: 'cardboard boxes',
-              description: 'Three stacked cardboard boxes in the hallway.',
-              position: { description: 'in front of right-side doorway' },
-              confidence: 0.99,
-              firstSeenAt: capturedAt,
-              lastSeenAt: capturedAt,
-              evidenceIds: [frameId],
-            },
-            {
-              id: 'change-audit-chair',
-              environmentId,
-              category: 'furniture',
-              name: 'office chair',
-              description: 'Black mesh office chair with wheels.',
-              position: { description: 'center of room' },
-              confidence: 0.97,
-              firstSeenAt: capturedAt,
-              lastSeenAt: capturedAt,
-              evidenceIds: [frameId],
-            },
-          ],
-          conditions: [],
-          relations: [],
-          evidence: [],
-        }
-      }
-
       if (prompt.includes('Condition audit for scan')) {
+        if (!current) return { sourceId, observations: [], objects: [], conditions: [], relations: [], evidence: [] }
         return {
           sourceId,
           observations: [{
@@ -291,7 +233,7 @@ try {
   console.log('PASS  free-form photo movement requires paired verification')
   console.log('PASS  portable fire extinguisher movement is eligible for paired temporal verification')
   console.log('PASS  generic condition/integrity audit restores missed current objects without a dedicated demo-object recovery pass')
-  console.log('PASS  recovery audit merges an already-seen chair instead of duplicating it')
+  console.log('PASS  generic current-state audit merges an already-seen chair instead of duplicating it')
   console.log('PASS  structural surfaces and low-salience decor do not become operational diff cards')
   console.log('PASS  exact output is white door changed + office chair moved + fire extinguisher moved + duffle bag added + cardboard boxes added')
   console.log('SENTINEL TEMPORAL PHOTO DIFF VERIFIED')
