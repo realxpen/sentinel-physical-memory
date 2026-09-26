@@ -654,7 +654,7 @@ function App() {
               </div>
             </details>
           </div>
-          {(answer.grounding?.intent === 'attention' || answer.grounding?.intent === 'priority' || answer.grounding?.intent === 'action') && <button className="answer-plan-action" type="button" disabled={Boolean(actionPlanStatus)} onClick={() => void runActionPlanner({ stateId: answer.stateId, goal: answer.answer })}>
+          {(answer.grounding?.intent === 'attention' || answer.grounding?.intent === 'priority' || answer.grounding?.intent === 'action' || answer.grounding?.issues.some((item) => ['open', 'acknowledged', 'in_progress'].includes(item.status))) && <button className="answer-plan-action" type="button" disabled={Boolean(actionPlanStatus)} onClick={() => void runActionPlanner({ stateId: answer.stateId, goal: answer.answer })}>
             {actionPlanStatus ? 'Planning grounded next steps…' : actionPlan ? 'Rebuild action plan ↗' : 'Create grounded action plan ↗'}
           </button>}
         </section>}
@@ -902,6 +902,12 @@ function App() {
               conditionIds: priorConditionVerificationCandidate.conditions.map((item) => item.id),
             })}>{verificationStatus ? 'Verifying…' : `Verify ${priorConditionVerificationCandidate.conditions.length} prior condition${priorConditionVerificationCandidate.conditions.length === 1 ? '' : 's'} ↗`}</button>
             <button className="wide-observe compact" type="button" onClick={() => libraryInputRef.current?.click()}><span>Choose another photo</span><span>Only if the physical state changed again ↗</span></button>
+          </div> : latestDiff && attentionChanges.length > 0 && currentSnapshot ? <div className="operations-next-actions">
+            <button className="change-ask-action" type="button" disabled={Boolean(actionPlanStatus)} onClick={() => void runActionPlanner({
+              stateId: currentSnapshot.stateId,
+              goal: 'Create the smallest safe evidence-backed plan for the current needs-attention condition.',
+            })}>{actionPlanStatus ? 'Planning grounded next steps…' : 'Create grounded action plan ↗'}</button>
+            <button className="wide-observe compact" type="button" onClick={() => libraryInputRef.current?.click()}><span>Choose update photo</span><span>After the recommended physical action is completed ↗</span></button>
           </div> : <button className="wide-observe" type="button" onClick={() => libraryInputRef.current?.click()}><span>Choose update photo</span><span>Select the next environmental state image ↗</span></button>}
         </div>
       </section>}

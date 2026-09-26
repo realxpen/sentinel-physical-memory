@@ -145,6 +145,7 @@ try {
     ['Has it been resolved?', 'resolution'],
   ]
   for (const [question, expected] of intents) expect(classifyAskBuildingIntent(question) === expected, `Expected "${question}" to classify as ${expected}`)
+  expect(classifyAskBuildingIntent('What should I do from the changes page?') === 'action', 'action phrasing from Reality Diff must remain action intent')
 
   const [main, css] = await Promise.all([
     readFile(new URL('../src/main.tsx', import.meta.url), 'utf8'),
@@ -157,6 +158,8 @@ try {
   expect(main.includes('CURRENT VS PREVIOUS'), 'answer surface must expose current-vs-previous context')
   expect(main.includes('SHOW EVIDENCE'), 'answer surface must expose grounded evidence')
   expect(main.includes('inspectSpatialObject(item.id); return'), 'current related physical objects must open the canonical object detail surface')
+  expect(main.includes("answer.grounding?.issues.some((item) => ['open', 'acknowledged', 'in_progress'].includes(item.status))"), 'grounded active issues must keep the action-plan CTA available even when an Ask answer is classified as general')
+  expect(main.includes('Create the smallest safe evidence-backed plan for the current needs-attention condition.'), 'Reality Diff needs-attention state must expose direct grounded action planning')
   expect(css.includes('.answer-object-links'), 'Phase 10 related-object navigation style is missing')
   expect(css.includes('.ask-prompt-rail'), 'Phase 10 contextual question rail is missing')
   expect(apiSource.includes("from '../src/memory/ask-building.ts'"), 'production API must explicitly bundle the Phase 10 TypeScript Ask service')
@@ -169,6 +172,7 @@ try {
   console.log('PASS  Ask read model collapses duplicate persisted conditions and exit-sign representation churn without mutating history')
   console.log('PASS  evidence/object/issue IDs fail closed to supplied reasoning context')
   console.log('PASS  ungrounded answers receive a conservative confidence cap')
+  console.log('PASS  actionable Ask and Reality Diff surfaces preserve a direct grounded action-plan entry point')
   console.log('PASS  first-class Ask UI exposes rationale, evidence, comparison and related-object navigation')
   console.log('SENTINEL PHASE 10 ASK THE BUILDING VERIFIED')
 } finally {
