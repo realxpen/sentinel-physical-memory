@@ -21,6 +21,12 @@ try {
   expect(areaAnchor.context.includes('OBJECT exit-current: exit sign'), 'verification context must include the re-observed EXIT anchor')
   expect(areaAnchor.result.verdicts[0].relatedObjectIds.includes('exit-current'), 'resolved verdict should retain the current area-anchor object id')
 
+  const omittedRetry = await runOmittedVerdictRetryCase(VerificationAgentService)
+  expect(omittedRetry.result.status === 'passed', 'a missing first-pass verdict should recover through one completeness retry when current evidence supports resolution')
+  expect(omittedRetry.modelCalls === 2, `missing verdict recovery should call the model exactly twice, got ${omittedRetry.modelCalls}`)
+  expect(omittedRetry.retryContext.includes('VERDICT_COMPLETENESS_RETRY:'), 'second verification call must explicitly identify the completeness retry')
+  expect(omittedRetry.retryContext.includes('condition_access'), 'completeness retry must name the omitted baseline condition id')
+
   const duplicateBaseline = await runDuplicateBaselineCase(VerificationAgentService)
   expect(duplicateBaseline.result.status === 'passed', 'duplicate baseline records should project to one passed verification')
   expect(duplicateBaseline.result.verdicts.length === 1, 'duplicate semantic baseline conditions must produce one verdict')
@@ -106,6 +112,7 @@ try {
   console.log('PASS  verification receives baseline localization + current proof images in deterministic order')
   console.log('PASS  positive current same-object evidence can verify a resolved condition')
   console.log('PASS  a re-observed durable EXIT-area anchor can verify access resolution even when the former obstacle is absent and object IDs changed')
+  console.log('PASS  omitted verification verdicts receive one explicit completeness retry before SENTINEL falls back to inconclusive')
   console.log('PASS  duplicate grounded baseline conditions collapse to one verification verdict without rewriting history')
   console.log('PASS  conflicting duplicate model verdicts fail closed as one inconclusive result')
   console.log('PASS  continued obstruction geometry overrides condition/issue disappearance')
@@ -265,6 +272,39 @@ async function runAreaAnchorResolutionCase(Service) {
   return { result, context }
 }
 
+
+async function runOmittedVerdictRetryCase(Service) {
+  const fixture = baseFixture({ currentCartPosition: 'beside orange shelving' })
+  let modelCalls = 0
+  let retryContext = ''
+  const model = {
+    provider: 'test',
+    model: 'test',
+    async verifyConditions(request) {
+      modelCalls += 1
+      if (modelCalls === 1) return { verdicts: [] }
+      retryContext = request.context
+      return {
+        verdicts: [{
+          conditionId: 'condition_access',
+          status: 'resolved',
+          confidence: 0.94,
+          reason: 'The same exit area is visible and the access path is clear.',
+          evidenceIds: ['e_current'],
+          relatedObjectIds: ['door'],
+        }],
+      }
+    },
+  }
+
+  const result = await new Service({ get: async () => fixture.memory }, model).verify({
+    environmentId: fixture.memory.environment.id,
+    previousStateId: fixture.previous.id,
+    currentStateId: fixture.current.id,
+    conditionIds: ['condition_access'],
+  })
+  return { result, modelCalls, retryContext }
+}
 
 async function runDuplicateBaselineCase(Service) {
   const fixture = baseFixture({ currentCartPosition: 'beside orange shelving' })
