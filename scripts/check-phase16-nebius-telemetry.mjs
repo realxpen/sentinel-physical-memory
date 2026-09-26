@@ -169,6 +169,8 @@ try {
 
   expect(health.includes("provider: 'nebius-token-factory'"), 'health must expose the Token Factory provider')
   expect(health.includes('reasoningModel'), 'health must expose the reasoning model')
+  expect(!scan.includes("DEFAULT_PREFERRED_VISION_MODEL = 'Qwen/Qwen2.5-VL-72B-Instruct'"), 'scan route must not probe the unavailable Qwen model by default')
+  expect(scan.includes("process.env.NEBIUS_PREFERRED_VISION_MODEL?.trim() || configuredPerceptionModel"), 'preferred vision route must be explicit opt-in and otherwise use the configured perception model directly')
   expect(readme.includes('nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B'), 'README must identify the actual NVIDIA model')
   expect(readme.includes('Nebius Token Factory'), 'README must identify the actual inference platform')
 
@@ -176,6 +178,7 @@ try {
   console.log('PASS  NVIDIA Nemotron is explicitly traced on reasoning + action roles')
   console.log('PASS  provider failures emit one safe error trace without secrets')
   console.log('PASS  successful product APIs expose per-request inference traces')
+  console.log('PASS  default perception routing goes directly to the proven configured model without a dead preferred-model probe')
   console.log('PASS  health + README expose the actual non-secret Nebius/NVIDIA architecture')
   console.log('SENTINEL PHASE 16 NEBIUS NVIDIA TELEMETRY VERIFIED')
 } finally {
