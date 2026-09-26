@@ -16,7 +16,8 @@ import type { ReasoningModelAdapter } from '../ai/model.js'
 import { conditionTrustLabel } from '../perception/condition-model.js'
 import type { EnvironmentalMemoryReader } from './repository.js'
 import { isUnconfirmedPersonObject } from '../domain/object-policy.js'
-import { isLowSalienceObjectChange } from './change-salience.js'
+import { changesForPresentation } from './change-presentation.js'
+import { collapseEquivalentConditionsForPresentation } from './memory-presentation.js'
 
 const MAX_HISTORY_STATES = 12
 const MAX_CONTEXT_OBJECTS = 30
@@ -97,7 +98,9 @@ export class AskBuildingService {
     )
     const stateObjects = snapshot.objects.filter((item) => !isUnconfirmedPersonObject(item))
     const allowedObjectIds = new Set(stateObjects.map((item) => item.id))
-    const stateConditions = snapshot.conditions.filter((item) => !item.objectIds.some((id) => hiddenPersonIds.has(id)))
+    const stateConditions = collapseEquivalentConditionsForPresentation(
+      snapshot.conditions.filter((item) => !item.objectIds.some((id) => hiddenPersonIds.has(id))),
+    )
     const stateIssues = snapshot.issues.filter((item) => !item.objectIds.some((id) => hiddenPersonIds.has(id)))
     const objects = [...stateObjects]
       .sort((a, b) => this.objectRelevance(b, tokens, stateIssues, stateConditions, intent) - this.objectRelevance(a, tokens, stateIssues, stateConditions, intent) || a.name.localeCompare(b.name))
@@ -131,12 +134,18 @@ export class AskBuildingService {
       ).join(' -> ')}`]
     })
 
-    const historicalIssues = uniqueById(historySnapshots.flatMap((item) => item.issues))
+    // The selected state's claims already have dedicated CURRENT sections below.
+    // Historical sections should contain only earlier snapshots; repeating the
+    // selected claims there gives the reasoning model artificial extra weight.
+    const priorHistorySnapshots = historySnapshots.filter((item) => item.stateId !== state.id)
+    const historicalIssues = uniqueById(priorHistorySnapshots.flatMap((item) => item.issues))
       .filter((item) => !item.objectIds.some((id) => hiddenPersonIds.has(id)))
       .sort((a, b) => this.issueRelevance(b, tokens, intent) - this.issueRelevance(a, tokens, intent) || b.confidence - a.confidence)
       .slice(0, MAX_CONTEXT_ISSUES)
-    const historicalConditions = uniqueById(historySnapshots.flatMap((item) => item.conditions))
-      .filter((item) => !item.objectIds.some((id) => hiddenPersonIds.has(id)))
+    const historicalConditions = collapseEquivalentConditionsForPresentation(
+      uniqueById(priorHistorySnapshots.flatMap((item) => item.conditions))
+        .filter((item) => !item.objectIds.some((id) => hiddenPersonIds.has(id))),
+    )
       .sort((a, b) => this.claimRelevance(b, tokens, intent) - this.claimRelevance(a, tokens, intent) || b.confidence - a.confidence)
       .slice(0, MAX_CONTEXT_CONDITIONS)
 
@@ -189,7 +198,12 @@ export class AskBuildingService {
       ...orderedStates.map((item) => {
         const historySnapshot = historySnapshots.find((snapshotItem) => snapshotItem.stateId === item.id)
         const visibleObjectCount = historySnapshot?.objects.filter((object) => !isUnconfirmedPersonObject(object)).length ?? 0
-        return `- STATE v${item.version} ${item.id} captured=${item.capturedAt} current=${item.id === memory.environment.currentStateId} | ${item.summary} | objects=${visibleObjectCount} conditions=${historySnapshot?.conditions.length ?? 0} issues=${historySnapshot?.issues.length ?? 0} relations=${historySnapshot?.relations.length ?? 0}`
+        const visibleConditionCount = historySnapshot
+          ? collapseEquivalentConditionsForPresentation(
+              historySnapshot.conditions.filter((condition) => !condition.objectIds.some((id) => hiddenPersonIds.has(id))),
+            ).length
+          : 0
+        return `- STATE v${item.version} ${item.id} captured=${item.capturedAt} current=${item.id === memory.environment.currentStateId} | ${item.summary} | objects=${visibleObjectCount} conditions=${visibleConditionCount} issues=${historySnapshot?.issues.length ?? 0} relations=${historySnapshot?.relations.length ?? 0}`
       }),
       'RELEVANT OBJECTS IN SELECTED STATE:',
       ...objects.map((item) => this.objectLine(item)),
@@ -212,9 +226,9 @@ export class AskBuildingService {
       'EVIDENCE AVAILABLE TO REASONING:',
       ...evidence.map((item) => this.evidenceLine(item)),
       previousState ? `PREVIOUS_STATE_ID ${previousState.id} VERSION ${previousState.version}` : 'NO_PREVIOUS_STATE',
-      selectedDiff ? `SELECTED_STATE_DIFF ${selectedDiff.id}: ${selectedDiff.summary}\n${selectedDiff.changes.filter((change) => !isLowSalienceObjectChange(change)).map((change) => `- ${change.type}: ${change.title} | ${change.description} | confidence=${change.confidence} | evidence=${change.evidenceIds.filter((id) => renderedEvidenceIds.has(id)).join(',')}`).join('\n')}` : 'NO_DIFF_INTO_SELECTED_STATE',
+      selectedDiff ? `SELECTED_STATE_DIFF ${selectedDiff.id}: ${selectedDiff.summary}\n${this.presentedDiffChanges(memory, selectedDiff).map((change) => `- ${change.type}: ${change.title} | ${change.description} | confidence=${change.confidence} | evidence=${change.evidenceIds.filter((id) => renderedEvidenceIds.has(id)).join(',')}`).join('\n')}` : 'NO_DIFF_INTO_SELECTED_STATE',
       'DIFF HISTORY UP TO SELECTED STATE:',
-      ...diffHistory.map((diff) => this.diffLine(diff, renderedEvidenceIds)),
+      ...diffHistory.map((diff) => this.diffLine(memory, diff, renderedEvidenceIds)),
     ].join('\n')
 
     return { text: context, intent, evidenceIds: renderedEvidenceIds, objectIds: renderedObjectIds, issueIds: renderedIssueIds, historyStateIds: orderedStates.map((item) => item.id) }
@@ -259,8 +273,17 @@ export class AskBuildingService {
   private conditionLine(item: EnvironmentalCondition): string { return `- CONDITION ${item.id}: ${item.title} | trust=${conditionTrustLabel(item)} | kind=${item.kind} | status=${item.status} | confidence=${item.confidence} | description=${item.description} | objects=${item.objectIds.join(',')} | evidence=${item.evidenceIds.join(',')}` }
   private issueLine(item: Issue): string { return `- ISSUE ${item.id}: ${item.title} | severity=${item.severity} | status=${item.status} | confidence=${item.confidence} | description=${item.description} | objects=${item.objectIds.join(',')} | evidence=${item.evidenceIds.join(',')}` }
   private evidenceLine(item: Evidence): string { return `- EVIDENCE ${item.id}: type=${item.type} source=${item.sourceId} captured=${item.capturedAt} description=${item.description} frame=${item.frameIndex ?? 'n/a'} timestampMs=${item.timestampMs ?? 'n/a'}` }
-  private diffLine(diff: EnvironmentalDiff, renderedEvidenceIds: Set<string>): string {
-    const visibleChanges = diff.changes.filter((change) => !isLowSalienceObjectChange(change)).slice(0, 24)
+  private presentedDiffChanges(memory: EnvironmentalMemory, diff: EnvironmentalDiff) {
+    const previousSnapshot = memory.snapshots.find((snapshot) => snapshot.stateId === diff.fromStateId)
+    const currentSnapshot = memory.snapshots.find((snapshot) => snapshot.stateId === diff.toStateId)
+    return changesForPresentation(diff.changes, {
+      previousObjects: previousSnapshot?.objects,
+      currentObjects: currentSnapshot?.objects,
+    }).slice(0, 24)
+  }
+
+  private diffLine(memory: EnvironmentalMemory, diff: EnvironmentalDiff, renderedEvidenceIds: Set<string>): string {
+    const visibleChanges = this.presentedDiffChanges(memory, diff)
     return `- DIFF ${diff.id} ${diff.fromStateId}->${diff.toStateId}: ${diff.summary}\n${visibleChanges.map((change) => `  - ${change.type}: ${change.title} | ${change.description} | confidence=${change.confidence} | evidence=${change.evidenceIds.filter((id) => renderedEvidenceIds.has(id)).join(',')}`).join('\n')}`
   }
 

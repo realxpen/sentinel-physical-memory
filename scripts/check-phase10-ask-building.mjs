@@ -13,7 +13,7 @@ try {
     evidenceItem('e3', 'source_v3', '2026-09-21T12:00:00.000Z', 'Green exit door visible with cart no longer in front of it.'),
   ]
   const door = (seenAt, evidenceIds) => ({
-    id: 'door', environmentId, category: 'door', name: 'green door', description: 'green exit door',
+    id: 'door', environmentId, category: 'door', name: 'green door', description: 'green exit door with a green "EXIT" sign above it',
     position: { description: 'warehouse rear wall' }, confidence: 0.97,
     firstSeenAt: '2026-09-21T10:00:00.000Z', lastSeenAt: seenAt, evidenceIds,
   })
@@ -21,6 +21,11 @@ try {
     id: 'cart', environmentId, category: 'equipment', name: 'orange cart',
     position: { description: position }, confidence: 0.96,
     firstSeenAt: '2026-09-21T10:00:00.000Z', lastSeenAt: seenAt, evidenceIds,
+  })
+  const exitSign = (seenAt, evidenceIds) => ({
+    id: 'exit_sign', environmentId, category: 'signage', name: 'Exit Sign',
+    description: 'Green EXIT sign mounted above the green door.', position: { description: 'above green door' }, confidence: 0.95,
+    firstSeenAt: '2026-09-21T11:00:00.000Z', lastSeenAt: seenAt, evidenceIds,
   })
   const state1 = state('state_v1', 1, '2026-09-21T10:00:00.000Z', ['source_v1'], 'Baseline state.')
   const state2 = state('state_v2', 2, '2026-09-21T11:00:00.000Z', ['source_v2'], 'Cart obstructs exit.')
@@ -31,6 +36,11 @@ try {
     description: 'orange cart is observed in front of green door', status: 'present', basis: 'inferred',
     confidence: 0.9, objectIds: ['cart', 'door'], evidenceIds: ['e2'], observedAt: state2.capturedAt,
   }
+  const obstructionConditionAlias = {
+    ...obstructionCondition,
+    id: 'condition_access_alias',
+    description: 'orange cart blocks the same green exit doorway',
+  }
   const obstructionIssue = {
     id: 'issue_access', environmentId, type: 'access', title: 'Emergency exit access obstructed',
     description: 'orange cart blocks clear access to grounded exit door', severity: 'medium', status: 'open',
@@ -39,8 +49,8 @@ try {
   }
   const snapshots = [
     { stateId: state1.id, environmentId, objects: [door(state1.capturedAt, ['e1']), cart(state1.capturedAt, ['e1'], 'beside shelving')], conditions: [], issues: [], relations: [] },
-    { stateId: state2.id, environmentId, objects: [door(state2.capturedAt, ['e1','e2']), cart(state2.capturedAt, ['e1','e2'], 'in front of green door')], conditions: [obstructionCondition], issues: [obstructionIssue], relations: [{ id: 'rel_front', environmentId, fromId: 'cart', toId: 'door', type: 'in_front_of', confidence: 1, evidenceIds: ['e2'] }] },
-    { stateId: state3.id, environmentId, objects: [door(state3.capturedAt, ['e1','e2','e3']), cart(state3.capturedAt, ['e1','e2','e3'], 'beside shelving')], conditions: [], issues: [], relations: [] },
+    { stateId: state2.id, environmentId, objects: [door(state2.capturedAt, ['e1','e2']), cart(state2.capturedAt, ['e1','e2'], 'in front of green door'), exitSign(state2.capturedAt, ['e2'])], conditions: [obstructionCondition, obstructionConditionAlias], issues: [obstructionIssue], relations: [{ id: 'rel_front', environmentId, fromId: 'cart', toId: 'door', type: 'in_front_of', confidence: 1, evidenceIds: ['e2'] }] },
+    { stateId: state3.id, environmentId, objects: [door(state3.capturedAt, ['e1','e2','e3']), cart(state3.capturedAt, ['e1','e2','e3'], 'beside shelving'), exitSign(state3.capturedAt, ['e2','e3'])], conditions: [], issues: [], relations: [] },
   ]
 
   const memory = {
@@ -64,7 +74,10 @@ try {
       { id: 'source_v3', environmentId, modality: 'image', uri: 'https://local/v3.jpg', capturedAt: state3.capturedAt },
     ],
     diffs: [
-      { id: 'diff_12', environmentId, fromStateId: state1.id, toStateId: state2.id, createdAt: state2.capturedAt, summary: 'Exit obstruction appeared.', changes: [{ id: 'change_12', environmentId, fromStateId: state1.id, toStateId: state2.id, type: 'changed', entityId: 'cart', entityKind: 'object', title: 'Cart moved in front of exit', description: 'orange cart is now in front of green door', confidence: 0.94, evidenceIds: ['e2'] }] },
+      { id: 'diff_12', environmentId, fromStateId: state1.id, toStateId: state2.id, createdAt: state2.capturedAt, summary: 'Exit obstruction appeared.', changes: [
+        { id: 'change_12', environmentId, fromStateId: state1.id, toStateId: state2.id, type: 'changed', entityId: 'cart', entityKind: 'object', title: 'Cart moved in front of exit', description: 'orange cart is now in front of green door', confidence: 0.94, evidenceIds: ['e2'] },
+        { id: 'change_exit_sign_split', environmentId, fromStateId: state1.id, toStateId: state2.id, type: 'added', entityId: 'exit_sign', entityKind: 'object', title: 'New: Exit Sign', description: 'Exit Sign was not present in the previous state.', confidence: 0.95, evidenceIds: ['e2'] },
+      ] },
       { id: 'diff_23', environmentId, fromStateId: state2.id, toStateId: state3.id, createdAt: state3.capturedAt, summary: 'Exit obstruction no longer re-observed.', changes: [{ id: 'change_23', environmentId, fromStateId: state2.id, toStateId: state3.id, type: 'uncertain', entityId: 'cart', entityKind: 'object', title: 'Obstruction not re-observed', description: 'cart is no longer visible in front of the exit in this view', confidence: 0.7, evidenceIds: ['e3'] }] },
     ],
   }
@@ -94,6 +107,7 @@ try {
   expect(captured[0].context.includes('STATE HISTORY:'), 'reasoning context must contain bounded immutable state history')
   expect(captured[0].context.includes('OBJECT HISTORY UP TO SELECTED STATE:'), 'reasoning context must contain durable object continuity')
   expect(captured[0].context.includes('DIFF HISTORY UP TO SELECTED STATE:'), 'reasoning context must contain Reality Diff history')
+  expect(!captured[0].context.includes('New: Exit Sign'), 'Ask context must hide persisted exit-sign representation churn when prior grounded memory already described the sign')
   expect(currentAnswer.evidenceIds.length === 1 && currentAnswer.evidenceIds[0] === 'e2', 'model evidence must be filtered to evidence actually supplied in context')
   expect(!currentAnswer.relatedObjectIds.includes('ghost'), 'invented object IDs must fail closed')
   expect(!currentAnswer.relatedIssueIds.includes('ghost_issue'), 'invented issue IDs must fail closed')
@@ -106,6 +120,9 @@ try {
   expect(historicalContext.includes('SELECTED_STATE_ID state_v2 VERSION 2'), 'explicit historical state must be selected')
   expect(!historicalContext.includes('STATE v3 state_v3'), 'historical Ask must never leak future state into reasoning context')
   expect(!historicalContext.includes('diff_23'), 'historical Ask must never leak future Reality Diff into reasoning context')
+  expect(!historicalContext.includes('condition_access_alias'), 'Ask read model must collapse equivalent persisted conditions without rewriting the snapshot')
+  expect((historicalContext.match(/CONDITION condition_access:/g) ?? []).length === 1, 'Ask read model must expose one semantic access condition for the selected state')
+  expect(!historicalContext.includes('New: Exit Sign'), 'historical Ask must hide exit-sign representation churn contextually')
 
   const noEvidenceModel = {
     provider: 'test',
@@ -149,6 +166,7 @@ try {
   console.log('PASS  seven MVP questions map to deterministic Ask intents')
   console.log('PASS  current Ask uses authoritative currentStateId and bounded immutable history')
   console.log('PASS  historical Ask excludes future states and future diffs')
+  console.log('PASS  Ask read model collapses duplicate persisted conditions and exit-sign representation churn without mutating history')
   console.log('PASS  evidence/object/issue IDs fail closed to supplied reasoning context')
   console.log('PASS  ungrounded answers receive a conservative confidence cap')
   console.log('PASS  first-class Ask UI exposes rationale, evidence, comparison and related-object navigation')
