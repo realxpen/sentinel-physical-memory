@@ -2,6 +2,7 @@ import type { EnvironmentalCondition, EnvironmentalDiff, EnvironmentalMemory, En
 import { assessCondition } from '../perception/condition-model.js'
 import { EnvironmentalDiffEngine, type DiffEngine } from './diff-engine.js'
 import { matchObjectsConservatively, sameFrameStillObjectsCanConsolidate, sameScanObjectsCanConsolidate } from './object-identity.js'
+import { isUnconfirmedPersonObject } from '../domain/object-policy.js'
 
 export interface MemoryIds { state: () => string; object: () => string; issue: () => string; relation: () => string; evidence: () => string; diff: () => string }
 export interface MemoryStoreDependencies { now?: () => Date; ids?: Partial<MemoryIds>; diffEngine?: DiffEngine }
@@ -236,7 +237,10 @@ export class EnvironmentalMemoryStore {
   }
 
   private upsertObjects(memory: EnvironmentalMemory, incoming: SpatialObject[], capturedAt: string, singleStillFrame = false): SpatialObject[] {
-    const existing = [...memory.objects]
+    // Never let a newly confirmed real person inherit the durable identity of a
+    // legacy/unconfirmed person claim. Immutable history remains intact, while
+    // future trusted people may establish their own canonical object identity.
+    const existing = memory.objects.filter((item) => !isUnconfirmedPersonObject(item))
     const groups = groupSameScanObjectAliases(incoming, singleStillFrame)
     const representatives = groups.map((group) => incoming[group[0]])
     const matches = matchObjectsConservatively(existing, representatives)
@@ -347,6 +351,7 @@ function applyCurrentObservation(target: SpatialObject, incoming: SpatialObject,
   target.position = incoming.position ?? target.position
   target.boundingBox = incoming.boundingBox ?? target.boundingBox
   target.state = incoming.state ?? target.state
+  target.personGrounding = incoming.personGrounding ?? target.personGrounding
   target.confidence = incoming.confidence
   target.lastSeenAt = capturedAt
   target.evidenceIds = unique([...target.evidenceIds, ...incoming.evidenceIds])
@@ -382,6 +387,7 @@ function mergeAliasEvidence(target: SpatialObject, alias: SpatialObject, capture
   target.position = target.position ?? alias.position
   target.boundingBox = target.boundingBox ?? alias.boundingBox
   target.state = target.state ?? alias.state
+  target.personGrounding = target.personGrounding ?? alias.personGrounding
   target.confidence = Math.max(target.confidence, alias.confidence)
   target.lastSeenAt = capturedAt
   target.evidenceIds = unique([...target.evidenceIds, ...alias.evidenceIds])
