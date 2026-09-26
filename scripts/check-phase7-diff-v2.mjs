@@ -280,6 +280,28 @@ try {
     throw new Error(`salience filtering must preserve new obstruction evidence: ${synthTitles.join(' | ')}`)
   }
 
+  const transientPersonNoise = engine.compare(
+    {
+      stateId: 'state_person_1',
+      environmentId,
+      objects: [object('person_old', 'person', 'person', { description: 'false-positive distant silhouette' })],
+      conditions: [],
+      issues: [],
+      relations: [],
+    },
+    {
+      stateId: 'state_person_2',
+      environmentId,
+      objects: [],
+      conditions: [],
+      issues: [],
+      relations: [],
+    },
+  )
+  if (transientPersonNoise.changes.some((change) => /person/i.test(change.title))) {
+    throw new Error('transient people must not create raw environmental change cards')
+  }
+
   const architecturalNamingNoise = engine.compare(
     {
       stateId: 'state_arch_1',
@@ -565,6 +587,7 @@ try {
   console.log('PASS  first-class condition transition semantics avoid duplicate issue noise')
   console.log('PASS  door hardware, light fixtures, room labels, decor, and permanent architecture naming drift stay out of raw Reality Diff')
   console.log('PASS  architectural noise suppression preserves obstruction, extinguisher movement, access conditions, and explicit door state changes')
+  console.log('PASS  transient people never become durable Reality Diff changes')
   console.log('PASS  generated state-pair diffs remain stored in environmental memory')
   console.log('SENTINEL PHASE 7 DIFF ENGINE V2 VERIFIED')
 } finally {
