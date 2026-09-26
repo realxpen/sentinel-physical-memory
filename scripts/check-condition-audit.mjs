@@ -187,24 +187,24 @@ try {
     async infer(request) {
       warehousePrompts.push(request.prompt)
       const isConditionAudit = request.prompt.includes('Condition audit for scan')
-      const isIdentityAudit = request.prompt.includes('Targeted physical-object identity verification for scan')
+      const isGeometryAudit = request.prompt.includes('Targeted access-geometry verification for scan')
 
-      if (isIdentityAudit) {
+      if (isGeometryAudit) {
         return {
           sourceId: warehouseSourceId,
           observations: [{
-            id: 'identity-jack-placement',
+            id: 'geometry-ramp-placement',
             environmentId: warehouseEnvironmentId,
             sourceId: warehouseSourceId,
             modality: 'video',
             capturedAt,
-            label: 'orange pallet jack',
-            description: 'An orange pallet jack is directly in front of the green door.',
+            label: 'orange ramp',
+            description: 'The orange ramp footprint directly occupies the access area in front of the green door.',
             confidence: 1,
             basis: 'observed',
             evidenceIds: ['evidence_0'],
           }, {
-            id: 'identity-exit-sign',
+            id: 'geometry-exit-sign',
             environmentId: warehouseEnvironmentId,
             sourceId: warehouseSourceId,
             modality: 'video',
@@ -216,17 +216,17 @@ try {
             evidenceIds: ['evidence_0'],
           }],
           objects: [{
-            id: 'identity-jack',
+            id: 'geometry-ramp',
             environmentId: warehouseEnvironmentId,
             category: 'equipment',
-            name: 'orange pallet jack',
-            description: 'An orange pallet jack directly in front of the green door.',
+            name: 'orange ramp',
+            description: 'An orange ramp whose footprint occupies the door access area.',
             confidence: 1,
             firstSeenAt: capturedAt,
             lastSeenAt: capturedAt,
             evidenceIds: ['evidence_0'],
           }, {
-            id: 'identity-door',
+            id: 'geometry-door',
             environmentId: warehouseEnvironmentId,
             category: 'door',
             name: 'green door',
@@ -235,7 +235,7 @@ try {
             lastSeenAt: capturedAt,
             evidenceIds: ['evidence_0'],
           }, {
-            id: 'identity-exit',
+            id: 'geometry-exit',
             environmentId: warehouseEnvironmentId,
             category: 'signage',
             name: 'emergency exit sign',
@@ -246,7 +246,15 @@ try {
             evidenceIds: ['evidence_0'],
           }],
           conditions: [],
-          relations: [],
+          relations: [{
+            id: 'geometry-ramp-front-door',
+            environmentId: warehouseEnvironmentId,
+            fromId: 'geometry-ramp',
+            toId: 'geometry-door',
+            type: 'in_front_of',
+            confidence: 0.98,
+            evidenceIds: ['evidence_0'],
+          }],
           evidence: [],
         }
       }
@@ -411,18 +419,17 @@ try {
     },
   })
 
-  if (warehousePrompts.length !== 3) throw new Error(`expected scene + condition audit + identity audit, got ${warehousePrompts.length}`)
-  if (!warehousePrompts[2].includes('Classify by visible morphology')) throw new Error('identity audit must classify from visible morphology')
-  if (!warehousePrompts[2].includes('not by filenames or metadata')) throw new Error('identity audit must reject filename/metadata leakage')
+  if (warehousePrompts.length !== 3) throw new Error(`expected scene + condition audit + geometry audit, got ${warehousePrompts.length}`)
+  if (!warehousePrompts[2].includes('physical relationship')) throw new Error('geometry audit must verify current spatial geometry')
+  if (!warehousePrompts[2].includes('Do not infer from filenames, metadata, prior memory')) throw new Error('geometry audit must reject metadata/memory leakage')
   if (!warehouseResult.conditions.some((item) => item.title === 'Emergency exit access obstructed')) {
-    throw new Error('identity-audit correction did not enable grounded access derivation')
+    throw new Error('generic geometry evidence did not enable grounded access derivation')
   }
-  if (warehouseResult.state.issueIds.length !== 1) throw new Error('derived warehouse access condition was not promoted')
-  if (!warehouseResult.observations.some((item) => item.label === 'orange pallet jack')) throw new Error('identity audit pallet-jack fact did not survive merge')
+  if (warehouseResult.state.issueIds.length !== 1) throw new Error('derived access condition was not promoted')
 
-  console.log('PASS  ambiguous category=other object triggers one generic identity audit')
-  console.log('PASS  identity audit uses visible morphology and explicitly rejects filename/metadata/demo leakage')
-  console.log('PASS  clarified current-object identity enables grounded derivation without lowering trust thresholds')
+  console.log('PASS  ambiguous category=other object can trigger generic geometry verification without taxonomy correction')
+  console.log('PASS  geometry audit uses current visual geometry and rejects filename/metadata/memory leakage')
+  console.log('PASS  grounded spatial relation enables access derivation regardless of the object noun')
 
   const geometryEnvironmentId = 'condition-audit-warehouse-geometry-test'
   const geometrySourceId = 'source-condition-audit-geometry'
@@ -753,11 +760,11 @@ try {
     },
   })
 
-  if (ordinaryGeometryPrompts.length !== 1) {
-    throw new Error(`expected only the grounded scene pass for ordinary furniture, got ${ordinaryGeometryPrompts.length}`)
+  if (ordinaryGeometryPrompts.length !== 2) {
+    throw new Error(`expected scene + generic condition audit for ordinary furniture, got ${ordinaryGeometryPrompts.length}`)
   }
   if (ordinaryGeometryPrompts.some((prompt) => prompt.includes('Targeted access-geometry verification'))) {
-    throw new Error('ordinary chair + door without explicit obstruction must not trigger targeted access geometry')
+    throw new Error('ordinary chair + door without a spatial proximity hint must not trigger targeted access geometry')
   }
   const ordinaryProviderConditions = ordinaryGeometryResult.conditions.filter((item) => item.title === 'Doorway access obstructed')
   if (ordinaryProviderConditions.length !== 0) {
@@ -772,7 +779,7 @@ try {
     throw new Error('ordinary furniture baseline must not manufacture an in_front_of relation')
   }
 
-  console.log('PASS  ordinary chair + door without explicit obstruction does not trigger unnecessary condition/access-geometry audits')
+  console.log('PASS  ordinary chair + door receives the generic condition audit but no unnecessary access-geometry audit')
   console.log('PASS  ordinary perspective overlap cannot promote a doorway access issue')
   console.log('PASS  no manufactured in_front_of relation enters immutable memory')
   console.log('PASS  ordinary doorway obstruction persists exactly one inferred medium access issue')
