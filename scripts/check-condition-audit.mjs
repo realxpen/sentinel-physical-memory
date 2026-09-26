@@ -552,6 +552,7 @@ try {
         category: 'equipment',
         name: 'orange pallet jack',
         description: 'orange pallet jack with wheels',
+        position: { description: 'near green door' },
         confidence: 1,
         firstSeenAt: capturedAt,
         lastSeenAt: capturedAt,
@@ -630,7 +631,7 @@ try {
     throw new Error(`expected exactly one persisted semantic access condition, got ${geometryStateConditions.length}`)
   }
 
-  console.log('PASS  pallet-jack + exit context without placement triggers one targeted access-geometry audit')
+  console.log('PASS  generic weak door-proximity evidence triggers one targeted geometry audit without itself proving obstruction')
   console.log('PASS  pass-local door aliases collapse to one persisted semantic access condition')
   console.log('PASS  geometry audit requires obstacle -> door in_front_of evidence and rejects weak proximity')
   console.log('PASS  structured geometry relation enables derivation without weakening policy thresholds')
