@@ -15,7 +15,7 @@ import type {
 import type { ReasoningModelAdapter } from '../ai/model.js'
 import { conditionTrustLabel } from '../perception/condition-model.js'
 import type { EnvironmentalMemoryReader } from './repository.js'
-import { isTransientEnvironmentalObject } from '../domain/object-policy.js'
+import { isUnconfirmedPersonObject } from '../domain/object-policy.js'
 import { isLowSalienceObjectChange } from './change-salience.js'
 
 const MAX_HISTORY_STATES = 12
@@ -92,10 +92,13 @@ export class AskBuildingService {
       .map((item) => memory.snapshots.find((snapshotItem) => snapshotItem.stateId === item.id))
       .filter((item): item is EnvironmentalStateSnapshot => Boolean(item))
 
-    const stateObjects = snapshot.objects.filter((item) => !isTransientEnvironmentalObject(item))
+    const hiddenPersonIds = new Set(
+      historySnapshots.flatMap((item) => item.objects.filter(isUnconfirmedPersonObject).map((object) => object.id)),
+    )
+    const stateObjects = snapshot.objects.filter((item) => !isUnconfirmedPersonObject(item))
     const allowedObjectIds = new Set(stateObjects.map((item) => item.id))
-    const stateConditions = snapshot.conditions
-    const stateIssues = snapshot.issues
+    const stateConditions = snapshot.conditions.filter((item) => !item.objectIds.some((id) => hiddenPersonIds.has(id)))
+    const stateIssues = snapshot.issues.filter((item) => !item.objectIds.some((id) => hiddenPersonIds.has(id)))
     const objects = [...stateObjects]
       .sort((a, b) => this.objectRelevance(b, tokens, stateIssues, stateConditions, intent) - this.objectRelevance(a, tokens, stateIssues, stateConditions, intent) || a.name.localeCompare(b.name))
       .slice(0, MAX_CONTEXT_OBJECTS)
@@ -129,9 +132,11 @@ export class AskBuildingService {
     })
 
     const historicalIssues = uniqueById(historySnapshots.flatMap((item) => item.issues))
+      .filter((item) => !item.objectIds.some((id) => hiddenPersonIds.has(id)))
       .sort((a, b) => this.issueRelevance(b, tokens, intent) - this.issueRelevance(a, tokens, intent) || b.confidence - a.confidence)
       .slice(0, MAX_CONTEXT_ISSUES)
     const historicalConditions = uniqueById(historySnapshots.flatMap((item) => item.conditions))
+      .filter((item) => !item.objectIds.some((id) => hiddenPersonIds.has(id)))
       .sort((a, b) => this.claimRelevance(b, tokens, intent) - this.claimRelevance(a, tokens, intent) || b.confidence - a.confidence)
       .slice(0, MAX_CONTEXT_CONDITIONS)
 
@@ -183,7 +188,7 @@ export class AskBuildingService {
       'STATE HISTORY:',
       ...orderedStates.map((item) => {
         const historySnapshot = historySnapshots.find((snapshotItem) => snapshotItem.stateId === item.id)
-        const visibleObjectCount = historySnapshot?.objects.filter((object) => !isTransientEnvironmentalObject(object)).length ?? 0
+        const visibleObjectCount = historySnapshot?.objects.filter((object) => !isUnconfirmedPersonObject(object)).length ?? 0
         return `- STATE v${item.version} ${item.id} captured=${item.capturedAt} current=${item.id === memory.environment.currentStateId} | ${item.summary} | objects=${visibleObjectCount} conditions=${historySnapshot?.conditions.length ?? 0} issues=${historySnapshot?.issues.length ?? 0} relations=${historySnapshot?.relations.length ?? 0}`
       }),
       'RELEVANT OBJECTS IN SELECTED STATE:',
