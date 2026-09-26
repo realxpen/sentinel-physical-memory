@@ -712,7 +712,9 @@ export class ScanPipeline {
           'Inspect the supplied frames only to verify the physical relationship between the named current-scan candidate object(s) and the visible door or doorway.',
           'If a candidate is directly in front of the door, emit an explicit relation with type="in_front_of", fromId=candidate object id, toId=door object id, plus grounded evidenceIds. The direction must be obstacle -> door.',
           'Also state the placement explicitly in a direct observation when visually supported.',
-          'Near, beside, left/right, or sharing the center of the image is NOT sufficient evidence of obstruction and must not be converted to in_front_of.',
+          'Near, beside, left/right, perspective overlap, or sharing the center of the image is NOT sufficient evidence of obstruction and must not be converted to in_front_of.',
+          'Do not reinterpret ordinary room furniture merely visible in the foreground as blocking a more distant door. Confirm in_front_of only when the candidate footprint visibly occupies the door opening, threshold, or access path.',
+          'For this targeted audit, the explicit obstacle -> door in_front_of relation is the authoritative geometry output. If that relation cannot be supported, do not use obstruction/blocking language in observations.',
           'If exit signage is visible, include the exit-sign observation/object so emergency-exit identity remains independently grounded. If no exit signage is visible, do not call the doorway an emergency exit.',
           'Do not infer from filenames, metadata, prior memory, or the earlier model wording. Use only visible frame evidence.',
           'Do not force a relation or operational condition when geometry is unclear.',
@@ -1242,7 +1244,11 @@ function accessGeometryCandidates(result: PerceptionResult): SpatialObject[] {
     if (item.category === 'obstruction') return true
 
     const text = `${item.name} ${item.description ?? ''}`
-    return /\b(?:pallet\s+jack|pallet|trolley|cart|forklift|box|carton|chair|cabinet|desk|table|equipment|material[-\s]+handling\s+equipment)\b/i.test(text)
+    // Do not proactively reinterpret ordinary office furniture as an access
+    // obstacle from a single perspective. If a chair/table/desk truly blocks
+    // a doorway, the broad scene or condition audit may state that directly;
+    // this targeted geometry pass is reserved for obstruction-like objects.
+    return /\b(?:pallet\s+jack|pallet|trolley|cart|forklift|box|carton|barrier|cone|ladder|equipment\s+case|material[-\s]+handling\s+equipment)\b/i.test(text)
   })
 }
 
