@@ -121,6 +121,20 @@ try {
     throw new Error('strong grounded ordinary doorway obstruction should become a medium access issue')
   }
 
+  const arbitraryObject = structuredClone(ordinaryDoorway)
+  arbitraryObject.objects[0].name = 'service door'
+  arbitraryObject.objects[0].description = 'plain service door'
+  arbitraryObject.objects[1].name = 'purple rolling hamper'
+  arbitraryObject.objects[1].category = 'equipment'
+  arbitraryObject.objects[1].description = 'purple rolling hamper with caster wheels'
+  arbitraryObject.objects[1].position = { description: 'directly in front of the service door' }
+  arbitraryObject.observations[0].label = 'purple rolling hamper'
+  arbitraryObject.observations[0].description = 'A purple rolling hamper is directly in front of the service door.'
+  const arbitraryDerived = deriveOperationalConditions(arbitraryObject, capturedAt)
+  if (arbitraryDerived.derivedConditions.length !== 1 || arbitraryDerived.derivedConditions[0].title !== 'Doorway access obstructed') {
+    throw new Error('access derivation must work for arbitrary grounded physical-object nouns, not a demo whitelist')
+  }
+
   const ordinarySafe = structuredClone(ordinaryDoorway)
   ordinarySafe.objects[1].position = { description: 'beside the wall away from the doorway' }
   ordinarySafe.observations[0].description = 'A gray chair is positioned beside the wall away from the doorway.'
@@ -212,6 +226,7 @@ try {
   console.log('PASS  grounded exit sign above the only visible door preserves independent exit grounding')
   console.log('PASS  ambiguous exit signage cannot create an emergency-exit claim; explicit ordinary doorway obstruction remains allowed')
   console.log('PASS  ordinary evidence-backed chair-in-front-of-door geometry derives a medium doorway access issue')
+  console.log('PASS  arbitrary grounded object nouns can derive doorway access conditions without whitelist membership')
   console.log('PASS  ordinary chair beside the doorway does not create an access issue')
   console.log('PASS  safe obstacle placement does not create an access condition')
   console.log('PASS  duplicate same-door obstruction representations consolidate to one access condition while retaining their grounded object ids')
