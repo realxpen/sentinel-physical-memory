@@ -1183,12 +1183,9 @@ function materializeExplicitGroundedObjects(
   capturedAt: string,
 ): { result: PerceptionResult; materialized: SpatialObject[] } {
   const hasDurableExitSign = result.objects.some((item) => {
-    const name = normalizeSemanticText(item.name)
-    const description = normalizeSemanticText(item.description ?? '')
-    const explicitInName = /\b(?:emergency\s+)?exit\s+(?:sign|symbol)\b/.test(name)
-    const explicitSignageObject = item.category === 'signage' &&
-      /\b(?:emergency\s+)?exit\b/.test(`${name} ${description}`) &&
-      /\b(?:sign|symbol)\b/.test(`${name} ${description}`)
+    const text = normalizeSemanticText(`${item.name} ${item.description ?? ''} ${item.position?.description ?? ''}`)
+    const explicitInName = hasExplicitExitSignText(item.name)
+    const explicitSignageObject = item.category === 'signage' && hasExplicitExitSignText(text)
     return explicitInName || explicitSignageObject
   })
   if (hasDurableExitSign) return { result, materialized: [] }
@@ -1205,7 +1202,7 @@ function materializeExplicitGroundedObjects(
       evidenceIds: item.evidenceIds,
     })),
   ].filter((item) =>
-    /\b(?:emergency\s+)?exit\s+(?:sign|symbol)\b/i.test(item.text) &&
+    hasExplicitExitSignText(item.text) &&
     item.evidenceIds.length > 0,
   )
 
@@ -1213,7 +1210,7 @@ function materializeExplicitGroundedObjects(
 
   const evidenceIds = [...new Set(groundedMentions.flatMap((item) => item.evidenceIds))]
   const confidence = Math.min(...groundedMentions.map((item) => item.confidence))
-  const explicitlyEmergency = groundedMentions.some((item) => /\bemergency\s+exit\s+(?:sign|symbol)\b/i.test(item.text))
+  const explicitlyEmergency = groundedMentions.some((item) => /\bemergency exit (?:sign|symbol|signage)\b/.test(normalizeSemanticText(item.text)))
   const object: SpatialObject = {
     id: 'sentinel_materialized_exit_sign',
     environmentId: result.objects[0]?.environmentId ?? result.observations[0]?.environmentId ?? '',
@@ -1230,6 +1227,11 @@ function materializeExplicitGroundedObjects(
     result: { ...result, objects: [...result.objects, object] },
     materialized: [object],
   }
+}
+
+function hasExplicitExitSignText(value: string): boolean {
+  const text = normalizeSemanticText(value)
+  return /\b(?:emergency )?exit (?:sign|symbol|signage)\b/.test(text)
 }
 
 function shouldRunIdentityAudit(result: PerceptionResult): boolean {
