@@ -133,7 +133,7 @@ async function verifySparseStillInventoryRetry(ScanPipeline) {
           modality: 'image',
           capturedAt,
           label: 'Office lounge visible',
-          description: 'A glass door, chair, table, plant, and fire extinguisher are directly visible.',
+          description: 'A glass door, chair, table, and plant are directly visible.',
           confidence: 0.97,
           basis: 'observed',
           evidenceIds: [frameId],
