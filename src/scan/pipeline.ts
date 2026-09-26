@@ -87,7 +87,24 @@ export class ScanPipeline {
       input,
       reserveAfterPerceptionMs,
     )
-    const completed = materializeExplicitGroundedObjects(personGrounded, input.source.capturedAt)
+    const observationRecovered = materializeDirectlyObservedRememberedObjects(
+      personGrounded,
+      priorObjects,
+      input.source.capturedAt,
+    )
+    if (observationRecovered.materialized.length > 0) {
+      console.warn('SENTINEL_OBSERVED_OBJECT_RECOVERY', {
+        scanId,
+        objects: observationRecovered.materialized.map((item) => ({
+          name: item.name,
+          category: item.category,
+          confidence: item.confidence,
+          evidenceIds: item.evidenceIds,
+        })),
+        policy: 'current direct observations may recover uniquely named remembered objects; prior memory supplies identity context only, never current evidence',
+      })
+    }
+    const completed = materializeExplicitGroundedObjects(observationRecovered.result, input.source.capturedAt)
     if (completed.materialized.length > 0) {
       console.warn('SENTINEL_GROUNDED_OBJECT_COMPLETION', {
         scanId,
@@ -1176,6 +1193,66 @@ function shouldRunStillImageConditionAudit(result: PerceptionResult): boolean {
 
 function hasOperationalConditionCandidate(result: PerceptionResult): boolean {
   return result.conditions.some((item) => OPERATIONAL_CONDITION_KINDS.has(item.kind))
+}
+
+function materializeDirectlyObservedRememberedObjects(
+  result: PerceptionResult,
+  priorObjects: SpatialObject[],
+  capturedAt: string,
+): { result: PerceptionResult; materialized: SpatialObject[] } {
+  if (priorObjects.length === 0 || result.observations.length === 0) {
+    return { result, materialized: [] }
+  }
+
+  const priorByStableName = new Map<string, SpatialObject[]>()
+  for (const prior of priorObjects) {
+    if (isPersonObject(prior)) continue
+    const key = normalizeTemporalName(prior.name)
+    if (!key) continue
+    const items = priorByStableName.get(key) ?? []
+    items.push(prior)
+    priorByStableName.set(key, items)
+  }
+
+  const currentNames = new Set(result.objects.map((item) => normalizeTemporalName(item.name)))
+  const materialized: SpatialObject[] = []
+
+  for (const observation of result.observations) {
+    if (observation.basis !== 'observed' || observation.confidence < 0.9 || observation.evidenceIds.length === 0) continue
+
+    const key = normalizeTemporalName(observation.label)
+    if (!key || currentNames.has(key)) continue
+
+    const candidates = priorByStableName.get(key) ?? []
+    if (candidates.length !== 1) continue
+    const prior = candidates[0]
+
+    // Presence comes only from the current observation + current frame evidence.
+    // Prior memory supplies stable identity/category context, never current
+    // position, state, or evidence.
+    const object: SpatialObject = {
+      id: `observed_recovery_${observation.id}`,
+      environmentId: observation.environmentId,
+      category: prior.category,
+      name: prior.name,
+      description: observation.description,
+      confidence: observation.confidence,
+      firstSeenAt: capturedAt,
+      lastSeenAt: capturedAt,
+      evidenceIds: [...new Set(observation.evidenceIds)],
+    }
+    materialized.push(object)
+    currentNames.add(key)
+  }
+
+  if (materialized.length === 0) return { result, materialized: [] }
+  return {
+    result: {
+      ...result,
+      objects: [...result.objects, ...materialized],
+    },
+    materialized,
+  }
 }
 
 function materializeExplicitGroundedObjects(
