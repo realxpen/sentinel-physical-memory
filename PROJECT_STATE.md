@@ -1,6 +1,6 @@
 # SENTINEL Project State
 
-Last updated: 2026-09-24
+Last updated: 2026-09-27
 
 ## North star
 
@@ -15,6 +15,24 @@ Hackathon track: **Best Apps and Agents**.
 ## Current phase
 
 **Phase 18 — Final Demo Polish: ACTIVE / PHASE 17 COMPLETE**
+
+## Arbitrary-environment generalization hardening — COMPLETE
+
+PR #53 removed the remaining demo-shaped runtime assumptions from the production perception/diff path.
+
+Verified on the green branch gate before merge:
+
+- full Sentinel CI passed;
+- Phase 14 Demo Scenario passed;
+- access-condition derivation no longer depends on named obstacle nouns such as boxes, carts, chairs, or pallet jacks;
+- the generic current-state integrity audit replaces the previous noun-targeted recovery pass;
+- spatial-geometry verification is driven by grounded current relationships/proximity, not environment names or expected demo changes;
+- cross-scan identity has a conservative one-to-one lexical fallback for wording drift such as chair → armchair;
+- temporal movement checks use object category + observed position change rather than a fixed movable-object whitelist;
+- secondary audit results consolidate against the evolving current scene instead of creating duplicate recovered objects;
+- trust thresholds, positive-evidence verification, immutable history, and person-confirmation gates remain unchanged.
+
+Canonical merge: `27595c5ad39e5c755b213c71698f21c5a87c3270`.
 
 ## Phase 3 — COMPLETE
 
