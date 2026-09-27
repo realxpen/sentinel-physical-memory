@@ -22,7 +22,7 @@ export function deriveOperationalConditions(
   perception: PerceptionResult,
   observedAt: string,
 ): ConditionDerivationResult {
-  const derivedConditions: EnvironmentalCondition[] = []
+  const derivedConditions: EnvironmentalCondition[] = deriveGroundedOperationalCues(perception, observedAt)
 
   const doors = perception.objects.filter((item) => item.category === 'door')
   const obstacles = perception.objects.filter((item) =>
@@ -117,7 +117,9 @@ export function deriveOperationalConditions(
   }
   if (derivedConditions.length === 0) return { result: perception, derivedConditions }
 
-  const consolidated = consolidateDoorAccessConditions(derivedConditions)
+  const accessConditions = derivedConditions.filter((item) => item.kind === 'access')
+  const nonAccessConditions = derivedConditions.filter((item) => item.kind !== 'access')
+  const consolidated = [...nonAccessConditions, ...consolidateDoorAccessConditions(accessConditions)]
   return {
     result: {
       ...perception,
@@ -125,6 +127,121 @@ export function deriveOperationalConditions(
     },
     derivedConditions: consolidated,
   }
+}
+
+type OperationalCueRule = {
+  kind: EnvironmentalCondition['kind']
+  title: string
+  pattern: RegExp
+  category?: SpatialObject['category'][]
+}
+
+const OPERATIONAL_CUE_RULES: OperationalCueRule[] = [
+  {
+    kind: 'hazard',
+    title: 'Slip hazard',
+    pattern: /\b(?:wet|slippery)\s+(?:floor|surface|walkway|path)\b|\b(?:puddle|spill|spilled liquid|standing water)\b.{0,48}\b(?:floor|surface|walkway|path|aisle)\b|\b(?:floor|surface|walkway|path|aisle)\b.{0,48}\b(?:wet|slippery|puddle|spill|standing water)\b/i,
+  },
+  {
+    kind: 'hazard',
+    title: 'Trip hazard',
+    pattern: /\b(?:cable|cord|wire|hose)\b.{0,56}\b(?:across|crossing|over|on)\b.{0,40}\b(?:floor|walkway|path|aisle|passage)\b|\b(?:floor|walkway|path|aisle|passage)\b.{0,56}\b(?:cable|cord|wire|hose)\b/i,
+  },
+  {
+    kind: 'hazard',
+    title: 'Electrical hazard',
+    pattern: /\b(?:exposed|bare|frayed|damaged|broken|burnt|burned|loose)\b.{0,40}\b(?:wire|wiring|conductor|cable|socket|outlet|receptacle|plug)\b|\b(?:wire|wiring|conductor|socket|outlet|receptacle|plug)\b.{0,40}\b(?:exposed|bare|frayed|damaged|broken|burnt|burned|loose)\b/i,
+    category: ['electrical', 'other', 'equipment'],
+  },
+  {
+    kind: 'damage',
+    title: 'Visible physical damage',
+    pattern: /\b(?:broken|damaged|cracked|detached|missing|loose)\b.{0,40}\b(?:door handle|handle|latch|hinge|fixture|panel|cover|cabinet|door|gate|guard|rail)\b|\b(?:door handle|handle|latch|hinge|fixture|panel|cover|cabinet|door|gate|guard|rail)\b.{0,40}\b(?:broken|damaged|cracked|detached|missing|loose)\b/i,
+  },
+]
+
+function deriveGroundedOperationalCues(
+  perception: PerceptionResult,
+  observedAt: string,
+): EnvironmentalCondition[] {
+  const derived: EnvironmentalCondition[] = []
+  const candidates = [
+    ...perception.objects.map((item) => ({
+      id: item.id,
+      object: item,
+      text: semanticText(item),
+      confidence: item.confidence,
+      evidenceIds: item.evidenceIds,
+    })),
+    ...perception.observations.map((item) => ({
+      id: item.id,
+      object: undefined,
+      text: semanticText(item),
+      confidence: item.confidence,
+      evidenceIds: item.evidenceIds,
+    })),
+  ]
+
+  for (const rule of OPERATIONAL_CUE_RULES) {
+    const matches = candidates.filter((candidate) => {
+      if (!candidate.evidenceIds.length || candidate.confidence < 0.85) return false
+      if (rule.category && candidate.object && !rule.category.includes(candidate.object.category)) return false
+      return rule.pattern.test(candidate.text)
+    })
+    if (matches.length === 0) continue
+
+    const objectIds = unique(matches.flatMap((item) => item.object ? [item.object.id] : []))
+    if (hasEquivalentOperationalCondition(perception.conditions, rule.title, objectIds)) continue
+
+    const evidenceIds = unique(matches.flatMap((item) => item.evidenceIds))
+    const confidence = Math.max(0, Math.min(0.95, Number((Math.min(...matches.map((item) => item.confidence)) * 0.9).toFixed(3))))
+    if (confidence < 0.85) continue
+
+    derived.push({
+      id: `derived_operational_${safeId(rule.title)}_${derived.length + 1}`,
+      environmentId: perception.objects[0]?.environmentId ?? perception.observations[0]?.environmentId ?? '',
+      kind: rule.kind,
+      title: rule.title,
+      description: operationalCueDescription(rule.title, matches.map((item) => item.text)),
+      status: 'present',
+      basis: 'inferred',
+      confidence,
+      objectIds,
+      evidenceIds,
+      observedAt,
+    })
+  }
+
+  return derived
+}
+
+function operationalCueDescription(title: string, texts: string[]): string {
+  const grounded = texts[0] ?? ''
+  switch (title) {
+    case 'Slip hazard':
+      return `Current visual evidence shows a wet/slippery floor condition: ${grounded}.`
+    case 'Trip hazard':
+      return `Current visual evidence shows a cable/cord/wire/hose condition across a walking surface: ${grounded}.`
+    case 'Electrical hazard':
+      return `Current visual evidence shows exposed or damaged electrical hardware/wiring: ${grounded}.`
+    case 'Visible physical damage':
+      return `Current visual evidence shows visible damage to a physical fixture or access component: ${grounded}.`
+    default:
+      return `Current visual evidence supports ${title.toLowerCase()}: ${grounded}.`
+  }
+}
+
+function hasEquivalentOperationalCondition(
+  conditions: EnvironmentalCondition[],
+  title: string,
+  objectIds: string[],
+): boolean {
+  const normalizedTitle = normalize(title)
+  return conditions.some((condition) => {
+    if (normalize(condition.title) === normalizedTitle) return true
+    if (objectIds.length === 0 || condition.objectIds.length === 0) return false
+    return condition.objectIds.some((id) => objectIds.includes(id)) && condition.kind !== 'normal'
+  })
 }
 
 function consolidateDoorAccessConditions(conditions: EnvironmentalCondition[]): EnvironmentalCondition[] {
