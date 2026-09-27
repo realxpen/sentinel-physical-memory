@@ -339,7 +339,8 @@ function deriveAccessFromGroundedObservations(
     const objectIds = [obstruction.id, door.id]
     if (hasExistingAccessCondition(perception.conditions, objectIds)) continue
 
-    const strongerBlocking = /\b(?:blocking|blocked|obstructing|obstructed|across|occupying|narrowing)\b/.test(text)
+    const hedged = /\b(?:potentially|possibly|may|might|could)\b/.test(text)
+    const strongerBlocking = !hedged && /\b(?:blocking|blocked|obstructing|obstructed|across|occupying|narrowing)\b/.test(text)
     const emergency = Boolean(exitEvidence)
     derived.push({
       id: `derived_access_observation_${safeId(obstruction.id)}_${safeId(door.id)}_${safeId(observation.id)}`,
