@@ -22,7 +22,10 @@ export function deriveOperationalConditions(
   perception: PerceptionResult,
   observedAt: string,
 ): ConditionDerivationResult {
-  const derivedConditions: EnvironmentalCondition[] = deriveGroundedOperationalCues(perception, observedAt)
+  const derivedConditions: EnvironmentalCondition[] = [
+    ...deriveGroundedOperationalCues(perception, observedAt),
+    ...deriveAccessFromGroundedObservations(perception, observedAt),
+  ]
 
   const doors = perception.objects.filter((item) => item.category === 'door')
   const obstacles = perception.objects.filter((item) =>
