@@ -278,6 +278,105 @@ function hasEquivalentOperationalCondition(
   })
 }
 
+function deriveAccessFromGroundedObservations(
+  perception: PerceptionResult,
+  observedAt: string,
+): EnvironmentalCondition[] {
+  const doors = perception.objects.filter((item) => item.category === 'door' && item.evidenceIds.length > 0)
+  const obstructions = perception.objects.filter((item) => item.category === 'obstruction' && item.evidenceIds.length > 0)
+  if (doors.length === 0 || obstructions.length === 0) return []
+
+  const derived: EnvironmentalCondition[] = []
+
+  for (const observation of perception.observations) {
+    if (observation.basis !== 'observed' || observation.confidence < 0.9 || observation.evidenceIds.length === 0) continue
+    const text = normalize(`${observation.label} ${observation.description}`)
+    if (!/\b(?:door|doorway|exit|egress)\b/.test(text)) continue
+
+    const placement = /\b(?:directly in front of|in front of|across|blocking|obstructing|occupying|narrowing)\b/.test(text)
+    const accessMeaning = /\b(?:obstruct(?:ing|ed|ion)?|block(?:ing|ed)?|access|egress|clearance|approach|path|route)\b/.test(text)
+    if (!placement || !accessMeaning) continue
+
+    const doorCandidates = doors.filter((door) =>
+      sharesAnyEvidence(observation.evidenceIds, door.evidenceIds) &&
+      observationMentionsEntity(text, door),
+    )
+    const door = doorCandidates.length === 1
+      ? doorCandidates[0]
+      : doors.length === 1 && sharesAnyEvidence(observation.evidenceIds, doors[0].evidenceIds)
+        ? doors[0]
+        : undefined
+    if (!door) continue
+
+    const obstructionCandidates = obstructions.filter((item) =>
+      sharesAnyEvidence(observation.evidenceIds, item.evidenceIds) &&
+      observationMentionsEntity(text, item),
+    )
+    const obstruction = obstructionCandidates.length === 1
+      ? obstructionCandidates[0]
+      : obstructions.length === 1 && sharesAnyEvidence(observation.evidenceIds, obstructions[0].evidenceIds)
+        ? obstructions[0]
+        : undefined
+    if (!obstruction) continue
+
+    const exitEvidence = findExitEvidenceForDoor(perception, door)
+    const evidenceIds = unique([
+      ...observation.evidenceIds,
+      ...obstruction.evidenceIds,
+      ...door.evidenceIds,
+      ...(exitEvidence?.evidenceIds ?? []),
+    ])
+    if (evidenceIds.length === 0) continue
+
+    const confidence = boundedInferenceConfidence(
+      observation.confidence,
+      obstruction.confidence,
+      door.confidence,
+      ...(exitEvidence ? [exitEvidence.confidence] : []),
+    )
+    if (confidence < 0.85) continue
+
+    const objectIds = [obstruction.id, door.id]
+    if (hasExistingAccessCondition(perception.conditions, objectIds)) continue
+
+    const strongerBlocking = /\b(?:blocking|blocked|obstructing|obstructed|across|occupying|narrowing)\b/.test(text)
+    const emergency = Boolean(exitEvidence)
+    derived.push({
+      id: `derived_access_observation_${safeId(obstruction.id)}_${safeId(door.id)}_${safeId(observation.id)}`,
+      environmentId: door.environmentId,
+      kind: 'access',
+      title: emergency
+        ? strongerBlocking ? 'Emergency exit access obstructed' : 'Emergency exit approach obstructed'
+        : strongerBlocking ? 'Doorway access obstructed' : 'Doorway approach obstructed',
+      description: emergency
+        ? strongerBlocking
+          ? `${obstruction.name} is directly observed in front of ${door.name}; the same current evidence also independently identifies the doorway as an exit, supporting an access obstruction concern.`
+          : `${obstruction.name} is directly observed in front of ${door.name}; independent current exit evidence supports an approach-clearance concern without claiming the doorway threshold is fully blocked.`
+        : strongerBlocking
+          ? `${obstruction.name} is directly observed in front of ${door.name}, supporting an access obstruction concern.`
+          : `${obstruction.name} is directly observed in front of ${door.name}, supporting an approach-clearance concern.`,
+      status: 'present',
+      basis: 'inferred',
+      confidence,
+      objectIds,
+      evidenceIds,
+      observedAt,
+    })
+  }
+
+  return derived
+}
+
+function sharesAnyEvidence(a: string[], b: string[]): boolean {
+  const right = new Set(b)
+  return a.some((id) => right.has(id))
+}
+
+function observationMentionsEntity(text: string, item: SpatialObject): boolean {
+  const aliases = entityAliases(item)
+  return aliases.some((alias) => text.includes(alias))
+}
+
 function consolidateDoorAccessConditions(conditions: EnvironmentalCondition[]): EnvironmentalCondition[] {
   const grouped = new Map<string, EnvironmentalCondition>()
 
