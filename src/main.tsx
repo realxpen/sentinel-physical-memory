@@ -52,12 +52,6 @@ interface ActionPlannerOptions {
 
 type View = 'memory' | 'observe' | 'changes'
 
-const previewChanges = [
-  { mark: '+', type: 'Added', detail: 'New conditions appear here after a second observation.' },
-  { mark: '↔', type: 'Moved', detail: 'SENTINEL compares remembered positions between scans.' },
-  { mark: '✓', type: 'Resolved', detail: 'Verified changes close the physical-world memory loop.' },
-]
-
 const ASK_BUILDING_PROMPTS = [
   { label: 'Attention', question: 'What needs my attention?' },
   { label: 'Locate', question: 'Where is the electrical panel?' },
