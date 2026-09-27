@@ -57,12 +57,15 @@ export function deriveOperationalConditions(
       ])
       if (evidenceIds.length === 0) continue
 
+      const approachOnly = placementEvidence.phrase === 'in front of'
       derivedConditions.push({
         id: `derived_access_${safeId(obstacle.id)}_${safeId(door.id)}`,
         environmentId: door.environmentId,
         kind: 'access',
-        title: 'Emergency exit access obstructed',
-        description: `${obstacle.name} is observed ${placementEvidence.phrase} ${door.name}, which is independently identified by grounded exit signage as an emergency exit.`,
+        title: approachOnly ? 'Emergency exit approach obstructed' : 'Emergency exit access obstructed',
+        description: approachOnly
+          ? `${obstacle.name} is visibly positioned in front of ${door.name}, reducing the clear approach area to a doorway independently identified by grounded exit signage as an emergency exit.`
+          : `${obstacle.name} is observed ${placementEvidence.phrase} ${door.name}, which is independently identified by grounded exit signage as an emergency exit.`,
         status: 'present',
         basis: 'inferred',
         confidence,
@@ -100,12 +103,15 @@ export function deriveOperationalConditions(
       ])
       if (evidenceIds.length === 0) continue
 
+      const approachOnly = placementEvidence.phrase === 'in front of'
       derivedConditions.push({
         id: 'derived_access_' + safeId(obstacle.id) + '_' + safeId(door.id),
         environmentId: door.environmentId,
         kind: 'access',
-        title: 'Doorway access obstructed',
-        description: obstacle.name + ' is observed ' + placementEvidence.phrase + ' ' + door.name + ', obstructing access through the doorway.',
+        title: approachOnly ? 'Doorway approach obstructed' : 'Doorway access obstructed',
+        description: approachOnly
+          ? obstacle.name + ' is visibly positioned in front of ' + door.name + ', reducing the clear approach area to the doorway.'
+          : obstacle.name + ' is observed ' + placementEvidence.phrase + ' ' + door.name + ', obstructing access through the doorway.',
         status: 'present',
         basis: 'inferred',
         confidence,
@@ -157,6 +163,26 @@ const OPERATIONAL_CUE_RULES: OperationalCueRule[] = [
     kind: 'damage',
     title: 'Visible physical damage',
     pattern: /\b(?:broken|damaged|cracked|detached|missing|loose)\b.{0,40}\b(?:door handle|handle|latch|hinge|fixture|panel|cover|cabinet|door|gate|guard|rail)\b|\b(?:door handle|handle|latch|hinge|fixture|panel|cover|cabinet|door|gate|guard|rail)\b.{0,40}\b(?:broken|damaged|cracked|detached|missing|loose)\b/i,
+  },
+  {
+    kind: 'hazard',
+    title: 'Sharp object hazard',
+    pattern: /\b(?:sharp object|sharp metal|metal shard|glass shard|glass shards|broken glass|exposed nail|nails?|blade|knife|pointed debris)\b.{0,64}\b(?:floor|walkway|walking path|path|aisle|passage|corridor|ground)\b|\b(?:floor|walkway|walking path|path|aisle|passage|corridor|ground)\b.{0,64}\b(?:sharp object|sharp metal|metal shard|glass shard|glass shards|broken glass|exposed nail|nails?|blade|knife|pointed debris)\b/i,
+  },
+  {
+    kind: 'access',
+    title: 'Circulation path obstructed',
+    pattern: /\b(?:chair|chairs|cart|trolley|box|boxes|equipment|furniture|bag|bags|materials?|items?|object|objects?)\b.{0,64}\b(?:on|across|blocking|obstructing|occupying|narrowing)\b.{0,48}\b(?:walkway|walking path|path|aisle|passage|corridor|access route)\b|\b(?:walkway|walking path|path|aisle|passage|corridor|access route)\b.{0,64}\b(?:blocked|obstructed|occupied|narrowed)\b.{0,48}\b(?:chair|chairs|cart|trolley|box|boxes|equipment|furniture|bag|bags|materials?|items?|object|objects?)\b/i,
+  },
+  {
+    kind: 'hazard',
+    title: 'Unsafe stacking or storage',
+    pattern: /\b(?:stack|stacked|pile|piled|stored items?|boxes?|materials?)\b.{0,56}\b(?:unstable|precarious|leaning|tipping|toppling|falling|unsafe)\b|\b(?:unstable|precarious|leaning|tipping|toppling|falling|unsafe)\b.{0,56}\b(?:stack|stacked|pile|piled|stored items?|boxes?|materials?)\b/i,
+  },
+  {
+    kind: 'attention',
+    title: 'Workspace organization needs attention',
+    pattern: /\b(?:workspace|work area|office|room|floor|walkway|aisle|passage)\b.{0,64}\b(?:cluttered|disorganized|disorganised|poorly arranged|messy|scattered)\b|\b(?:cluttered|disorganized|disorganised|poorly arranged|messy|scattered)\b.{0,64}\b(?:workspace|work area|office|room|floor|walkway|aisle|passage)\b/i,
   },
 ]
 
@@ -226,6 +252,14 @@ function operationalCueDescription(title: string, texts: string[]): string {
       return `Current visual evidence shows exposed or damaged electrical hardware/wiring: ${grounded}.`
     case 'Visible physical damage':
       return `Current visual evidence shows visible damage to a physical fixture or access component: ${grounded}.`
+    case 'Sharp object hazard':
+      return `Current visual evidence shows a sharp or cutting object on a floor or circulation surface: ${grounded}.`
+    case 'Circulation path obstructed':
+      return `Current visual evidence shows an object occupying or narrowing a walking/circulation path: ${grounded}.`
+    case 'Unsafe stacking or storage':
+      return `Current visual evidence shows unstable or unsafe storage/stacking: ${grounded}.`
+    case 'Workspace organization needs attention':
+      return `Current visual evidence describes a cluttered or poorly arranged work area that may reduce safe, clear use of the space: ${grounded}.`
     default:
       return `Current visual evidence supports ${title.toLowerCase()}: ${grounded}.`
   }
@@ -332,6 +366,29 @@ function findObstaclePlacementEvidence(
 
   const obstacleNames = entityAliases(obstacle)
   const doorNames = entityAliases(door)
+
+  // A current-scan object already classified by perception as a physical
+  // obstruction may ground doorway-approach encroachment from its structured
+  // position even when a stricter geometry audit decides that the literal
+  // threshold is still clear. This is intentionally weaker than a proved
+  // obstacle→door relation: it supports an approach/access concern, not a claim
+  // that the doorway opening itself is fully blocked.
+  if (obstacle.category === 'obstruction' && obstacle.evidenceIds.length > 0) {
+    const position = normalize(obstacle.position?.description ?? '')
+    const inFrontOfDoor = doorNames.some((doorName) =>
+      position === `in front of ${doorName}` ||
+      position.includes(`in front of ${doorName}`) ||
+      position === `in front of the ${doorName}`,
+    )
+    if (inFrontOfDoor) {
+      return {
+        confidence: obstacle.confidence,
+        evidenceIds: obstacle.evidenceIds,
+        phrase: 'in front of',
+      }
+    }
+  }
+
   const candidates: Array<Observation | SpatialObject> = [
     ...perception.observations,
     ...perception.objects,
