@@ -335,6 +335,67 @@ try {
     throw new Error('provider-grounded obstruction positioned in front of an exit door must surface as an approach/access concern even when the literal threshold is not claimed blocked')
   }
 
+  const workshop2ProductionShape = {
+    sourceId,
+    evidence: [evidence('frame_workshop2')],
+    relations: [],
+    conditions: [],
+    objects: [
+      {
+        id: 'workshop2_exit_sign', environmentId, category: 'signage', name: 'exit sign',
+        description: 'a green exit sign above a red door', position: { description: 'above red door' },
+        confidence: 1, firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: ['frame_workshop2'],
+      },
+      {
+        id: 'workshop2_red_door', environmentId, category: 'door', name: 'red door',
+        description: 'a red door with a small window', position: { description: 'center back wall' },
+        confidence: 1, firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: ['frame_workshop2'],
+      },
+      {
+        id: 'workshop2_boxes', environmentId, category: 'obstruction', name: 'cardboard boxes',
+        description: 'two cardboard boxes stacked on the floor', position: { description: 'center floor' },
+        confidence: 1, firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: ['frame_workshop2'],
+      },
+    ],
+    observations: [
+      {
+        id: 'workshop2_door_visibility', environmentId, sourceId, modality: 'image', capturedAt,
+        label: 'door visibility', description: 'Red door with exit sign above is visible in the image.',
+        confidence: 1, basis: 'observed', evidenceIds: ['frame_workshop2'],
+      },
+      {
+        id: 'workshop2_door_access', environmentId, sourceId, modality: 'image', capturedAt,
+        label: 'door access path', description: 'The door is accessible from the front, with a clear path leading to it.',
+        confidence: 1, basis: 'observed', evidenceIds: ['frame_workshop2'],
+      },
+      {
+        id: 'workshop2_obstruction', environmentId, sourceId, modality: 'image', capturedAt,
+        label: 'doorway obstruction', description: 'Cardboard boxes are placed in front of the door, potentially obstructing access.',
+        confidence: 1, basis: 'observed', evidenceIds: ['frame_workshop2'],
+      },
+      {
+        id: 'workshop2_boxes_position', environmentId, sourceId, modality: 'image', capturedAt,
+        label: 'cardboard boxes position', description: 'The cardboard boxes are placed directly in front of the door, potentially obstructing access.',
+        confidence: 1, basis: 'observed', evidenceIds: ['frame_workshop2'],
+      },
+    ],
+  }
+  const workshop2Derived = deriveOperationalConditions(workshop2ProductionShape, capturedAt)
+  const workshop2Access = workshop2Derived.derivedConditions.find((item) => item.title === 'Emergency exit approach obstructed')
+  if (!workshop2Access) {
+    throw new Error('production-shaped first-scan evidence must compose the boxes + door + independent exit sign into an exit-approach concern')
+  }
+  const workshop2Assessment = assessCondition(workshop2Access)
+  if (!workshop2Assessment.operational || workshop2Assessment.issueType !== 'access') {
+    throw new Error('production-shaped exit-approach concern must promote to an operational access issue')
+  }
+  if (!workshop2Access.objectIds.includes('workshop2_boxes') || !workshop2Access.objectIds.includes('workshop2_red_door')) {
+    throw new Error('production-shaped access concern must bind the current boxes and door')
+  }
+  if (!workshop2Access.evidenceIds.includes('frame_workshop2')) {
+    throw new Error('production-shaped access concern must retain the current trusted frame evidence')
+  }
+
   const normalScene = structuredClone(genericHazardBase)
   normalScene.objects.push({
     id: 'normal_outlet', environmentId, category: 'electrical', name: 'wall outlet',
@@ -361,6 +422,7 @@ try {
   console.log('PASS  inferred conditions are not reused as direct emergency-exit grounding facts')
   console.log('PASS  generic grounded wet-floor, trip, electrical, physical-damage, sharp-object, circulation, and clutter cues derive operational issues without environment-specific hardcoding')
   console.log('PASS  grounded obstruction in front of an exit surfaces as an approach concern without falsely claiming the threshold is blocked')
+  console.log('PASS  exact Workshop2-style first-scan evidence composes a grounded exit-approach issue instead of recording zero conditions')
   console.log('PASS  ordinary intact objects do not trigger generic hazard derivation')
   console.log('SENTINEL CONDITION DERIVATION GATE VERIFIED')
 } finally {
