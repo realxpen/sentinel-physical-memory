@@ -948,7 +948,7 @@ function App() {
           {latestDiff && <div className="reality-compare-caption"><span>PHYSICAL MEMORY UPDATED</span><strong>{presentedChangeSummary(presentedChanges)}</strong></div>}
         </div>
 
-        {latestDiff ? presentedChanges.length === 0 ? <div className="empty-diff operations-empty"><strong>No material change detected.</strong><span>The current scene assessment above still applies even when nothing changed from the previous state.</span></div> : <div className="operations-change-groups">
+        {latestDiff ? presentedChanges.length === 0 ? <div className="empty-diff operations-empty"><strong>No material change detected.</strong><span>The building state is materially consistent with the previous observation. The current scene assessment above still applies even when nothing changed.</span></div> : <div className="operations-change-groups">
           {attentionChanges.length > 0 && <ChangeGroup title="Operational changes" subtitle="Operational findings that appeared or changed between remembered states." changes={attentionChanges} onSelect={setSelectedChangeId} />}
           {physicalChanges.length > 0 && <ChangeGroup title="Physical changes" subtitle="Grounded changes to objects or their visible state/location." changes={physicalChanges} onSelect={setSelectedChangeId} />}
           {resolvedChanges.length > 0 && <ChangeGroup title="Resolved" subtitle="Changes explicitly supported as resolved." changes={resolvedChanges} onSelect={setSelectedChangeId} />}
