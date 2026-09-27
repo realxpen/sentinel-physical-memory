@@ -685,7 +685,6 @@ export class ScanPipeline {
     }
 
     return validatePerceptionForScan(merged, input.environmentId, input.source.id)
-    }
   }
 
   private async inferPerceptionPass(
