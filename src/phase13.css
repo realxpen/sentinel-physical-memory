@@ -1124,3 +1124,177 @@
     white-space: normal;
   }
 }
+
+
+/* Current-scene inspection is primary; Reality Diff is secondary chronology. */
+.phase13-shell .scene-inspection-hero {
+  padding-bottom: 34px;
+}
+.phase13-shell .current-scene-findings {
+  width: min(1040px, 100%);
+  margin: 30px auto 54px;
+  padding: 26px;
+  border: 1px solid rgba(91,255,138,.16);
+  border-radius: 26px;
+  background:
+    radial-gradient(circle at 92% 0%, rgba(91,255,138,.075), transparent 34%),
+    rgba(10,14,11,.78);
+  box-shadow: 0 24px 80px rgba(0,0,0,.16);
+}
+.phase13-shell .current-scene-findings-head {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding-bottom: 20px;
+  border-bottom: 1px solid rgba(255,255,255,.075);
+}
+.phase13-shell .current-scene-findings-head h2 {
+  margin: 7px 0 6px;
+  color: #f4f4ef;
+  font-size: clamp(30px, 4vw, 48px);
+  line-height: .95;
+  letter-spacing: -.05em;
+}
+.phase13-shell .current-scene-findings-head p {
+  max-width: 650px;
+  margin: 0;
+  color: rgba(244,244,239,.55);
+  font-size: 10px;
+  line-height: 1.5;
+}
+.phase13-shell .current-scene-findings-head > strong {
+  flex: none;
+  padding-top: 4px;
+  color: rgba(244,244,239,.56);
+  font-size: 8px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.phase13-shell .scene-findings-list {
+  display: grid;
+}
+.phase13-shell .scene-finding-card {
+  display: grid;
+  grid-template-columns: 54px minmax(0,1fr);
+  gap: 18px;
+  padding: 20px 0;
+  border-bottom: 1px solid rgba(255,255,255,.065);
+}
+.phase13-shell .scene-finding-card:last-child {
+  border-bottom: 0;
+}
+.phase13-shell .scene-finding-index {
+  padding-top: 3px;
+  color: var(--p13-green);
+  font-size: 16px;
+  font-weight: 850;
+  letter-spacing: -.04em;
+}
+.phase13-shell .scene-finding-copy h3 {
+  margin: 7px 0 5px;
+  color: #f4f4ef;
+  font-size: 19px;
+  letter-spacing: -.035em;
+}
+.phase13-shell .scene-finding-copy p {
+  max-width: 780px;
+  margin: 0;
+  color: rgba(244,244,239,.66);
+  font-size: 10px;
+  line-height: 1.5;
+}
+.phase13-shell .scene-finding-copy > small {
+  display: block;
+  margin-top: 9px;
+  color: rgba(244,244,239,.36);
+  font-size: 7px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.phase13-shell .scene-finding-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.phase13-shell .scene-finding-meta span {
+  padding: 4px 7px;
+  border: 1px solid rgba(255,255,255,.09);
+  border-radius: 999px;
+  color: rgba(244,244,239,.55);
+  font-size: 6px;
+  font-weight: 850;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+}
+.phase13-shell .scene-finding-meta span:first-child {
+  border-color: rgba(91,255,138,.24);
+  color: var(--p13-green);
+}
+.phase13-shell .scene-findings-empty {
+  display: grid;
+  gap: 6px;
+  padding: 22px 0 2px;
+}
+.phase13-shell .scene-findings-empty strong {
+  color: #f4f4ef;
+  font-size: 14px;
+}
+.phase13-shell .scene-findings-empty span {
+  max-width: 720px;
+  color: rgba(244,244,239,.5);
+  font-size: 9px;
+  line-height: 1.5;
+}
+.phase13-shell .scene-findings-action {
+  min-height: 38px;
+  margin-top: 18px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--p13-green);
+  color: #061008;
+  font: inherit;
+  font-size: 8px;
+  font-weight: 850;
+  letter-spacing: .03em;
+}
+.phase13-shell .reality-diff-heading {
+  width: min(1040px, 100%);
+  margin: 8px auto 22px;
+  padding-top: 34px;
+  border-top: 1px solid rgba(255,255,255,.075);
+}
+.phase13-shell .reality-diff-heading h2 {
+  margin: 7px 0 6px;
+  color: #f4f4ef;
+  font-size: clamp(34px, 5vw, 58px);
+  line-height: .94;
+  letter-spacing: -.055em;
+}
+.phase13-shell .reality-diff-heading p {
+  max-width: 700px;
+  margin: 0;
+  color: rgba(244,244,239,.48);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+@media (max-width: 650px) {
+  .phase13-shell .current-scene-findings {
+    margin-top: 20px;
+    padding: 18px;
+    border-radius: 22px;
+  }
+  .phase13-shell .current-scene-findings-head {
+    display: grid;
+    gap: 10px;
+  }
+  .phase13-shell .scene-finding-card {
+    grid-template-columns: 32px minmax(0,1fr);
+    gap: 10px;
+  }
+  .phase13-shell .scene-finding-copy h3 {
+    font-size: 17px;
+  }
+}

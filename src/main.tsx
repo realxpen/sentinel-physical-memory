@@ -52,12 +52,6 @@ interface ActionPlannerOptions {
 
 type View = 'memory' | 'observe' | 'changes'
 
-const previewChanges = [
-  { mark: '+', type: 'Added', detail: 'New conditions appear here after a second observation.' },
-  { mark: '↔', type: 'Moved', detail: 'SENTINEL compares remembered positions between scans.' },
-  { mark: '✓', type: 'Resolved', detail: 'Verified changes close the physical-world memory loop.' },
-]
-
 const ASK_BUILDING_PROMPTS = [
   { label: 'Attention', question: 'What needs my attention?' },
   { label: 'Locate', question: 'Where is the electrical panel?' },
@@ -181,9 +175,17 @@ function App() {
   const currentMemoryImage = currentMemoryState && memory
     ? memory.sources.find((source) => currentMemoryState.sourceIds.includes(source.id) && source.modality === 'image')?.uri
     : undefined
-  const currentAttentionCount = currentSnapshot
-    ? currentSnapshot.conditions.filter((item) => item.kind !== 'normal').length + currentSnapshot.issues.filter((item) => item.status !== 'resolved').length
-    : 0
+  const currentOpenIssues = currentSnapshot
+    ? currentSnapshot.issues.filter((item) => item.status !== 'resolved' && item.status !== 'dismissed')
+    : []
+  const currentIssueTitles = new Set(currentOpenIssues.map((item) => normalizeFindingTitle(item.title)))
+  const currentUnpromotedConditions = currentSnapshot
+    ? currentSnapshot.conditions.filter((item) =>
+        item.kind !== 'normal' &&
+        !currentIssueTitles.has(normalizeFindingTitle(item.title)),
+      )
+    : []
+  const currentAttentionCount = currentOpenIssues.length + currentUnpromotedConditions.length
   const currentStateLabel = currentMemoryState ? `State v${currentMemoryState.version}` : 'No state yet'
   const canVerifyActionPlan = Boolean(actionPlan && actionPlanBaselineState && currentMemoryState && currentMemoryState.version > actionPlanBaselineState.version)
   const overlayOpen = Boolean(selectedChange || historySelection || selectedSpatialObject || showEnvironmentDialog)
@@ -347,10 +349,10 @@ function App() {
             conditionIds: actionPlan.grounding.conditions.map((item) => item.id),
           })
         } else {
-          setView(payload.diff ? 'changes' : 'memory')
+          setView('changes')
         }
       } else {
-        setView(payload.diff ? 'changes' : 'memory')
+        setView('changes')
       }
     } catch (scanError) {
       setStatus('Observation interrupted')
@@ -401,10 +403,10 @@ function App() {
             conditionIds: actionPlan.grounding.conditions.map((item) => item.id),
           })
         } else {
-          setView(payload.diff ? 'changes' : 'memory')
+          setView('changes')
         }
       } else {
-        setView(payload.diff ? 'changes' : 'memory')
+        setView('changes')
       }
     } catch (scanError) {
       setStatus('Observation interrupted')
@@ -838,67 +840,123 @@ function App() {
       </section>}
 
       {view === 'observe' && <section className="observe-view">
-        <div className={currentMemoryImage ? 'observe-camera has-memory-image' : 'observe-camera'} style={currentMemoryImage ? { backgroundImage: `linear-gradient(90deg, rgba(8,10,9,.94) 0%, rgba(8,10,9,.68) 44%, rgba(8,10,9,.3) 100%), url("${currentMemoryImage}")` } : undefined}><div className="camera-noise" /><div className="scan-line" /><div className="camera-topline"><SentinelMark active /><span>{isWorking ? status : `${activeEnvironment.name.toUpperCase()} / OBSERVATION MODE`}</span></div><div className="focus-frame focus-one"><span>Workspace</span></div><div className="focus-frame focus-two"><span>Evidence region</span></div><div className="observe-message"><span className="eyebrow">PHONE-FIRST OBSERVATION</span><h2>{isWorking ? status : memory ? `Photograph what changed in ${activeEnvironment.name}.` : `Create the first memory for ${activeEnvironment.name}.`}</h2><p>Take one clear photo or choose one from Photos. SENTINEL grounds visible evidence and updates only this location's persistent environmental state. Video remains optional for larger spaces.</p></div><div className="observe-capture-actions"><button className="capture-button" type="button" onClick={() => libraryInputRef.current?.click()} aria-label="Choose a photo from library"><span><i /></span><strong>{isWorking ? 'Observing' : memory ? 'Choose update photo' : 'Choose first photo'}</strong></button><div className="observe-secondary-actions"><button className="walkthrough-option" type="button" onClick={() => inputRef.current?.click()} disabled={isWorking}>Take photo</button><button className="walkthrough-option" type="button" onClick={() => videoInputRef.current?.click()} disabled={isWorking}>Choose video</button></div></div></div>
+        <div className={currentMemoryImage ? 'observe-camera has-memory-image' : 'observe-camera'} style={currentMemoryImage ? { backgroundImage: `linear-gradient(90deg, rgba(8,10,9,.94) 0%, rgba(8,10,9,.68) 44%, rgba(8,10,9,.3) 100%), url("${currentMemoryImage}")` } : undefined}><div className="camera-noise" /><div className="scan-line" /><div className="camera-topline"><SentinelMark active /><span>{isWorking ? status : `${activeEnvironment.name.toUpperCase()} / OBSERVATION MODE`}</span></div><div className="focus-frame focus-one"><span>Workspace</span></div><div className="focus-frame focus-two"><span>Evidence region</span></div><div className="observe-message"><span className="eyebrow">CURRENT-SCENE INSPECTION</span><h2>{isWorking ? status : `Show SENTINEL what is happening in ${activeEnvironment.name}.`}</h2><p>Take or upload a clear photo, or choose a video. SENTINEL first inspects the current scene for visible hazards, damage, blocked access and usability problems; then it remembers the state and compares it with prior observations.</p></div><div className="observe-capture-actions"><button className="capture-button" type="button" onClick={() => libraryInputRef.current?.click()} aria-label="Choose a photo from library"><span><i /></span><strong>{isWorking ? 'Observing' : memory ? 'Choose update photo' : 'Choose first photo'}</strong></button><div className="observe-secondary-actions"><button className="walkthrough-option" type="button" onClick={() => inputRef.current?.click()} disabled={isWorking}>Take photo</button><button className="walkthrough-option" type="button" onClick={() => videoInputRef.current?.click()} disabled={isWorking}>Choose video</button></div></div></div>
         {error && <div className="error" role="alert"><strong>Observation interrupted</strong><span>{error}</span></div>}
       </section>}
 
       {view === 'changes' && <section className="changes-view operations-diff">
-        <div className="hero-copy compact operations-diff-hero">
-          <div className="eyebrow">REALITY DIFF / {activeEnvironment.name.toUpperCase()}</div>
-          <h1>{latestDiff ? 'What changed.' : 'What changed.'}</h1>
-          <p>{latestDiff ? `SENTINEL compared the previous remembered state with the current one and found ${presentedChanges.length} supported change${presentedChanges.length === 1 ? '' : 's'}. Review what needs attention, what physically changed, and what has been resolved.` : memory ? `Observe ${activeEnvironment.name} again. SENTINEL will compare the new grounded state with the one it remembers for this location.` : `${activeEnvironment.name} needs a first observation before Reality Diff can begin.`}</p>
+        <div className="hero-copy compact operations-diff-hero scene-inspection-hero">
+          <div className="eyebrow">SCENE INSPECTION / {activeEnvironment.name.toUpperCase()}</div>
+          <h1>{currentSnapshot ? (currentAttentionCount > 0 ? 'What needs attention.' : 'Scene inspected.') : 'Inspect this scene.'}</h1>
+          <p>{currentSnapshot
+            ? currentAttentionCount > 0
+              ? `SENTINEL found ${currentAttentionCount} grounded current-scene finding${currentAttentionCount === 1 ? '' : 's'} that deserve attention. These findings come from what is visible now; Reality Diff below separately explains what changed.`
+              : 'SENTINEL inspected the current image/video state for visible hazards, access problems, damage and usability concerns. No supported operational finding is present in this state.'
+            : 'Upload a photo or video. SENTINEL will inspect what is wrong in the current scene first, then create physical memory and compare later observations.'}</p>
         </div>
 
-        {latestDiff && <div className="operations-summary" aria-label="Facility operations change summary">
-          <div className={attentionChanges.length > 0 ? 'operations-stat attention active' : 'operations-stat attention'}>
-            <span>Needs attention</span>
-            <strong>{attentionChanges.length}</strong>
-            <small>{attentionChanges.length ? 'Operational changes to review' : 'No new operational concern'}</small>
+        {currentSnapshot && <div className="operations-summary" aria-label="Current scene inspection summary">
+          <div className={currentAttentionCount > 0 ? 'operations-stat attention active' : 'operations-stat attention'}>
+            <span>Current findings</span>
+            <strong>{currentAttentionCount}</strong>
+            <small>{currentAttentionCount ? 'Visible conditions or issues to review' : 'No supported current concern'}</small>
           </div>
           <div className={physicalChanges.length > 0 ? 'operations-stat physical active' : 'operations-stat physical'}>
             <span>Physical changes</span>
-            <strong>{physicalChanges.length}</strong>
-            <small>{physicalChanges.length ? 'Added, moved, removed or changed' : 'No supported physical change'}</small>
+            <strong>{latestDiff ? physicalChanges.length : 0}</strong>
+            <small>{latestDiff && physicalChanges.length ? 'Added, moved, removed or changed' : latestDiff ? 'No supported physical change' : 'First remembered state'}</small>
           </div>
           <div className={resolvedChanges.length > 0 ? 'operations-stat resolved active' : 'operations-stat resolved'}>
             <span>Resolved</span>
-            <strong>{resolvedChanges.length}</strong>
-            <small>{resolvedChanges.length ? 'Supported resolution events' : 'No newly verified resolution'}</small>
+            <strong>{latestDiff ? resolvedChanges.length : 0}</strong>
+            <small>{latestDiff && resolvedChanges.length ? 'Supported resolution events' : 'No newly verified resolution'}</small>
           </div>
           <div className={verificationChanges.length > 0 ? 'operations-stat verification active' : 'operations-stat verification'}>
             <span>Needs verification</span>
-            <strong>{verificationChanges.length}</strong>
-            <small>{verificationChanges.length ? 'Not re-observed is not resolved' : 'No uncertain disappearance'}</small>
+            <strong>{latestDiff ? verificationChanges.length : 0}</strong>
+            <small>{latestDiff && verificationChanges.length ? 'Not re-observed is not resolved' : 'No uncertain disappearance'}</small>
           </div>
         </div>}
+
+        {currentSnapshot && <section className="current-scene-findings" aria-label="What is wrong in the current scene">
+          <div className="current-scene-findings-head">
+            <div>
+              <span className="eyebrow">CURRENT SCENE / NOW</span>
+              <h2>{currentAttentionCount > 0 ? 'What SENTINEL says is wrong.' : 'No grounded problem detected.'}</h2>
+              <p>This section is independent of Reality Diff. A problem belongs here even if it already existed before this scan.</p>
+            </div>
+            <strong>{currentStateLabel}</strong>
+          </div>
+
+          {currentAttentionCount === 0 ? <div className="scene-findings-empty">
+            <strong>No current operational finding survived grounding.</strong>
+            <span>SENTINEL does not turn ordinary objects or missing evidence into hazards. Try another angle or video when a suspected condition is not clearly visible.</span>
+          </div> : <div className="scene-findings-list">
+            {currentOpenIssues.map((issue, index) => <article className="scene-finding-card issue" key={issue.id}>
+              <span className="scene-finding-index">{String(index + 1).padStart(2, '0')}</span>
+              <div className="scene-finding-copy">
+                <div className="scene-finding-meta"><span>{issue.severity}</span><span>ISSUE · {issue.status}</span><span>{Math.round(issue.confidence * 100)}%</span></div>
+                <h3>{issue.title}</h3>
+                <p>{issue.description}</p>
+                <small>{issue.evidenceIds.length} grounded evidence reference{issue.evidenceIds.length === 1 ? '' : 's'}</small>
+              </div>
+            </article>)}
+            {currentUnpromotedConditions.map((condition, index) => <article className="scene-finding-card condition" key={condition.id}>
+              <span className="scene-finding-index">{String(currentOpenIssues.length + index + 1).padStart(2, '0')}</span>
+              <div className="scene-finding-copy">
+                <div className="scene-finding-meta"><span>{condition.kind}</span><span>{condition.basis.toUpperCase()} CONDITION</span><span>{Math.round(condition.confidence * 100)}%</span></div>
+                <h3>{condition.title}</h3>
+                <p>{condition.description}</p>
+                <small>{condition.evidenceIds.length} grounded evidence reference{condition.evidenceIds.length === 1 ? '' : 's'}</small>
+              </div>
+            </article>)}
+          </div>}
+
+          {currentAttentionCount > 0 && <button className="scene-findings-action" type="button" disabled={Boolean(actionPlanStatus)} onClick={() => void runActionPlanner({
+            stateId: currentSnapshot.stateId,
+            goal: 'Create the smallest safe evidence-backed plan for the current scene findings.',
+            relatedConditionIds: currentUnpromotedConditions.map((item) => item.id),
+            relatedIssueIds: currentOpenIssues.map((item) => item.id),
+          })}>{actionPlanStatus ? 'Planning grounded next steps…' : 'Create grounded action plan ↗'}</button>}
+        </section>}
+
+        <div className="reality-diff-heading">
+          <span className="eyebrow">REALITY DIFF / MEMORY</span>
+          <h2>What changed.</h2>
+          <p>{latestDiff
+            ? `SENTINEL compared the previous remembered state with the current one and found ${presentedChanges.length} supported change${presentedChanges.length === 1 ? '' : 's'}.`
+            : currentSnapshot
+              ? 'This is the first remembered state for this location, so there is no earlier physical state to compare yet.'
+              : 'Create a first observation before Reality Diff can begin.'}</p>
+        </div>
 
         <div className="reality-compare" aria-label="Before and after physical memory">
           <article className="reality-frame">
             <div className="reality-frame-head"><strong>{latestDiff ? stateLabel(memory, latestDiff.fromStateId) : 'Previous state'}</strong><span>BEFORE</span></div>
             <div className="reality-media previous">
-              {previousDiffImage ? <img src={previousDiffImage} alt="Previous environmental observation" /> : <div className="reality-placeholder"><i /><span>Previous physical memory</span></div>}
+              {previousDiffImage ? <img src={previousDiffImage} alt="Previous environmental observation" /> : <div className="reality-placeholder"><i /><span>{latestDiff ? 'Previous physical memory' : 'No earlier state'}</span></div>}
             </div>
             {latestDiff && <code>{shortStateId(latestDiff.fromStateId)}</code>}
           </article>
           <article className="reality-frame">
-            <div className="reality-frame-head"><strong>{latestDiff ? stateLabel(memory, latestDiff.toStateId) : 'Next state'}</strong><span>AFTER</span></div>
+            <div className="reality-frame-head"><strong>{latestDiff ? stateLabel(memory, latestDiff.toStateId) : currentStateLabel}</strong><span>CURRENT</span></div>
             <div className="reality-media current">
-              {currentDiffImage ? <img src={currentDiffImage} alt="Current environmental observation" /> : <div className="reality-placeholder"><i /><span>Current physical memory</span></div>}
+              {(currentDiffImage ?? currentMemoryImage) ? <img src={currentDiffImage ?? currentMemoryImage} alt="Current environmental observation" /> : <div className="reality-placeholder"><i /><span>Current physical memory</span></div>}
             </div>
-            {latestDiff && <code>{shortStateId(latestDiff.toStateId)}</code>}
+            {currentMemoryState && <code>{shortStateId(currentMemoryState.id)}</code>}
           </article>
           {latestDiff && <div className="reality-compare-caption"><span>PHYSICAL MEMORY UPDATED</span><strong>{presentedChangeSummary(presentedChanges)}</strong></div>}
         </div>
 
-        {latestDiff ? presentedChanges.length === 0 ? <div className="empty-diff operations-empty"><strong>No material change detected.</strong><span>The building state is materially consistent with the previous observation.</span></div> : <div className="operations-change-groups">
-          {attentionChanges.length > 0 && <ChangeGroup title="Needs attention" subtitle="Operational conditions or issues that deserve review." changes={attentionChanges} onSelect={setSelectedChangeId} />}
+        {latestDiff ? presentedChanges.length === 0 ? <div className="empty-diff operations-empty"><strong>No material change detected.</strong><span>The building state is materially consistent with the previous observation. The current scene assessment above still applies even when nothing changed.</span></div> : <div className="operations-change-groups">
+          {attentionChanges.length > 0 && <ChangeGroup title="Operational changes" subtitle="Operational findings that appeared or changed between remembered states." changes={attentionChanges} onSelect={setSelectedChangeId} />}
           {physicalChanges.length > 0 && <ChangeGroup title="Physical changes" subtitle="Grounded changes to objects or their visible state/location." changes={physicalChanges} onSelect={setSelectedChangeId} />}
           {resolvedChanges.length > 0 && <ChangeGroup title="Resolved" subtitle="Changes explicitly supported as resolved." changes={resolvedChanges} onSelect={setSelectedChangeId} />}
           {verificationChanges.length > 0 && <ChangeGroup title="Needs verification" subtitle="Previously remembered items were not re-observed. SENTINEL does not call that resolved." changes={verificationChanges} onSelect={setSelectedChangeId} />}
-        </div> : <div className="change-list" aria-label="Environmental changes"><div className="preview-label">INTERACTION PREVIEW — NOT DETECTED EVENTS</div>{previewChanges.map((change) => <div className="change-row" key={change.type}><span className={`change-mark ${change.type.toLowerCase()}`}>{change.mark}</span><div><strong>{change.type}</strong><small>{change.detail}</small></div></div>)}</div>}
+        </div> : <div className="empty-diff operations-empty"><strong>No previous state yet.</strong><span>Current-scene findings above are available immediately; Reality Diff begins after the next observation.</span></div>}
 
         <div className="operations-next-step">
-          <div><span className="eyebrow">NEXT OPERATION</span><strong>{latestDiff && attentionChanges.length > 0 ? 'Review what needs attention, then ask SENTINEL what should happen next.' : latestDiff && verificationChanges.length > 0 ? 'Verification is required before treating this as resolved. Re-observe the area and confirm the physical condition.' : priorConditionVerificationCandidate ? `A prior condition from State v${priorConditionVerificationCandidate.previousState.version} is ready to verify against the current clear state.` : latestDiff ? 'No urgent action is implied by the diff alone. Observe again when the physical state changes.' : 'Create a second state to unlock Reality Diff.'}</strong></div>
+          <div><span className="eyebrow">NEXT OPERATION</span><strong>{currentAttentionCount > 0 ? 'Review the current scene findings and create a grounded action plan before rescanning.' : latestDiff && verificationChanges.length > 0 ? 'Verification is required before treating this as resolved. Re-observe the area and confirm the physical condition.' : priorConditionVerificationCandidate ? `A prior condition from State v${priorConditionVerificationCandidate.previousState.version} is ready to verify against the current clear state.` : currentSnapshot ? 'No grounded current concern is present. Observe again whenever the physical scene changes.' : 'Upload a photo or video to inspect this scene.'}</strong></div>
           {priorConditionVerificationCandidate ? <div className="operations-next-actions">
             <button className="verify-current-button" type="button" disabled={Boolean(verificationStatus)} onClick={() => void runVerification({
               previousStateId: priorConditionVerificationCandidate.previousState.id,
@@ -906,16 +964,17 @@ function App() {
               conditionIds: priorConditionVerificationCandidate.conditions.map((item) => item.id),
             })}>{verificationStatus ? 'Verifying…' : `Verify ${priorConditionVerificationCandidate.conditions.length} prior condition${priorConditionVerificationCandidate.conditions.length === 1 ? '' : 's'} ↗`}</button>
             <button className="wide-observe compact" type="button" onClick={() => libraryInputRef.current?.click()}><span>Choose another photo</span><span>Only if the physical state changed again ↗</span></button>
-          </div> : latestDiff && attentionChanges.length > 0 && currentSnapshot ? <div className="operations-next-actions">
+          </div> : currentAttentionCount > 0 && currentSnapshot ? <div className="operations-next-actions">
             <button className="change-ask-action" type="button" disabled={Boolean(actionPlanStatus)} onClick={() => void runActionPlanner({
               stateId: currentSnapshot.stateId,
-              goal: 'Create the smallest safe evidence-backed plan for the current needs-attention condition.',
+              goal: 'Create the smallest safe evidence-backed plan for the current scene findings.',
+              relatedConditionIds: currentUnpromotedConditions.map((item) => item.id),
+              relatedIssueIds: currentOpenIssues.map((item) => item.id),
             })}>{actionPlanStatus ? 'Planning grounded next steps…' : 'Create grounded action plan ↗'}</button>
             <button className="wide-observe compact" type="button" onClick={() => libraryInputRef.current?.click()}><span>Choose update photo</span><span>After the recommended physical action is completed ↗</span></button>
-          </div> : <button className="wide-observe" type="button" onClick={() => libraryInputRef.current?.click()}><span>Choose update photo</span><span>Select the next environmental state image ↗</span></button>}
+          </div> : <button className="wide-observe" type="button" onClick={() => libraryInputRef.current?.click()}><span>Inspect another photo</span><span>Check the current scene again ↗</span></button>}
         </div>
       </section>}
-
       {selectedChange && latestDiff && <div className="drawer-backdrop" role="presentation" onClick={() => setSelectedChangeId(null)}>
         <aside className="evidence-drawer change-drawer" role="dialog" aria-modal="true" aria-label={selectedChange.title} onClick={(event) => event.stopPropagation()}>
           <button className="drawer-close" type="button" onClick={() => setSelectedChangeId(null)}>×</button>
@@ -1197,6 +1256,10 @@ function ChangeGroup({ title, subtitle, changes, onSelect }: { title: string; su
       </button>)}
     </div>
   </section>
+}
+
+function normalizeFindingTitle(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim()
 }
 
 function changeBucket(change: Change): 'attention' | 'physical' | 'resolved' | 'verification' {

@@ -159,7 +159,7 @@ try {
   expect(main.includes('SHOW EVIDENCE'), 'answer surface must expose grounded evidence')
   expect(main.includes('inspectSpatialObject(item.id); return'), 'current related physical objects must open the canonical object detail surface')
   expect(main.includes("answer.grounding?.issues.some((item) => ['open', 'acknowledged', 'in_progress'].includes(item.status))"), 'grounded active issues must keep the action-plan CTA available even when an Ask answer is classified as general')
-  expect(main.includes('Create the smallest safe evidence-backed plan for the current needs-attention condition.'), 'Reality Diff needs-attention state must expose direct grounded action planning')
+  expect(main.includes('Create the smallest safe evidence-backed plan for the current scene findings.'), 'current-scene findings must expose direct grounded action planning')
   expect(css.includes('.answer-object-links'), 'Phase 10 related-object navigation style is missing')
   expect(css.includes('.ask-prompt-rail'), 'Phase 10 contextual question rail is missing')
   expect(apiSource.includes("from '../src/memory/ask-building.ts'"), 'production API must explicitly bundle the Phase 10 TypeScript Ask service')
