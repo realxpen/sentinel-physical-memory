@@ -583,15 +583,17 @@ export class ScanPipeline {
       `The scene inventory already identified these visible objects: ${sceneObjectSummary}.`,
       `The scene inventory reported these conditions: ${sceneConditionSummary}. Benign/normal conditions do not count as a completed operational-condition audit.`,
       `Previously remembered object naming context (NOT evidence): ${priorNamingContext}.`,
-      'Inspect the supplied CURRENT evidence from scratch. Recover any materially useful directly visible object, relation, or operational condition that the broad scene pass missed or under-described. Do not assume a particular building type, room type, object list, or demo scenario.',
-      'Evaluate the physical scene broadly: access/circulation, safety, visible damage, maintenance state, equipment/fixture state, electrical/HVAC context, compliance cues, storage/placement, cleanliness only when operationally meaningful, and any other condition that materially affects use of the environment.',
+      'Inspect the supplied CURRENT evidence from scratch. This pass is issue-first: identify concrete visible operational problems in the current physical scene, then recover only the objects/relations needed to ground those problems. Do not assume a particular building type, room type, object list, prior demo, or expected change.',
+      'Evaluate broadly and non-exhaustively: access/circulation obstruction, slip/trip hazards, exposed or damaged electrical hardware/wiring, broken/damaged fixtures or access components, leaks/spills, unsafe storage/placement, equipment or safety-device access, visible maintenance defects, smoke/fire cues, HVAC/electrical abnormalities, and other visually defensible conditions that materially affect use of the environment.',
+      'A condition is the PRIMARY output of this audit. When a visible problem is supported, emit it in conditions[]; do not leave the problem only as an observation or object description.',
       'Classify objects from visible morphology and context. If identity is uncertain, keep the label generic rather than forcing a familiar object name.',
       'When a condition depends on a spatial relationship, encode the grounded relation and bind the condition to the relevant current object IDs. Do not rely on vague narrative wording alone.',
-      'Use basis="observed" only for directly visible physical state. Use basis="inferred" and status="uncertain" for interpretations that go beyond what is directly visible.',
+      'Use basis="observed" only for the directly visible physical condition itself. Use basis="inferred" only when the visible facts support an operational interpretation that goes beyond direct appearance; status must remain uncertain unless the physical condition itself is visibly present.',
       'Do not recommend actions, diagnose invisible causes, predict hidden risk, or infer facts from filenames, metadata, prior memory, or expected changes.',
       'Reference only the exact supplied FRAME_ID values in evidenceIds. SENTINEL owns frame evidence records.',
       'Do not enumerate negative findings. If there is no concrete operational condition, return conditions=[] and do not add filler observations.',
-      'Return the full SENTINEL PerceptionResult JSON schema. It is acceptable for conditions to be empty.',
+      'Before returning conditions=[], explicitly re-check the visible floor/walking surfaces, doors/access routes, electrical outlets/wiring, handles/fixtures, storage/stacking, and safety equipment for directly visible abnormal state. This is a generic checklist, not a list of expected findings.',
+      'Return the full SENTINEL PerceptionResult JSON schema. It is acceptable for conditions to be empty when no issue is visually supported.',
     ].join('\n')
 
     try {
@@ -1264,7 +1266,7 @@ function shouldRunAccessGeometryAudit(result: PerceptionResult): boolean {
   return accessGeometryCandidates(result).some((candidate) =>
     !hasAuthoritativeBlockingPlacement(result, candidate, doors) &&
     sharesTrustedEvidenceWithAnyDoor(candidate, doors) &&
-    hasAccessProximityHint(result, candidate, doors),
+    (candidate.category === 'obstruction' || hasAccessProximityHint(result, candidate, doors)),
   )
 }
 
