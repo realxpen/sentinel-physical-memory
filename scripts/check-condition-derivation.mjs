@@ -383,7 +383,7 @@ try {
   const workshop2Derived = deriveOperationalConditions(workshop2ProductionShape, capturedAt)
   const workshop2Access = workshop2Derived.derivedConditions.find((item) => item.title === 'Emergency exit approach obstructed')
   if (!workshop2Access) {
-    throw new Error('production-shaped first-scan evidence must compose the boxes + door + independent exit sign into an exit-approach concern')
+    throw new Error(`production-shaped first-scan evidence must compose the boxes + door + independent exit sign into an exit-approach concern; got ${JSON.stringify(workshop2Derived.derivedConditions.map((item) => ({ title: item.title, description: item.description, objectIds: item.objectIds })))}`)
   }
   const workshop2Assessment = assessCondition(workshop2Access)
   if (!workshop2Assessment.operational || workshop2Assessment.issueType !== 'access') {
