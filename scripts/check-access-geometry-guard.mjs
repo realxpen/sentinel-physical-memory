@@ -209,9 +209,130 @@ try {
     throw new Error('explicit grounded obstacle -> door relation must remain eligible for access derivation')
   }
 
+  const obstructionEnvironmentId = 'arbitrary-obstruction-geometry'
+  const obstructionSourceId = 'arbitrary-obstruction-source'
+  const obstructionPrompts = []
+  const obstructionModel = {
+    provider: 'test-provider',
+    model: 'test-model',
+    async infer(request) {
+      obstructionPrompts.push(request.prompt)
+      const frameId = request.artifacts.find((artifact) => artifact.kind === 'frame')?.frameId
+      if (!frameId) throw new Error('expected trusted still frame')
+
+      if (request.prompt.includes('Condition audit for scan')) {
+        return { sourceId: obstructionSourceId, observations: [], objects: [], conditions: [], relations: [], evidence: [] }
+      }
+      if (request.prompt.includes('Targeted access-geometry verification')) {
+        return {
+          sourceId: obstructionSourceId,
+          observations: [{
+            id: 'obs_geom',
+            environmentId: obstructionEnvironmentId,
+            sourceId: obstructionSourceId,
+            modality: 'image',
+            capturedAt,
+            label: 'physical obstruction at doorway',
+            description: 'The current obstruction occupies the doorway access path.',
+            confidence: 0.97,
+            basis: 'observed',
+            evidenceIds: [frameId],
+          }],
+          objects: [{
+            id: 'door_current',
+            environmentId: obstructionEnvironmentId,
+            category: 'door',
+            name: 'service door',
+            description: 'Visible service door.',
+            confidence: 0.98,
+            firstSeenAt: capturedAt,
+            lastSeenAt: capturedAt,
+            evidenceIds: [frameId],
+          }, {
+            id: 'obstruction_current',
+            environmentId: obstructionEnvironmentId,
+            category: 'obstruction',
+            name: 'temporary stored items',
+            description: 'Visible stored items in the access area.',
+            confidence: 0.96,
+            firstSeenAt: capturedAt,
+            lastSeenAt: capturedAt,
+            evidenceIds: [frameId],
+          }],
+          conditions: [],
+          relations: [{
+            id: 'geometry_obstruction_front_door',
+            environmentId: obstructionEnvironmentId,
+            fromId: 'obstruction_current',
+            toId: 'door_current',
+            type: 'in_front_of',
+            confidence: 0.97,
+            evidenceIds: [frameId],
+          }],
+          evidence: [],
+        }
+      }
+
+      return {
+        sourceId: obstructionSourceId,
+        observations: [],
+        objects: [{
+          id: 'door_current',
+          environmentId: obstructionEnvironmentId,
+          category: 'door',
+          name: 'service door',
+          description: 'Visible service door.',
+          state: 'closed',
+          confidence: 0.98,
+          firstSeenAt: capturedAt,
+          lastSeenAt: capturedAt,
+          evidenceIds: [frameId],
+        }, {
+          id: 'obstruction_current',
+          environmentId: obstructionEnvironmentId,
+          category: 'obstruction',
+          name: 'temporary stored items',
+          description: 'Visible stored items in the middle area.',
+          position: { description: 'middle area' },
+          confidence: 0.96,
+          firstSeenAt: capturedAt,
+          lastSeenAt: capturedAt,
+          evidenceIds: [frameId],
+        }],
+        conditions: [],
+        relations: [],
+        evidence: [],
+      }
+    },
+  }
+
+  const obstructionPipeline = new ScanPipeline({ model: obstructionModel })
+  const obstructionResult = await obstructionPipeline.run({
+    environmentId: obstructionEnvironmentId,
+    source: {
+      id: obstructionSourceId,
+      environmentId: obstructionEnvironmentId,
+      modality: 'image',
+      uri: 'data:image/jpeg;base64,AAA',
+      capturedAt,
+      metadata: { name: 'Arbitrary Obstruction Scene', environmentType: 'other', captureMode: 'photo' },
+    },
+    media: { kind: 'image', uri: 'data:image/jpeg;base64,AAA', mimeType: 'image/jpeg', sizeBytes: 3 },
+  })
+  if (!obstructionPrompts.some((prompt) => prompt.includes('Targeted access-geometry verification'))) {
+    throw new Error('a grounded category=obstruction object plus visible door must trigger geometry verification even without a noun/proximity whitelist')
+  }
+  if (!obstructionResult.conditions.some((item) => item.title === 'Doorway access obstructed')) {
+    throw new Error('relation-backed arbitrary obstruction must derive an ordinary doorway access condition')
+  }
+  if (obstructionResult.state.issueIds.length !== 1) {
+    throw new Error('relation-backed arbitrary obstruction must promote exactly one operational issue')
+  }
+
   console.log('PASS  ordinary office furniture does not trigger targeted access-geometry auditing')
   console.log('PASS  geometry-audit obstruction prose is non-authoritative without an explicit relation')
   console.log('PASS  an explicit grounded obstacle -> door relation still supports access derivation')
+  console.log('PASS  arbitrary category=obstruction objects trigger geometry verification without demo nouns or prior proximity wording')
   console.log('SENTINEL ACCESS GEOMETRY GUARD VERIFIED')
 } finally {
   await vite.close()

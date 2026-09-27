@@ -220,6 +220,73 @@ try {
     throw new Error('an inferred condition must not be reused as direct emergency-exit grounding')
   }
 
+  const genericHazardBase = {
+    sourceId,
+    evidence: [evidence('frame_hazard')],
+    relations: [],
+    conditions: [],
+    objects: [],
+    observations: [],
+  }
+
+  const wetFloor = structuredClone(genericHazardBase)
+  wetFloor.objects.push({
+    id: 'wet_floor_1', environmentId, category: 'other', name: 'wet floor',
+    description: 'A visibly wet floor surface with a shallow puddle across the walking area.',
+    confidence: 0.98, firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: ['frame_hazard'],
+  })
+  const wetDerived = deriveOperationalConditions(wetFloor, capturedAt)
+  const slip = wetDerived.derivedConditions.find((item) => item.title === 'Slip hazard')
+  if (!slip || !assessCondition(slip).operational) {
+    throw new Error('grounded wet/slippery floor cue must derive an operational slip hazard')
+  }
+
+  const exposedElectrical = structuredClone(genericHazardBase)
+  exposedElectrical.objects.push({
+    id: 'socket_1', environmentId, category: 'electrical', name: 'wall outlet',
+    description: 'Damaged wall socket with exposed bare wiring visible from the opening.',
+    confidence: 0.97, firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: ['frame_hazard'],
+  })
+  const electricalDerived = deriveOperationalConditions(exposedElectrical, capturedAt)
+  const electrical = electricalDerived.derivedConditions.find((item) => item.title === 'Electrical hazard')
+  if (!electrical || !assessCondition(electrical).operational) {
+    throw new Error('grounded exposed/damaged electrical cue must derive an operational electrical hazard')
+  }
+
+  const tripScene = structuredClone(genericHazardBase)
+  tripScene.observations.push({
+    id: 'trip_obs', environmentId, sourceId, modality: 'image', capturedAt,
+    label: 'loose cable', description: 'A loose cable stretches across the walking path on the floor.',
+    confidence: 0.97, basis: 'observed', evidenceIds: ['frame_hazard'],
+  })
+  const tripDerived = deriveOperationalConditions(tripScene, capturedAt)
+  const trip = tripDerived.derivedConditions.find((item) => item.title === 'Trip hazard')
+  if (!trip || !assessCondition(trip).operational) {
+    throw new Error('grounded cable-across-walking-surface cue must derive an operational trip hazard')
+  }
+
+  const brokenHandle = structuredClone(genericHazardBase)
+  brokenHandle.objects.push({
+    id: 'handle_1', environmentId, category: 'other', name: 'door handle',
+    description: 'Broken door handle detached from the door latch assembly.',
+    confidence: 0.96, firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: ['frame_hazard'],
+  })
+  const damageDerived = deriveOperationalConditions(brokenHandle, capturedAt)
+  const damage = damageDerived.derivedConditions.find((item) => item.title === 'Visible physical damage')
+  if (!damage || !assessCondition(damage).operational || assessCondition(damage).issueType !== 'damage') {
+    throw new Error('grounded broken fixture/access-component cue must derive an operational damage issue')
+  }
+
+  const normalScene = structuredClone(genericHazardBase)
+  normalScene.objects.push({
+    id: 'normal_outlet', environmentId, category: 'electrical', name: 'wall outlet',
+    description: 'Intact wall outlet with cover plate fitted normally.',
+    confidence: 0.99, firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: ['frame_hazard'],
+  })
+  if (deriveOperationalConditions(normalScene, capturedAt).derivedConditions.length !== 0) {
+    throw new Error('ordinary intact physical objects must not be converted into operational hazards')
+  }
+
   console.log('PASS  independently grounded exit signage + obstacle placement derives one inferred access condition')
   console.log('PASS  green emergency exit door aliases to grounded green-door wording without lowering confidence policy')
   console.log('PASS  derived condition preserves evidence and stays below source confidence')
@@ -234,6 +301,8 @@ try {
   console.log('PASS  reversed spatial direction does not derive an access obstruction')
   console.log('PASS  door naming alone cannot self-ground emergency-exit identity, while ordinary doorway geometry remains usable')
   console.log('PASS  inferred conditions are not reused as direct emergency-exit grounding facts')
+  console.log('PASS  generic grounded wet-floor, trip, electrical, and physical-damage cues derive operational issues without environment-specific hardcoding')
+  console.log('PASS  ordinary intact objects do not trigger generic hazard derivation')
   console.log('SENTINEL CONDITION DERIVATION GATE VERIFIED')
 } finally {
   await vite.close()

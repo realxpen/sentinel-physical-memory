@@ -231,6 +231,40 @@ try {
     throw new Error('safety signage must remain visible when generic sticker churn is filtered')
   }
 
+  const workspaceInventoryNoise = changesForPresentation([
+    {
+      id: 'stool-new-a', environmentId: 'workspace', fromStateId: 'state_1', toStateId: 'state_2',
+      type: 'added', entityKind: 'object', entityId: 'stool_a', title: 'New: stool',
+      description: 'stool was not present in the previous state.', confidence: 1, evidenceIds: ['e_current'],
+    },
+    {
+      id: 'stool-new-b', environmentId: 'workspace', fromStateId: 'state_1', toStateId: 'state_2',
+      type: 'added', entityKind: 'object', entityId: 'stool_b', title: 'New: stool',
+      description: 'stool was not present in the previous state.', confidence: 1, evidenceIds: ['e_current'],
+    },
+    change('stools-old', 'Not re-observed: stools', 'stools_previous'),
+    change('pencil-old', 'Not re-observed: pencil container', 'pencil_previous'),
+    {
+      id: 'boxes-real', environmentId: 'workspace', fromStateId: 'state_1', toStateId: 'state_2',
+      type: 'added', entityKind: 'object', entityId: 'boxes_real', title: 'New: cardboard boxes',
+      description: 'cardboard boxes were not present in the previous state.', confidence: 0.95, evidenceIds: ['e_boxes'],
+    },
+    {
+      id: 'issue-real', environmentId: 'workspace', fromStateId: 'state_1', toStateId: 'state_2',
+      type: 'added', entityKind: 'issue', entityId: 'issue_access', title: 'New issue: Doorway access obstructed',
+      description: 'Stored items obstruct the doorway access path.', confidence: 0.9, evidenceIds: ['e_boxes'],
+    },
+  ])
+  if (workspaceInventoryNoise.some((item) => /stool|pencil container/i.test(item.title))) {
+    throw new Error('low-value stool/stationery representation churn must not dominate Reality Diff')
+  }
+  if (!workspaceInventoryNoise.some((item) => item.title === 'New: cardboard boxes')) {
+    throw new Error('presentation cleanup must preserve the real material addition')
+  }
+  if (!workspaceInventoryNoise.some((item) => item.title === 'New issue: Doorway access obstructed')) {
+    throw new Error('presentation cleanup must preserve the operational issue')
+  }
+
   const distinctWalls = changesForPresentation([
     change('left_wall', 'Not re-observed: white wall', 'wall_left', ['e_left']),
     change('right_wall', 'Not re-observed: white wall', 'wall_right', ['e_right']),
@@ -243,6 +277,7 @@ try {
   console.log('PASS  historical exit-sign object splitting is filtered only when prior grounded memory already described the sign')
   console.log('PASS  current direct observations suppress false Not re-observed cards caused only by object materialization omission')
   console.log('PASS  historical micro-inventory, architectural re-segmentation, and transient-person churn are filtered without hiding operational changes')
+  console.log('PASS  stool/stationery representation churn is filtered while material additions and operational issues remain visible')
   console.log('SENTINEL PHASE 8 CHANGE PRESENTATION VERIFIED')
 } finally {
   await vite.close()
