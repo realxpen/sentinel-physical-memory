@@ -596,6 +596,7 @@ export class ScanPipeline {
       'Return the full SENTINEL PerceptionResult JSON schema. It is acceptable for conditions to be empty when no issue is visually supported.',
     ].join('\n')
 
+    let merged = scene
     try {
       console.warn('SENTINEL_CONDITION_AUDIT_STARTED', {
         scanId,
@@ -604,84 +605,86 @@ export class ScanPipeline {
       })
       const audit = pruneNegativeAuditObservations(await this.inferPerceptionPass('condition-audit', auditPrompt, artifacts, frames, input))
       const recovered = mergeCurrentStateAudit(scene, audit, 'audit_')
-      let merged = recovered.scene
+      merged = recovered.scene
       console.warn('SENTINEL_CONDITION_AUDIT_COMPLETED', {
         scanId,
         auditConditions: audit.conditions.length,
         mergedConditions: merged.conditions.length,
         providerOperationalConditions: merged.conditions.filter((item) => OPERATIONAL_CONDITION_KINDS.has(item.kind)).length,
       })
-
-      if (
-        !hasOperationalConditionCandidate(merged)
-        && shouldRunAccessGeometryAudit(merged)
-        && this.hasRuntimeBudget(OPTIONAL_AUDIT_TIMEOUT_MS + reserveAfterPerceptionMs)
-      ) {
-        const geometryCandidates = accessGeometryCandidates(merged)
-          .map((item) => `${item.name} (${item.category})`)
-          .join(', ')
-        const geometryDoors = merged.objects
-          .filter((item) => item.category === 'door')
-          .map((item) => item.name)
-          .join(', ')
-
-        const geometryPrompt = [
-          `Targeted access-geometry verification for scan ${scanId} in environment ${input.environmentId}.`,
-          `The scan source id is ${input.source.id}.`,
-          `The trusted scan capturedAt is ${input.source.capturedAt}.`,
-          `Visible physical-obstruction candidates: ${geometryCandidates || 'none'}.`,
-          `Visible door candidates: ${geometryDoors || 'none'}.`,
-          'Inspect the supplied frames only to verify the physical relationship between the named current-scan candidate object(s) and the visible door or doorway.',
-          'If a candidate is directly in front of the door, emit an explicit relation with type="in_front_of", fromId=candidate object id, toId=door object id, plus grounded evidenceIds. The direction must be obstacle -> door.',
-          'Also state the placement explicitly in a direct observation when visually supported.',
-          'Near, beside, left/right, perspective overlap, or sharing the center of the image is NOT sufficient evidence of obstruction and must not be converted to in_front_of.',
-          'Do not reinterpret ordinary room furniture merely visible in the foreground as blocking a more distant door. Confirm in_front_of only when the candidate footprint visibly occupies the door opening, threshold, or access path.',
-          'For this targeted audit, the explicit obstacle -> door in_front_of relation is the authoritative geometry output. If that relation cannot be supported, do not use obstruction/blocking language in observations.',
-          'If exit signage is visible, include the exit-sign observation/object so emergency-exit identity remains independently grounded. If no exit signage is visible, do not call the doorway an emergency exit.',
-          'Do not infer from filenames, metadata, prior memory, or the earlier model wording. Use only visible frame evidence.',
-          'Do not force a relation or operational condition when geometry is unclear.',
-          'Reference only exact supplied FRAME_ID values in evidenceIds. Return the full SENTINEL PerceptionResult JSON schema.',
-        ].join('\n')
-
-        console.warn('SENTINEL_ACCESS_GEOMETRY_AUDIT_STARTED', {
-          scanId,
-          reason: 'physical_obstacle_and_door_without_explicit_placement',
-          candidates: geometryCandidates,
-        })
-        try {
-          const geometryAudit = await this.inferPerceptionPass('access-geometry-audit', geometryPrompt, artifacts, frames, input)
-          merged = mergeCurrentStateAudit(merged, geometryAudit, 'geometry_').scene
-          console.warn('SENTINEL_ACCESS_GEOMETRY_AUDIT_COMPLETED', {
-            scanId,
-            relations: geometryAudit.relations.map((item) => ({
-              type: item.type,
-              fromId: item.fromId,
-              toId: item.toId,
-              confidence: item.confidence,
-            })),
-            observations: geometryAudit.observations.map((item) => ({
-              label: item.label,
-              description: item.description,
-              confidence: item.confidence,
-            })),
-          })
-        } catch (error) {
-          console.warn('SENTINEL_ACCESS_GEOMETRY_AUDIT_SKIPPED', {
-            scanId,
-            code: errorCode(error),
-            message: error instanceof Error ? error.message : 'Unknown access-geometry-audit failure',
-          })
-        }
-      }
-
-      return validatePerceptionForScan(merged, input.environmentId, input.source.id)
     } catch (error) {
       console.warn('SENTINEL_CONDITION_AUDIT_SKIPPED', {
         scanId,
         code: errorCode(error),
         message: error instanceof Error ? error.message : 'Unknown condition-audit failure',
       })
-      return scene
+    }
+
+    // Geometry is an independent trust pass. A malformed/empty condition-audit
+    // response must not suppress a still-valid current obstruction→door check.
+    if (
+      !hasOperationalConditionCandidate(merged)
+      && shouldRunAccessGeometryAudit(merged)
+      && this.hasRuntimeBudget(OPTIONAL_AUDIT_TIMEOUT_MS + reserveAfterPerceptionMs)
+    ) {
+      const geometryCandidates = accessGeometryCandidates(merged)
+        .map((item) => `${item.name} (${item.category})`)
+        .join(', ')
+      const geometryDoors = merged.objects
+        .filter((item) => item.category === 'door')
+        .map((item) => item.name)
+        .join(', ')
+
+      const geometryPrompt = [
+        `Targeted access-geometry verification for scan ${scanId} in environment ${input.environmentId}.`,
+        `The scan source id is ${input.source.id}.`,
+        `The trusted scan capturedAt is ${input.source.capturedAt}.`,
+        `Visible physical-obstruction candidates: ${geometryCandidates || 'none'}.`,
+        `Visible door candidates: ${geometryDoors || 'none'}.`,
+        'Inspect the supplied frames only to verify the physical relationship between the named current-scan candidate object(s) and the visible door or doorway.',
+        'If a candidate is directly in front of the door, emit an explicit relation with type="in_front_of", fromId=candidate object id, toId=door object id, plus grounded evidenceIds. The direction must be obstacle -> door.',
+        'Also state the placement explicitly in a direct observation when visually supported.',
+        'Near, beside, left/right, perspective overlap, or sharing the center of the image is NOT sufficient evidence of obstruction and must not be converted to in_front_of.',
+        'Do not reinterpret ordinary room furniture merely visible in the foreground as blocking a more distant door. Confirm in_front_of only when the candidate footprint visibly occupies the door opening, threshold, or access path.',
+        'For this targeted audit, the explicit obstacle -> door in_front_of relation is the authoritative geometry output. If that relation cannot be supported, do not use obstruction/blocking language in observations.',
+        'If exit signage is visible, include the exit-sign observation/object so emergency-exit identity remains independently grounded. If no exit signage is visible, do not call the doorway an emergency exit.',
+        'Do not infer from filenames, metadata, prior memory, or the earlier model wording. Use only visible frame evidence.',
+        'Do not force a relation or operational condition when geometry is unclear.',
+        'Reference only exact supplied FRAME_ID values in evidenceIds. Return the full SENTINEL PerceptionResult JSON schema.',
+      ].join('\n')
+
+      console.warn('SENTINEL_ACCESS_GEOMETRY_AUDIT_STARTED', {
+        scanId,
+        reason: 'physical_obstacle_and_door_without_explicit_placement',
+        candidates: geometryCandidates,
+      })
+      try {
+        const geometryAudit = await this.inferPerceptionPass('access-geometry-audit', geometryPrompt, artifacts, frames, input)
+        merged = mergeCurrentStateAudit(merged, geometryAudit, 'geometry_').scene
+        console.warn('SENTINEL_ACCESS_GEOMETRY_AUDIT_COMPLETED', {
+          scanId,
+          relations: geometryAudit.relations.map((item) => ({
+            type: item.type,
+            fromId: item.fromId,
+            toId: item.toId,
+            confidence: item.confidence,
+          })),
+          observations: geometryAudit.observations.map((item) => ({
+            label: item.label,
+            description: item.description,
+            confidence: item.confidence,
+          })),
+        })
+      } catch (error) {
+        console.warn('SENTINEL_ACCESS_GEOMETRY_AUDIT_SKIPPED', {
+          scanId,
+          code: errorCode(error),
+          message: error instanceof Error ? error.message : 'Unknown access-geometry-audit failure',
+        })
+      }
+    }
+
+    return validatePerceptionForScan(merged, input.environmentId, input.source.id)
     }
   }
 
