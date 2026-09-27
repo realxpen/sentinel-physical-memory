@@ -293,29 +293,25 @@ function deriveAccessFromGroundedObservations(
     const text = normalize(`${observation.label} ${observation.description}`)
     if (!/\b(?:door|doorway|exit|egress)\b/.test(text)) continue
 
-    const placement = /\b(?:directly in front of|in front of|across|blocking|obstructing|occupying|narrowing)\b/.test(text)
-    const accessMeaning = /\b(?:obstruct(?:ing|ed|ion)?|block(?:ing|ed)?|access|egress|clearance|approach|path|route)\b/.test(text)
+    const placement = /(?:directly in front of|in front of|across|blocking|obstructing|occupying|narrowing)/.test(text)
+    const accessMeaning = /(?:obstruct|block|access|egress|clearance|approach|path|route)/.test(text)
     if (!placement || !accessMeaning) continue
 
-    const doorCandidates = doors.filter((door) =>
-      sharesAnyEvidence(observation.evidenceIds, door.evidenceIds) &&
-      observationMentionsEntity(text, door),
-    )
-    const door = doorCandidates.length === 1
-      ? doorCandidates[0]
-      : doors.length === 1 && sharesAnyEvidence(observation.evidenceIds, doors[0].evidenceIds)
-        ? doors[0]
+    const sharedDoors = doors.filter((door) => sharesAnyEvidence(observation.evidenceIds, door.evidenceIds))
+    const mentionedDoors = sharedDoors.filter((door) => observationMentionsEntity(text, door))
+    const door = sharedDoors.length === 1
+      ? sharedDoors[0]
+      : mentionedDoors.length === 1
+        ? mentionedDoors[0]
         : undefined
     if (!door) continue
 
-    const obstructionCandidates = obstructions.filter((item) =>
-      sharesAnyEvidence(observation.evidenceIds, item.evidenceIds) &&
-      observationMentionsEntity(text, item),
-    )
-    const obstruction = obstructionCandidates.length === 1
-      ? obstructionCandidates[0]
-      : obstructions.length === 1 && sharesAnyEvidence(observation.evidenceIds, obstructions[0].evidenceIds)
-        ? obstructions[0]
+    const sharedObstructions = obstructions.filter((item) => sharesAnyEvidence(observation.evidenceIds, item.evidenceIds))
+    const mentionedObstructions = sharedObstructions.filter((item) => observationMentionsEntity(text, item))
+    const obstruction = sharedObstructions.length === 1
+      ? sharedObstructions[0]
+      : mentionedObstructions.length === 1
+        ? mentionedObstructions[0]
         : undefined
     if (!obstruction) continue
 
