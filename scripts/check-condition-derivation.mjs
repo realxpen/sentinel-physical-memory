@@ -277,6 +277,64 @@ try {
     throw new Error('grounded broken fixture/access-component cue must derive an operational damage issue')
   }
 
+  const sharpFloor = structuredClone(genericHazardBase)
+  sharpFloor.observations.push({
+    id: 'sharp_obs', environmentId, sourceId, modality: 'image', capturedAt,
+    label: 'sharp metal object', description: 'A sharp metal shard is lying on the walking path floor.',
+    confidence: 0.98, basis: 'observed', evidenceIds: ['frame_hazard'],
+  })
+  const sharpDerived = deriveOperationalConditions(sharpFloor, capturedAt)
+  const sharp = sharpDerived.derivedConditions.find((item) => item.title === 'Sharp object hazard')
+  if (!sharp || !assessCondition(sharp).operational) {
+    throw new Error('grounded sharp object on a walking surface must derive an operational hazard')
+  }
+
+  const chairWalkway = structuredClone(genericHazardBase)
+  chairWalkway.observations.push({
+    id: 'chair_walkway_obs', environmentId, sourceId, modality: 'image', capturedAt,
+    label: 'chair in walkway', description: 'A chair is positioned on the walkway and narrows the walking path.',
+    confidence: 0.97, basis: 'observed', evidenceIds: ['frame_hazard'],
+  })
+  const circulationDerived = deriveOperationalConditions(chairWalkway, capturedAt)
+  const circulation = circulationDerived.derivedConditions.find((item) => item.title === 'Circulation path obstructed')
+  if (!circulation || !assessCondition(circulation).operational || assessCondition(circulation).issueType !== 'access') {
+    throw new Error('grounded furniture on a walkway must derive an operational access issue')
+  }
+
+  const clutteredWorkspace = structuredClone(genericHazardBase)
+  clutteredWorkspace.observations.push({
+    id: 'clutter_obs', environmentId, sourceId, modality: 'image', capturedAt,
+    label: 'work area organization', description: 'The work area is visibly cluttered and poorly arranged with scattered items around the floor.',
+    confidence: 0.96, basis: 'observed', evidenceIds: ['frame_hazard'],
+  })
+  const clutterDerived = deriveOperationalConditions(clutteredWorkspace, capturedAt)
+  const clutter = clutterDerived.derivedConditions.find((item) => item.title === 'Workspace organization needs attention')
+  if (!clutter || !assessCondition(clutter).operational) {
+    throw new Error('explicit grounded clutter/disorganization must derive a low-severity attention issue')
+  }
+
+  const approachScene = structuredClone(uniquelyAnchoredSign)
+  approachScene.objects = approachScene.objects.map((item) =>
+    item.id === 'jack_1'
+      ? {
+          ...item,
+          id: 'boxes_approach',
+          name: 'cardboard boxes',
+          category: 'obstruction',
+          description: 'stacked cardboard boxes',
+          position: { description: 'in front of green door' },
+          confidence: 0.95,
+          evidenceIds: ['frame_jack'],
+        }
+      : item,
+  )
+  approachScene.observations = approachScene.observations.filter((item) => item.id !== 'obs_jack')
+  const approachDerived = deriveOperationalConditions(approachScene, capturedAt)
+  const approach = approachDerived.derivedConditions.find((item) => item.title === 'Emergency exit approach obstructed')
+  if (!approach || !assessCondition(approach).operational) {
+    throw new Error('provider-grounded obstruction positioned in front of an exit door must surface as an approach/access concern even when the literal threshold is not claimed blocked')
+  }
+
   const normalScene = structuredClone(genericHazardBase)
   normalScene.objects.push({
     id: 'normal_outlet', environmentId, category: 'electrical', name: 'wall outlet',
@@ -301,7 +359,8 @@ try {
   console.log('PASS  reversed spatial direction does not derive an access obstruction')
   console.log('PASS  door naming alone cannot self-ground emergency-exit identity, while ordinary doorway geometry remains usable')
   console.log('PASS  inferred conditions are not reused as direct emergency-exit grounding facts')
-  console.log('PASS  generic grounded wet-floor, trip, electrical, and physical-damage cues derive operational issues without environment-specific hardcoding')
+  console.log('PASS  generic grounded wet-floor, trip, electrical, physical-damage, sharp-object, circulation, and clutter cues derive operational issues without environment-specific hardcoding')
+  console.log('PASS  grounded obstruction in front of an exit surfaces as an approach concern without falsely claiming the threshold is blocked')
   console.log('PASS  ordinary intact objects do not trigger generic hazard derivation')
   console.log('SENTINEL CONDITION DERIVATION GATE VERIFIED')
 } finally {
