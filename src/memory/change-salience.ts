@@ -2,7 +2,7 @@ import type { Change, SpatialObject } from '../domain/sentinel.js'
 import { isPersonChangeTitle, isPersonObject } from '../domain/object-policy.js'
 
 const STRUCTURAL_SURFACE = /^(?:(?:white|painted|brick|concrete|interior|exterior) )?wall$|^(?:(?:wooden|wood|tile|tiled|concrete|vinyl|laminate|hardwood|carpeted) )?floor$|^(?:(?:white|painted|drop|suspended) )?ceiling$/
-const MICRO_INVENTORY = /^(?:cup|mug|pen holder|pencil holder|light switch|switch plate|books|book|globe|wicker basket|basket|potted plant|plant|rug|area rug|carpet)$/
+const MICRO_INVENTORY = /^(?:cup|mug|pen holder|pencil holder|pen container|pencil container|stationery holder|light switch|switch plate|books|book|globe|wicker basket|basket|potted plant|plant|rug|area rug|carpet|stool|stools)$/
 const DOOR_HARDWARE = /\b(?:door\s*knob|doorknob|door\s*handle|door\s*hardware|door\s*frame|doorframe|hinge|hinges|latch|lockset|strike plate|door closer|push bar|panic bar|threshold)\b/
 const DURABLE_ARCHITECTURAL_ANCHOR = /\b(?:doorway|door|window|room|corridor|hallway|entryway|entrance|door frame|doorframe)\b/
 const FURNITURE_DOOR = /\b(?:closet|cabinet|cupboard|locker|wardrobe)\s+door\b/
