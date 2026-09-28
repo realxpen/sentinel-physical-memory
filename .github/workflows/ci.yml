@@ -30,6 +30,8 @@ jobs:
         run: npm run check:phase5-conditions
       - name: Verify grounded operational condition derivation
         run: npm run check:condition-derivation
+      - name: Verify generic condition reasoning without hazard hardcoding
+        run: npm run check:generic-condition-reasoning
       - name: Verify conservative access geometry
         run: npm run check:access-geometry-guard
       - name: Verify Reality Diff position semantics
