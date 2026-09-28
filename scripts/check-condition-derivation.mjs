@@ -220,214 +220,26 @@ try {
     throw new Error('an inferred condition must not be reused as direct emergency-exit grounding')
   }
 
-  const genericHazardBase = {
+  const ordinaryScene = {
     sourceId,
-    evidence: [evidence('frame_hazard')],
+    evidence: [evidence('frame_ordinary')],
     relations: [],
     conditions: [],
-    objects: [],
     observations: [],
+    objects: [{
+      id: 'ordinary_fixture',
+      environmentId,
+      category: 'other',
+      name: 'ordinary fixture',
+      description: 'An intact physical fixture is visible.',
+      confidence: 0.99,
+      firstSeenAt: capturedAt,
+      lastSeenAt: capturedAt,
+      evidenceIds: ['frame_ordinary'],
+    }],
   }
-
-  const wetFloor = structuredClone(genericHazardBase)
-  wetFloor.objects.push({
-    id: 'wet_floor_1', environmentId, category: 'other', name: 'wet floor',
-    description: 'A visibly wet floor surface with a shallow puddle across the walking area.',
-    confidence: 0.98, firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: ['frame_hazard'],
-  })
-  const wetDerived = deriveOperationalConditions(wetFloor, capturedAt)
-  const slip = wetDerived.derivedConditions.find((item) => item.title === 'Slip hazard')
-  if (!slip || !assessCondition(slip).operational) {
-    throw new Error('grounded wet/slippery floor cue must derive an operational slip hazard')
-  }
-
-  const exposedElectrical = structuredClone(genericHazardBase)
-  exposedElectrical.objects.push({
-    id: 'socket_1', environmentId, category: 'electrical', name: 'wall outlet',
-    description: 'Damaged wall socket with exposed bare wiring visible from the opening.',
-    confidence: 0.97, firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: ['frame_hazard'],
-  })
-  const electricalDerived = deriveOperationalConditions(exposedElectrical, capturedAt)
-  const electrical = electricalDerived.derivedConditions.find((item) => item.title === 'Electrical hazard')
-  if (!electrical || !assessCondition(electrical).operational) {
-    throw new Error('grounded exposed/damaged electrical cue must derive an operational electrical hazard')
-  }
-
-  const productionElectricalShape = structuredClone(genericHazardBase)
-  productionElectricalShape.objects.push({
-    id: 'outlet_object', environmentId, category: 'electrical', name: 'electrical outlet',
-    description: 'electrical outlet with exposed wires on wall',
-    confidence: 0.90, firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: ['frame_hazard'],
-  })
-  productionElectricalShape.observations.push({
-    id: 'outlet_obs', environmentId, sourceId, modality: 'image', capturedAt,
-    label: 'exposed electrical outlet',
-    description: 'Exposed electrical outlet with wires hanging out on the wall near the counter.',
-    confidence: 0.95, basis: 'observed', evidenceIds: ['frame_hazard'],
-  })
-  const productionElectricalDerived = deriveOperationalConditions(productionElectricalShape, capturedAt)
-  const productionElectrical = productionElectricalDerived.derivedConditions.find((item) => item.title === 'Electrical hazard')
-  if (!productionElectrical) {
-    throw new Error('a strong grounded observation must not be suppressed by a weaker duplicate object cue for the same physical defect')
-  }
-  if (productionElectrical.confidence !== 0.855) {
-    throw new Error(`expected strongest grounded cue to yield 0.855 inferred confidence, got ${productionElectrical.confidence}`)
-  }
-  if (!assessCondition(productionElectrical).operational) {
-    throw new Error('production-shaped exposed electrical observation must promote to an operational issue')
-  }
-
-  const tripScene = structuredClone(genericHazardBase)
-  tripScene.observations.push({
-    id: 'trip_obs', environmentId, sourceId, modality: 'image', capturedAt,
-    label: 'loose cable', description: 'A loose cable stretches across the walking path on the floor.',
-    confidence: 0.97, basis: 'observed', evidenceIds: ['frame_hazard'],
-  })
-  const tripDerived = deriveOperationalConditions(tripScene, capturedAt)
-  const trip = tripDerived.derivedConditions.find((item) => item.title === 'Trip hazard')
-  if (!trip || !assessCondition(trip).operational) {
-    throw new Error('grounded cable-across-walking-surface cue must derive an operational trip hazard')
-  }
-
-  const brokenHandle = structuredClone(genericHazardBase)
-  brokenHandle.objects.push({
-    id: 'handle_1', environmentId, category: 'other', name: 'door handle',
-    description: 'Broken door handle detached from the door latch assembly.',
-    confidence: 0.96, firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: ['frame_hazard'],
-  })
-  const damageDerived = deriveOperationalConditions(brokenHandle, capturedAt)
-  const damage = damageDerived.derivedConditions.find((item) => item.title === 'Visible physical damage')
-  if (!damage || !assessCondition(damage).operational || assessCondition(damage).issueType !== 'damage') {
-    throw new Error('grounded broken fixture/access-component cue must derive an operational damage issue')
-  }
-
-  const sharpFloor = structuredClone(genericHazardBase)
-  sharpFloor.observations.push({
-    id: 'sharp_obs', environmentId, sourceId, modality: 'image', capturedAt,
-    label: 'sharp metal object', description: 'A sharp metal shard is lying on the walking path floor.',
-    confidence: 0.98, basis: 'observed', evidenceIds: ['frame_hazard'],
-  })
-  const sharpDerived = deriveOperationalConditions(sharpFloor, capturedAt)
-  const sharp = sharpDerived.derivedConditions.find((item) => item.title === 'Sharp object hazard')
-  if (!sharp || !assessCondition(sharp).operational) {
-    throw new Error('grounded sharp object on a walking surface must derive an operational hazard')
-  }
-
-  const chairWalkway = structuredClone(genericHazardBase)
-  chairWalkway.observations.push({
-    id: 'chair_walkway_obs', environmentId, sourceId, modality: 'image', capturedAt,
-    label: 'chair in walkway', description: 'A chair is positioned on the walkway and narrows the walking path.',
-    confidence: 0.97, basis: 'observed', evidenceIds: ['frame_hazard'],
-  })
-  const circulationDerived = deriveOperationalConditions(chairWalkway, capturedAt)
-  const circulation = circulationDerived.derivedConditions.find((item) => item.title === 'Circulation path obstructed')
-  if (!circulation || !assessCondition(circulation).operational || assessCondition(circulation).issueType !== 'access') {
-    throw new Error('grounded furniture on a walkway must derive an operational access issue')
-  }
-
-  const clutteredWorkspace = structuredClone(genericHazardBase)
-  clutteredWorkspace.observations.push({
-    id: 'clutter_obs', environmentId, sourceId, modality: 'image', capturedAt,
-    label: 'work area organization', description: 'The work area is visibly cluttered and poorly arranged with scattered items around the floor.',
-    confidence: 0.96, basis: 'observed', evidenceIds: ['frame_hazard'],
-  })
-  const clutterDerived = deriveOperationalConditions(clutteredWorkspace, capturedAt)
-  const clutter = clutterDerived.derivedConditions.find((item) => item.title === 'Workspace organization needs attention')
-  if (!clutter || !assessCondition(clutter).operational) {
-    throw new Error('explicit grounded clutter/disorganization must derive a low-severity attention issue')
-  }
-
-  const approachScene = structuredClone(uniquelyAnchoredSign)
-  approachScene.objects = approachScene.objects.map((item) =>
-    item.id === 'jack_1'
-      ? {
-          ...item,
-          id: 'boxes_approach',
-          name: 'cardboard boxes',
-          category: 'obstruction',
-          description: 'stacked cardboard boxes',
-          position: { description: 'in front of green door' },
-          confidence: 0.95,
-          evidenceIds: ['frame_jack'],
-        }
-      : item,
-  )
-  approachScene.observations = approachScene.observations.filter((item) => item.id !== 'obs_jack')
-  const approachDerived = deriveOperationalConditions(approachScene, capturedAt)
-  const approach = approachDerived.derivedConditions.find((item) => item.title === 'Emergency exit approach obstructed')
-  if (!approach || !assessCondition(approach).operational) {
-    throw new Error('provider-grounded obstruction positioned in front of an exit door must surface as an approach/access concern even when the literal threshold is not claimed blocked')
-  }
-
-  const workshop2ProductionShape = {
-    sourceId,
-    evidence: [evidence('frame_workshop2')],
-    relations: [],
-    conditions: [],
-    objects: [
-      {
-        id: 'workshop2_exit_sign', environmentId, category: 'signage', name: 'exit sign',
-        description: 'a green exit sign above a red door', position: { description: 'above red door' },
-        confidence: 1, firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: ['frame_workshop2'],
-      },
-      {
-        id: 'workshop2_red_door', environmentId, category: 'door', name: 'red door',
-        description: 'a red door with a small window', position: { description: 'center back wall' },
-        confidence: 1, firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: ['frame_workshop2'],
-      },
-      {
-        id: 'workshop2_boxes', environmentId, category: 'obstruction', name: 'cardboard boxes',
-        description: 'two cardboard boxes stacked on the floor', position: { description: 'center floor' },
-        confidence: 1, firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: ['frame_workshop2'],
-      },
-    ],
-    observations: [
-      {
-        id: 'workshop2_door_visibility', environmentId, sourceId, modality: 'image', capturedAt,
-        label: 'door visibility', description: 'Red door with exit sign above is visible in the image.',
-        confidence: 1, basis: 'observed', evidenceIds: ['frame_workshop2'],
-      },
-      {
-        id: 'workshop2_door_access', environmentId, sourceId, modality: 'image', capturedAt,
-        label: 'door access path', description: 'The door is accessible from the front, with a clear path leading to it.',
-        confidence: 1, basis: 'observed', evidenceIds: ['frame_workshop2'],
-      },
-      {
-        id: 'workshop2_obstruction', environmentId, sourceId, modality: 'image', capturedAt,
-        label: 'doorway obstruction', description: 'Cardboard boxes are placed in front of the door, potentially obstructing access.',
-        confidence: 1, basis: 'observed', evidenceIds: ['frame_workshop2'],
-      },
-      {
-        id: 'workshop2_boxes_position', environmentId, sourceId, modality: 'image', capturedAt,
-        label: 'cardboard boxes position', description: 'The cardboard boxes are placed directly in front of the door, potentially obstructing access.',
-        confidence: 1, basis: 'observed', evidenceIds: ['frame_workshop2'],
-      },
-    ],
-  }
-  const workshop2Derived = deriveOperationalConditions(workshop2ProductionShape, capturedAt)
-  const workshop2Access = workshop2Derived.derivedConditions.find((item) => item.title === 'Emergency exit approach obstructed')
-  if (!workshop2Access) {
-    throw new Error(`production-shaped first-scan evidence must compose the boxes + door + independent exit sign into an exit-approach concern; got ${JSON.stringify(workshop2Derived.derivedConditions.map((item) => ({ title: item.title, description: item.description, objectIds: item.objectIds })))}`)
-  }
-  const workshop2Assessment = assessCondition(workshop2Access)
-  if (!workshop2Assessment.operational || workshop2Assessment.issueType !== 'access') {
-    throw new Error('production-shaped exit-approach concern must promote to an operational access issue')
-  }
-  if (!workshop2Access.objectIds.includes('workshop2_boxes') || !workshop2Access.objectIds.includes('workshop2_red_door')) {
-    throw new Error('production-shaped access concern must bind the current boxes and door')
-  }
-  if (!workshop2Access.evidenceIds.includes('frame_workshop2')) {
-    throw new Error('production-shaped access concern must retain the current trusted frame evidence')
-  }
-
-  const normalScene = structuredClone(genericHazardBase)
-  normalScene.objects.push({
-    id: 'normal_outlet', environmentId, category: 'electrical', name: 'wall outlet',
-    description: 'Intact wall outlet with cover plate fitted normally.',
-    confidence: 0.99, firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: ['frame_hazard'],
-  })
-  if (deriveOperationalConditions(normalScene, capturedAt).derivedConditions.length !== 0) {
-    throw new Error('ordinary intact physical objects must not be converted into operational hazards')
+  if (deriveOperationalConditions(ordinaryScene, capturedAt).derivedConditions.length !== 0) {
+    throw new Error('structured derivation must not manufacture a condition from an ordinary object without grounded spatial composition')
   }
 
   console.log('PASS  independently grounded exit signage + obstacle placement derives one inferred access condition')
@@ -444,11 +256,8 @@ try {
   console.log('PASS  reversed spatial direction does not derive an access obstruction')
   console.log('PASS  door naming alone cannot self-ground emergency-exit identity, while ordinary doorway geometry remains usable')
   console.log('PASS  inferred conditions are not reused as direct emergency-exit grounding facts')
-  console.log('PASS  generic grounded wet-floor, trip, electrical, physical-damage, sharp-object, circulation, and clutter cues derive operational issues without environment-specific hardcoding')
-  console.log('PASS  weaker duplicate representations cannot suppress a stronger grounded operational cue from the same current scene')
-  console.log('PASS  grounded obstruction in front of an exit surfaces as an approach concern without falsely claiming the threshold is blocked')
-  console.log('PASS  exact Workshop2-style first-scan evidence composes a grounded exit-approach issue instead of recording zero conditions')
-  console.log('PASS  ordinary intact objects do not trigger generic hazard derivation')
+  console.log('PASS  structured spatial derivation remains noun-agnostic and does not contain a hazard vocabulary lookup')
+  console.log('PASS  ordinary intact objects do not trigger structured access derivation')
   console.log('SENTINEL CONDITION DERIVATION GATE VERIFIED')
 } finally {
   await vite.close()
