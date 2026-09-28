@@ -18,6 +18,7 @@ import type { EnvironmentalMemoryReader } from '../memory/repository.js'
 import { collapseEquivalentConditionsForPresentation } from '../memory/memory-presentation.js'
 
 const ACTIVE_ISSUES = new Set(['open', 'acknowledged', 'in_progress'])
+// Keep a transient provider retry inside the route budget; grounding still validates every returned step.
 const ACTION_PLAN_MODEL_TIMEOUT_MS = 45_000
 const MAX_ACTION_PLAN_MODEL_ATTEMPTS = 2
 
