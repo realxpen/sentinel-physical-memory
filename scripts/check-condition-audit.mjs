@@ -895,6 +895,11 @@ try {
 function groundedAccessDraft(request, title) {
   const relation = request.context.match(/\|\s+([^\s]+)\s+-\[in_front_of\]->\s+([^\s]+)\s+\|[^\n]*evidence=([^\s,]+)/)
   if (!relation) return { conditions: [] }
+  const observationLine = request.context.split('\n').find((line) =>
+    line.includes('OBSERVATION_ID') && line.includes(`evidence=${relation[3]}`),
+  )
+  const observationId = observationLine?.match(/OBSERVATION_ID ([^ |]+)/)?.[1]
+  if (!observationId) return { conditions: [] }
   return {
     conditions: [{
       kind: 'access',
@@ -902,6 +907,7 @@ function groundedAccessDraft(request, title) {
       description: 'Grounded current-scene geometry shows a physical object occupying the doorway access area.',
       status: 'present',
       confidence: 0.96,
+      supportingObservationIds: [observationId],
       objectIds: [relation[1], relation[2]],
       evidenceIds: [relation[3]],
     }],
