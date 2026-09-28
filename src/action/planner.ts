@@ -11,12 +11,15 @@ import type {
   Evidence,
   Issue,
 } from '../domain/sentinel.js'
-import type { ActionPlanningDraftStep, ActionPlanningModelAdapter } from '../ai/model.js'
+import { ModelAdapterError } from '../ai/model.js'
+import type { ActionPlanningDraft, ActionPlanningDraftStep, ActionPlanningInferenceRequest, ActionPlanningModelAdapter } from '../ai/model.js'
 import { conditionTrustLabel } from '../perception/condition-model.js'
 import type { EnvironmentalMemoryReader } from '../memory/repository.js'
 import { collapseEquivalentConditionsForPresentation } from '../memory/memory-presentation.js'
 
 const ACTIVE_ISSUES = new Set(['open', 'acknowledged', 'in_progress'])
+const ACTION_PLAN_MODEL_TIMEOUT_MS = 45_000
+const MAX_ACTION_PLAN_MODEL_ATTEMPTS = 2
 
 export class ActionPlannerInputError extends Error {
   readonly status: number
@@ -70,12 +73,37 @@ export class ActionPlannerService {
     const evidence = memory.evidence.filter((item) => evidenceIdSet.has(item.id))
     const context = buildContext(memory, state, conditions, issues, objects, evidence, request.goal)
 
-    const draft = await this.model.plan({
+    const modelRequest: ActionPlanningInferenceRequest = {
       role: 'action',
       request: { ...request, stateId: state.id },
       context,
-    })
+      timeoutMs: ACTION_PLAN_MODEL_TIMEOUT_MS,
+    }
+    const draft = await this.planWithRetry(modelRequest)
     return groundPlan(memory, state, conditions, issues, objects, evidence, draft)
+  }
+
+  private async planWithRetry(request: ActionPlanningInferenceRequest): Promise<ActionPlanningDraft> {
+    let lastError: unknown
+
+    for (let attempt = 1; attempt <= MAX_ACTION_PLAN_MODEL_ATTEMPTS; attempt += 1) {
+      try {
+        return await this.model.plan(request)
+      } catch (error) {
+        lastError = error
+        const retryable = error instanceof ModelAdapterError && error.retryable
+        if (!retryable || attempt >= MAX_ACTION_PLAN_MODEL_ATTEMPTS) throw error
+
+        console.warn('SENTINEL_ACTION_PLAN_MODEL_RETRY', {
+          attempt,
+          nextAttempt: attempt + 1,
+          code: error.code,
+          message: error.message,
+        })
+      }
+    }
+
+    throw lastError instanceof Error ? lastError : new Error('Action planning failed without a provider error.')
   }
 }
 
