@@ -42,12 +42,18 @@ async function verifyOutputContractRetry(ScanPipeline, ModelAdapterError) {
   const capturedAt = '2026-09-15T13:30:00.000Z'
   let sceneAttempts = 0
   let auditAttempts = 0
+  let detailAttempts = 0
 
   const model = {
     provider: 'test-provider',
     model: 'test-model',
     async infer(request) {
       const isAudit = request.prompt.includes('Condition audit for scan')
+      const isDetailAudit = request.prompt.includes('Localized physical-detail audit for scan')
+      if (isDetailAudit) {
+        detailAttempts += 1
+        return { sourceId, observations: [], objects: [], conditions: [], relations: [], evidence: [] }
+      }
       if (isAudit) {
         auditAttempts += 1
         return perception({
@@ -84,6 +90,7 @@ async function verifyOutputContractRetry(ScanPipeline, ModelAdapterError) {
 
   expect(sceneAttempts === 2, `expected exactly 2 scene perception attempts, got ${sceneAttempts}`)
   expect(auditAttempts === 1, `expected one post-scene condition audit, got ${auditAttempts}`)
+  expect(detailAttempts === 1, `expected one bounded detail audit after the broad audit remained empty, got ${detailAttempts}`)
   expect(result.state.version === 1, `expected State v1 after retry, got v${result.state.version}`)
   expect(result.observations.length === 1, `condition-audit prose must not persist as observations, got ${result.observations.length}`)
 }
@@ -94,6 +101,7 @@ async function verifySparseStillInventoryRetry(ScanPipeline) {
   const capturedAt = '2026-09-26T12:30:00.000Z'
   let sceneAttempts = 0
   let auditAttempts = 0
+  let detailAttempts = 0
   const prompts = []
 
   const model = {
@@ -102,6 +110,10 @@ async function verifySparseStillInventoryRetry(ScanPipeline) {
     async infer(request) {
       prompts.push(request.prompt)
       const frameId = request.artifacts.find((artifact) => artifact.kind === 'frame')?.frameId ?? 'frame_0'
+      if (request.prompt.includes('Localized physical-detail audit for scan')) {
+        detailAttempts += 1
+        return { sourceId, observations: [], objects: [], conditions: [], relations: [], evidence: [] }
+      }
       if (request.prompt.includes('Condition audit for scan')) {
         auditAttempts += 1
         return { sourceId, observations: [], objects: [], conditions: [], relations: [], evidence: [] }
@@ -200,6 +212,7 @@ async function verifySparseStillInventoryRetry(ScanPipeline) {
 
   expect(sceneAttempts === 2, `expected one sparse-inventory retry, got ${sceneAttempts} scene calls`)
   expect(auditAttempts === 1, `generic still-image integrity audit must run after the recovered scene, got ${auditAttempts}`)
+  expect(detailAttempts === 1, `localized detail audit must run once when the recovered broad audit remains empty, got ${detailAttempts}`)
   expect(prompts[1]?.includes('SPARSE STILL-PHOTO RETRY'), 'second scene attempt must receive the sparse still-photo recovery instruction')
   expect(result.state.version === 1, 'successful retry must create exactly State v1')
   const memory = await pipeline.getMemory(environmentId)
