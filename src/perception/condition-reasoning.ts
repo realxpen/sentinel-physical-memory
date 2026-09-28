@@ -37,6 +37,7 @@ export function groundReasonedConditions(
   environmentId: string,
   capturedAt: string,
 ): ConditionReasoningGroundingResult {
+  const allowedObservationIds = new Set(perception.observations.filter((item) => item.basis === 'observed').map((item) => item.id))
   const allowedObjectIds = new Set(perception.objects.map((item) => item.id))
   const allowedEvidenceIds = new Set(perception.evidence.map((item) => item.id))
   const existingTitles = new Set(perception.conditions.map((item) => normalizeText(item.title)))
@@ -56,9 +57,14 @@ export function groundReasonedConditions(
       continue
     }
 
+    const supportingObservationIds = unique(candidate.supportingObservationIds)
     const objectIds = unique(candidate.objectIds)
     const evidenceIds = unique(candidate.evidenceIds)
 
+    if (supportingObservationIds.length === 0 || supportingObservationIds.some((id) => !allowedObservationIds.has(id))) {
+      rejected.push({ title, reason: 'unknown-or-missing-observation-reference' })
+      continue
+    }
     if (objectIds.some((id) => !allowedObjectIds.has(id))) {
       rejected.push({ title, reason: 'unknown-object-reference' })
       continue
@@ -76,7 +82,9 @@ export function groundReasonedConditions(
     }
 
     const supportingObservations = perception.observations.filter((item) =>
-      item.basis === 'observed' && item.evidenceIds.some((id) => evidenceSet.has(id)),
+      supportingObservationIds.includes(item.id)
+      && item.basis === 'observed'
+      && item.evidenceIds.some((id) => evidenceSet.has(id)),
     )
     const supportingObjects = perception.objects.filter((item) =>
       item.evidenceIds.some((id) => evidenceSet.has(id))
@@ -87,8 +95,12 @@ export function groundReasonedConditions(
       && (objectIds.length === 0 || objectIds.includes(item.fromId) || objectIds.includes(item.toId)),
     )
 
-    if (supportingObservations.length === 0 && supportingObjects.length === 0 && supportingRelations.length === 0) {
-      rejected.push({ title, reason: 'no-current-grounded-support' })
+    if (supportingObservations.length !== supportingObservationIds.length) {
+      rejected.push({ title, reason: 'observation-not-grounded-by-cited-evidence' })
+      continue
+    }
+    if (supportingObservations.length === 0) {
+      rejected.push({ title, reason: 'no-current-grounded-observation-support' })
       continue
     }
 
@@ -121,7 +133,7 @@ export function groundReasonedConditions(
       kind: candidate.kind,
       title,
       description,
-      status: candidate.status,
+      status: candidate.kind === 'attention' ? 'uncertain' : candidate.status,
       basis: 'inferred',
       confidence,
       objectIds,
