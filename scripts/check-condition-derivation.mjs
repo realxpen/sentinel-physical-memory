@@ -253,6 +253,30 @@ try {
     throw new Error('grounded exposed/damaged electrical cue must derive an operational electrical hazard')
   }
 
+  const productionElectricalShape = structuredClone(genericHazardBase)
+  productionElectricalShape.objects.push({
+    id: 'outlet_object', environmentId, category: 'electrical', name: 'electrical outlet',
+    description: 'electrical outlet with exposed wires on wall',
+    confidence: 0.90, firstSeenAt: capturedAt, lastSeenAt: capturedAt, evidenceIds: ['frame_hazard'],
+  })
+  productionElectricalShape.observations.push({
+    id: 'outlet_obs', environmentId, sourceId, modality: 'image', capturedAt,
+    label: 'exposed electrical outlet',
+    description: 'Exposed electrical outlet with wires hanging out on the wall near the counter.',
+    confidence: 0.95, basis: 'observed', evidenceIds: ['frame_hazard'],
+  })
+  const productionElectricalDerived = deriveOperationalConditions(productionElectricalShape, capturedAt)
+  const productionElectrical = productionElectricalDerived.derivedConditions.find((item) => item.title === 'Electrical hazard')
+  if (!productionElectrical) {
+    throw new Error('a strong grounded observation must not be suppressed by a weaker duplicate object cue for the same physical defect')
+  }
+  if (productionElectrical.confidence !== 0.855) {
+    throw new Error(`expected strongest grounded cue to yield 0.855 inferred confidence, got ${productionElectrical.confidence}`)
+  }
+  if (!assessCondition(productionElectrical).operational) {
+    throw new Error('production-shaped exposed electrical observation must promote to an operational issue')
+  }
+
   const tripScene = structuredClone(genericHazardBase)
   tripScene.observations.push({
     id: 'trip_obs', environmentId, sourceId, modality: 'image', capturedAt,
@@ -421,6 +445,7 @@ try {
   console.log('PASS  door naming alone cannot self-ground emergency-exit identity, while ordinary doorway geometry remains usable')
   console.log('PASS  inferred conditions are not reused as direct emergency-exit grounding facts')
   console.log('PASS  generic grounded wet-floor, trip, electrical, physical-damage, sharp-object, circulation, and clutter cues derive operational issues without environment-specific hardcoding')
+  console.log('PASS  weaker duplicate representations cannot suppress a stronger grounded operational cue from the same current scene')
   console.log('PASS  grounded obstruction in front of an exit surfaces as an approach concern without falsely claiming the threshold is blocked')
   console.log('PASS  exact Workshop2-style first-scan evidence composes a grounded exit-approach issue instead of recording zero conditions')
   console.log('PASS  ordinary intact objects do not trigger generic hazard derivation')
