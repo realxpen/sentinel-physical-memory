@@ -229,7 +229,13 @@ function deriveGroundedOperationalCues(
     if (hasEquivalentOperationalCondition(perception.conditions, rule.title, objectIds)) continue
 
     const evidenceIds = unique(matches.flatMap((item) => item.evidenceIds))
-    const confidence = Math.max(0, Math.min(0.95, Number((Math.min(...matches.map((item) => item.confidence)) * 0.9).toFixed(3))))
+    // Matches here are alternative/corroborating observations of the SAME
+    // operational cue, not independent premises that all need to be true.
+    // A weaker duplicate must never veto a stronger grounded observation.
+    // Use the strongest directly grounded cue and keep the existing inference
+    // discount/cap; multi-premise derivations elsewhere still use the minimum.
+    const strongestGroundedConfidence = Math.max(...matches.map((item) => item.confidence))
+    const confidence = Math.max(0, Math.min(0.95, Number((strongestGroundedConfidence * 0.9).toFixed(3))))
     if (confidence < 0.85) continue
 
     derived.push({
