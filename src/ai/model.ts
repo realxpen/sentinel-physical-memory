@@ -34,6 +34,7 @@ export interface ActionPlanningInferenceRequest {
   role: 'action'
   request: ActionPlanningRequest & { stateId: string }
   context: string
+  timeoutMs?: number
 }
 export interface TemporalVerificationCandidate {
   key: string
