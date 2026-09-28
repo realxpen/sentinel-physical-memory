@@ -5,6 +5,7 @@ const vite = await createServer({ server: { middlewareMode: true }, appType: 'cu
 
 try {
   const { ActionPlannerService, ActionPlannerInputError } = await vite.ssrLoadModule('/src/action/planner.ts')
+  const { ModelAdapterError } = await vite.ssrLoadModule('/src/ai/model.ts')
 
   const environmentId = 'phase11-test'
   const state1 = state('state_v1', 1, '2026-09-20T10:00:00.000Z', ['source_v1'])
@@ -133,6 +134,46 @@ try {
   expect(verify.title === 'Rescan to verify', 'planner must append deterministic verification handoff')
   expect(verify.status === 'recommended', 'verification handoff must not claim verified work')
   expect(!('estimatedCost' in corrective), 'Phase 11 must not manufacture cost estimates')
+  expect(captured[0].timeoutMs === 45000, 'action planning must use a bounded provider timeout before any retry')
+
+  let transientAttempts = 0
+  const transientModel = {
+    provider: 'test',
+    model: 'test',
+    async plan(request) {
+      transientAttempts += 1
+      expect(request.timeoutMs === 45000, 'action-plan retry must preserve the bounded provider timeout')
+      if (transientAttempts === 1) {
+        throw new ModelAdapterError({
+          code: 'EMPTY_MODEL_RESPONSE',
+          message: 'simulated empty provider response',
+          retryable: true,
+        })
+      }
+      return {
+        goal: 'Restore clear emergency exit access.',
+        rationale: 'The selected immutable state contains a grounded access condition and issue.',
+        steps: [{
+          title: 'Clear the exit obstruction',
+          description: 'Move the grounded orange cart out of the emergency exit access path.',
+          priority: 'medium',
+          relatedConditionIds: ['condition_access'],
+          relatedIssueIds: ['issue_access'],
+          relatedObjectIds: ['cart','door'],
+          evidenceIds: ['e2'],
+        }],
+      }
+    },
+  }
+  const transientService = new ActionPlannerService({ get: async () => memory }, transientModel)
+  const transientResult = await transientService.create({
+    environmentId,
+    stateId: state2.id,
+    relatedConditionIds: ['condition_access'],
+    relatedIssueIds: ['issue_access'],
+  })
+  expect(transientAttempts === 2, 'retryable action-plan provider failure must receive exactly one bounded retry')
+  expect(transientResult.plan.steps[0].title === 'Clear the exit obstruction', 'retried action plan must pass through normal grounding')
 
   const wetCondition = {
     id: 'condition_wet', environmentId, kind: 'hazard', title: 'Wet floor',
@@ -258,10 +299,12 @@ try {
 
   expect(nebius.includes('Do not use a fixed hazard-to-action lookup'), 'Nemotron action prompt must require semantic reasoning rather than a remediation table')
   expect(nebius.includes('appropriately qualified professional'), 'Nemotron prompt must preserve a generic specialist safety boundary')
+  expect(nebius.includes('request.timeoutMs'), 'Nebius action planning must honor the bounded timeout supplied by the planner service')
   expect(!nebius.includes('a grounded wet floor can call for'), 'Nemotron action prompt must not encode scene-specific remediation examples as runtime policy')
 
 
   console.log('PASS  historical state planning stays pinned to immutable state evidence')
+  console.log('PASS  transient action-plan provider failures receive one bounded retry')
   console.log('PASS  hallucinated condition/issue/object/evidence IDs fail closed')
   console.log('PASS  action priority is capped by trusted condition/issue authority')
   console.log('PASS  grounded conditions can produce direct corrective actions without a hardcoded remediation lookup')
