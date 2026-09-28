@@ -191,9 +191,10 @@ try {
         line.includes('OBSERVATION_ID') && line.includes('damaged wall outlet'),
       )
       const objectId = objectLine?.match(/OBJECT_ID ([^ |]+)/)?.[1]
+      const observationId = observationLine?.match(/OBSERVATION_ID ([^ |]+)/)?.[1]
       const evidenceId = observationLine?.match(/evidence=([^ |,]+)/)?.[1]
         ?? objectLine?.match(/evidence=([^ |,]+)/)?.[1]
-      if (!objectId || !evidenceId) return { conditions: [] }
+      if (!objectId || !observationId || !evidenceId) return { conditions: [] }
 
       return {
         conditions: [{
@@ -202,6 +203,7 @@ try {
           description: 'The grounded current facts show a wall electrical fixture with internal wiring visibly exposed at an open or missing cover.',
           status: 'present',
           confidence: 0.97,
+          supportingObservationIds: [observationId],
           objectIds: [objectId],
           evidenceIds: [evidenceId],
         }],
