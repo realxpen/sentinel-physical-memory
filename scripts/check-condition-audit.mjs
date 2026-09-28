@@ -397,6 +397,9 @@ try {
         evidence: [],
       }
     },
+    async reasonConditions(request) {
+      return groundedAccessDraft(request, 'Emergency exit access obstructed')
+    },
   }
 
   const warehousePipeline = new ScanPipeline({ model: warehouseModel })
@@ -428,13 +431,13 @@ try {
   if (!warehousePrompts[2].includes('physical relationship')) throw new Error('geometry audit must verify current spatial geometry')
   if (!warehousePrompts[2].includes('Do not infer from filenames, metadata, prior memory')) throw new Error('geometry audit must reject metadata/memory leakage')
   if (!warehouseResult.conditions.some((item) => item.title === 'Emergency exit access obstructed')) {
-    throw new Error('generic geometry evidence did not enable grounded access derivation')
+    throw new Error('generic geometry evidence did not enable grounded condition reasoning')
   }
   if (warehouseResult.state.issueIds.length !== 1) throw new Error('derived access condition was not promoted')
 
   console.log('PASS  ambiguous category=other object can trigger generic geometry verification without taxonomy correction')
   console.log('PASS  geometry audit uses current visual geometry and rejects filename/metadata/memory leakage')
-  console.log('PASS  grounded spatial relation enables access derivation regardless of the object noun')
+  console.log('PASS  grounded spatial relation feeds generic condition reasoning regardless of the object noun')
 
   const geometryEnvironmentId = 'condition-audit-warehouse-geometry-test'
   const geometrySourceId = 'source-condition-audit-geometry'
@@ -594,6 +597,9 @@ try {
         evidence: [],
       }
     },
+    async reasonConditions(request) {
+      return groundedAccessDraft(request, 'Emergency exit access obstructed')
+    },
   }
 
   const geometryPipeline = new ScanPipeline({ model: geometryModel })
@@ -625,7 +631,7 @@ try {
   if (!geometryPrompts[2].includes('type="in_front_of"')) throw new Error('geometry audit must request a structured in_front_of relation')
   if (!geometryPrompts[2].includes('Near, beside, left/right')) throw new Error('geometry audit must reject weak proximity as obstruction evidence')
   if (!geometryResult.conditions.some((item) => item.title === 'Emergency exit access obstructed')) {
-    throw new Error('grounded geometry relation did not enable deterministic access derivation')
+    throw new Error('grounded geometry relation did not enable generic access reasoning')
   }
   if (geometryResult.state.issueIds.length !== 1) throw new Error('geometry-supported derived access condition was not promoted')
   const geometryMemory = await geometryPipeline.getMemory(geometryEnvironmentId)
@@ -639,7 +645,7 @@ try {
   console.log('PASS  generic weak door-proximity evidence triggers one targeted geometry audit without itself proving obstruction')
   console.log('PASS  pass-local door aliases collapse to one persisted semantic access condition')
   console.log('PASS  geometry audit requires obstacle -> door in_front_of evidence and rejects weak proximity')
-  console.log('PASS  structured geometry relation enables derivation without weakening policy thresholds')
+  console.log('PASS  structured geometry relation enables generic reasoning without weakening policy thresholds')
 
 
   const ordinaryGeometryEnvironmentId = 'condition-audit-ordinary-doorway-geometry-test'
@@ -886,6 +892,22 @@ try {
   console.log('PASS  explicit grounded exit-sign mention materializes one durable signage object when provider omits it')
   console.log('PASS  grounded object completion preserves evidence and does not rely on filename/prior memory')
   console.log('SENTINEL CONDITION AUDIT VERIFIED')
+function groundedAccessDraft(request, title) {
+  const relation = request.context.match(/\|\s+([^\s]+)\s+-\[in_front_of\]->\s+([^\s]+)\s+\|[^\n]*evidence=([^\s,]+)/)
+  if (!relation) return { conditions: [] }
+  return {
+    conditions: [{
+      kind: 'access',
+      title,
+      description: 'Grounded current-scene geometry shows a physical object occupying the doorway access area.',
+      status: 'present',
+      confidence: 0.96,
+      objectIds: [relation[1], relation[2]],
+      evidenceIds: [relation[3]],
+    }],
+  }
+}
+
 } finally {
   await vite.close()
 }
