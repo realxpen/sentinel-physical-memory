@@ -622,6 +622,52 @@ export class ScanPipeline {
       })
     }
 
+    // A broad room inventory can miss small but operationally important physical
+    // details. When both broad passes find no operational condition, run one
+    // bounded detail-first pass over the same current evidence. This is still
+    // evidence-grounded: it may only persist what the current frames support.
+    if (
+      !hasOperationalConditionCandidate(merged)
+      && this.hasRuntimeBudget(OPTIONAL_AUDIT_TIMEOUT_MS + reserveAfterPerceptionMs)
+    ) {
+      const detailPrompt = [
+        `Localized physical-detail audit for scan ${scanId} in environment ${input.environmentId}.`,
+        `The scan source id is ${input.source.id}.`,
+        `The trusted scan capturedAt is ${input.source.capturedAt}.`,
+        'Re-inspect the CURRENT frame evidence for small or localized abnormal physical details that a broad scene inventory can miss.',
+        'Systematically inspect visible wall fixtures and connections, floor edges and walking surfaces, door/handle hardware, equipment connections, storage edges, and partially occluded details across the whole frame.',
+        'Look for directly visible abnormal states such as exposed or damaged wiring/electrical fixtures, missing or damaged covers, wet/slippery areas, sharp debris, broken or loose hardware, leaks, unstable placement, trip hazards, blocked access, or comparable physical defects.',
+        'Do not enumerate ordinary intact inventory. Only return objects/observations needed to ground a visible abnormality.',
+        'Do not infer hidden electrical status, hidden causes, or unseen damage. Describe only the visible physical state.',
+        'For every supported abnormality, return the minimum grounded set: a direct observation, relevant object when identifiable, and a condition when the abnormal physical state itself is visible.',
+        'Bind all returned items to CURRENT FRAME_ID evidence. Do not use prior memory, filenames, metadata, room expectations, or earlier model wording as evidence.',
+        'If no abnormality is visually supportable, return empty observations/conditions rather than inventing one.',
+        'Return the full SENTINEL PerceptionResult JSON schema.',
+      ].join('\n')
+
+      console.warn('SENTINEL_DETAIL_AUDIT_STARTED', {
+        scanId,
+        reason: 'broad_passes_found_no_operational_condition',
+      })
+      try {
+        const detailAudit = await this.inferPerceptionPass('detail-audit', detailPrompt, artifacts, frames, input)
+        merged = mergeCurrentStateAudit(merged, detailAudit, 'detail_').scene
+        console.warn('SENTINEL_DETAIL_AUDIT_COMPLETED', {
+          scanId,
+          observations: detailAudit.observations.length,
+          objects: detailAudit.objects.length,
+          conditions: detailAudit.conditions.length,
+          operationalConditionsAfterMerge: merged.conditions.filter((item) => OPERATIONAL_CONDITION_KINDS.has(item.kind)).length,
+        })
+      } catch (error) {
+        console.warn('SENTINEL_DETAIL_AUDIT_SKIPPED', {
+          scanId,
+          code: errorCode(error),
+          message: error instanceof Error ? error.message : 'Unknown detail-audit failure',
+        })
+      }
+    }
+
     // Geometry is an independent trust pass. A malformed/empty condition-audit
     // response must not suppress a still-valid current obstruction→door check.
     if (
@@ -690,7 +736,7 @@ export class ScanPipeline {
   }
 
   private async inferPerceptionPass(
-    pass: 'scene' | 'state-audit' | 'condition-audit' | 'access-geometry-audit' | 'person-confirmation-audit',
+    pass: 'scene' | 'state-audit' | 'condition-audit' | 'detail-audit' | 'access-geometry-audit' | 'person-confirmation-audit',
     prompt: string,
     artifacts: ScanArtifact[],
     frames: ScanFrame[],
