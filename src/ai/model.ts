@@ -74,6 +74,7 @@ export interface ConditionReasoningDraftCondition {
   description: string
   status: 'present' | 'uncertain'
   confidence: number
+  supportingObservationIds: string[]
   objectIds: string[]
   evidenceIds: string[]
 }
