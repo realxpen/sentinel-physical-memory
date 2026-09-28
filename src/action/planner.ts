@@ -116,16 +116,15 @@ function buildContext(
     '- Recommendations only. Do not claim work is completed, resolved, or verified.',
     '- Use only supplied IDs. Every step must cite a condition or issue and evidence.',
     '- No costs, marketplace, contractor search, payments, procurement, invented diagnosis, or invented measurements.',
-    '- A useful plan must address the physical condition itself when a safe corrective action is supportable; do not stop at warning signage, restricting access, or monitoring alone.',
-    '- When appropriate, separate immediate risk control from actual remediation: control exposure first, then remove, clean, dry, reposition, secure, repair, or replace the grounded problem as safely justified by the condition.',
-    '- Hazardous/specialist work: recommend safe isolation when directly possible and a qualified professional; do not give unqualified repair instructions. For exposed/damaged electrical conditions, never tell an unqualified person to handle or insulate a potentially live conductor.',
+    '- A useful plan must address the grounded physical condition itself when a safe corrective action is supportable; do not stop at warning signage, restricting access, or monitoring alone.',
+    '- Reason from the supplied condition and object facts to the smallest safe corrective action. Do not select actions from a hardcoded hazard lookup table.',
+    '- Separate immediate risk control from actual remediation when the grounded condition justifies both.',
+    '- Hazardous/specialist work: recommend safe isolation when directly supportable and an appropriately qualified professional; do not give unqualified repair instructions or ask a user to manipulate a potentially dangerous component.',
     '- Uncertain conditions: inspect or re-observe rather than assert a repair.',
     '- Do not add a generic rescan/verification handoff step; SENTINEL appends one deterministic verification handoff after grounding. If observation itself is the corrective action for an uncertain condition, describe that specific inspection rather than generic post-work verification.',
     '- Do not state that a path, repair, clearance, or action is legally/code required unless the supplied grounded condition or evidence explicitly says so.',
     'CONDITIONS:',
     ...conditions.map((item) => `- ${item.id} | ${item.title} | trust=${conditionTrustLabel(item)} | kind=${item.kind} | status=${item.status} | confidence=${item.confidence} | objects=${item.objectIds.join(',')} | evidence=${item.evidenceIds.join(',')} | ${item.description}`),
-    'REMEDIATION OBJECTIVES:',
-    ...conditions.map((item) => `- ${item.id} | ${remediationObjective(item)}`),
     'ISSUES:',
     ...issues.map((item) => `- ${item.id} | ${item.title} | type=${item.type} | severity=${item.severity} | status=${item.status} | objects=${item.objectIds.join(',')} | evidence=${item.evidenceIds.join(',')} | ${item.description}`),
     'OBJECTS:',
@@ -135,42 +134,6 @@ function buildContext(
   ].join('\n')
 }
 
-
-function remediationObjective(condition: EnvironmentalCondition): string {
-  if (condition.status !== 'present') return 'Inspect or re-observe this uncertain condition before recommending physical repair.'
-
-  const text = `${condition.title} ${condition.description}`.toLowerCase()
-
-  if (/\b(?:wet|slippery|spill|spilled|puddle|liquid)\b/.test(text)) {
-    return 'Control access while the surface is unsafe, remove the liquid or contamination, then clean/mop and dry the affected walking surface before normal use.'
-  }
-
-  if (/\b(?:exposed|bare|naked|damaged|broken)\b.{0,40}\b(?:wire|wiring|cable|socket|outlet|plug|electrical|conductor)\b|\b(?:wire|wiring|cable|socket|outlet|plug|electrical|conductor)\b.{0,40}\b(?:exposed|bare|naked|damaged|broken)\b/.test(text)) {
-    return 'Keep people away from the electrical hazard; if safe and authorized, isolate/de-energize the affected circuit, then have a qualified electrical professional inspect and repair, insulate, secure, or replace the damaged component as appropriate.'
-  }
-
-  if (condition.kind === 'access' || /\b(?:blocked|obstructed|obstruction|blocking|narrowed|egress|walkway|passage|access path|approach)\b/.test(text)) {
-    return 'Remove or reposition the grounded obstruction so the affected doorway, exit approach, walkway, or access path is physically clear.'
-  }
-
-  if (/\b(?:sharp|broken glass|glass shard|metal shard|nail|blade|debris)\b/.test(text)) {
-    return 'Prevent contact with the affected area, then safely remove and dispose of the grounded sharp/debris hazard using appropriate handling protection.'
-  }
-
-  if (condition.kind === 'damage') {
-    return 'Keep the visibly damaged component out of unsafe use and have the appropriate person repair or replace the grounded damaged part.'
-  }
-
-  if (condition.kind === 'maintenance') {
-    return 'Address the grounded maintenance condition itself using the smallest safe corrective work, escalating to an appropriate specialist when the repair is not safe for ordinary handling.'
-  }
-
-  if (condition.kind === 'hazard') {
-    return 'Control exposure to the grounded hazard, then remove or correct the physical hazard when that can be done safely; otherwise escalate the corrective work to an appropriate qualified person.'
-  }
-
-  return 'Take the smallest safe physical corrective action that directly addresses the grounded condition, not only a warning or monitoring step.'
-}
 
 function groundPlan(
   memory: EnvironmentalMemory,
