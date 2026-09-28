@@ -210,8 +210,11 @@ try {
 
   if (detailResult.frames.length !== 5) throw new Error(`expected full photo + 4 detail frames, got ${detailResult.frames.length}`)
   const sceneRequest = detailRequests.find((item) => !item.prompt.includes('Condition audit for scan') && !item.prompt.includes('Localized physical-detail audit for scan'))
+  const conditionRequest = detailRequests.find((item) => item.prompt.includes('Condition audit for scan'))
   const detailRequest = detailRequests.find((item) => item.prompt.includes('Localized physical-detail audit for scan'))
   if (!sceneRequest || sceneRequest.frameIds.length !== 1) throw new Error('broad scene perception must use only the canonical full photo')
+  if (!conditionRequest || conditionRequest.frameIds.length !== 5) throw new Error('generic condition inspection must inspect the full photo plus all bounded crops')
+  if (!conditionRequest.prompt.includes('SAME capture')) throw new Error('condition audit must explicitly treat detail crops as one physical capture')
   if (!detailRequest || detailRequest.frameIds.length !== 5) throw new Error('localized detail audit must inspect the full photo plus all bounded crops')
   if (!detailRequest.prompt.includes('SAME capture')) throw new Error('detail audit must explicitly treat crops as one physical capture')
   const electricalCondition = detailResult.conditions.find((item) => item.title === 'Electrical hazard')
