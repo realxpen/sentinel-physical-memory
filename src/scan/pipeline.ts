@@ -627,7 +627,8 @@ export class ScanPipeline {
     // bounded detail-first pass over the same current evidence. This is still
     // evidence-grounded: it may only persist what the current frames support.
     if (
-      !hasOperationalConditionCandidate(merged)
+      input.media.kind === 'image'
+      && !hasOperationalConditionCandidate(merged)
       && this.hasRuntimeBudget(OPTIONAL_AUDIT_TIMEOUT_MS + reserveAfterPerceptionMs)
     ) {
       const detailPrompt = [
