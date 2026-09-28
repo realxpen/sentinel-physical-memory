@@ -90,7 +90,7 @@ async function verifyOutputContractRetry(ScanPipeline, ModelAdapterError) {
 
   expect(sceneAttempts === 2, `expected exactly 2 scene perception attempts, got ${sceneAttempts}`)
   expect(auditAttempts === 1, `expected one post-scene condition audit, got ${auditAttempts}`)
-  expect(detailAttempts === 1, `expected one bounded detail audit after the broad audit remained empty, got ${detailAttempts}`)
+  expect(detailAttempts === 0, `video path should not run the still-image detail pass, got ${detailAttempts}`)
   expect(result.state.version === 1, `expected State v1 after retry, got v${result.state.version}`)
   expect(result.observations.length === 1, `condition-audit prose must not persist as observations, got ${result.observations.length}`)
 }
