@@ -8,6 +8,8 @@ import {
   type ActionPlanningDraft,
   type ActionPlanningInferenceRequest,
   type ActionPlanningModelAdapter,
+  type ConditionReasoningDraft,
+  type ConditionReasoningInferenceRequest,
   type ArtifactResolver,
   type ModelAdapter,
   type ModelInferenceRequest,
@@ -24,7 +26,7 @@ const DEFAULT_BASE_URL = 'https://api.tokenfactory.us-central1.nebius.com/v1'
 const LEGACY_GLOBAL_BASE_URL = 'https://api.tokenfactory.nebius.com/v1'
 const DEFAULT_MODEL = 'nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B'
 
-export type NebiusInferenceRole = 'perception' | 'temporal-verification' | 'reasoning' | 'action' | 'verification'
+export type NebiusInferenceRole = 'perception' | 'condition-reasoning' | 'temporal-verification' | 'reasoning' | 'action' | 'verification'
 
 export interface NebiusInferenceTrace {
   provider: 'nebius-token-factory'
@@ -77,6 +79,34 @@ export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapte
     const content = await this.buildContent(request.prompt, request.artifacts)
     const response = await this.requestCompletion(this.systemPrompt(request.role), content, 'perception', request.timeoutMs)
     return this.parsePerceptionResult(this.extractText(response), request)
+  }
+
+  async reasonConditions(request: ConditionReasoningInferenceRequest): Promise<ConditionReasoningDraft> {
+    const prompt = [
+      'Reason about the CURRENT physical environment using ONLY the grounded SENTINEL facts supplied below.',
+      'Your job is not object detection. The perception layer already produced the visible facts. Your job is to determine whether those facts support any abnormal physical condition that materially affects safe use, access, maintenance, equipment/fixture integrity, compliance, or practical operation of the space.',
+      'Do not limit yourself to a memorized list of hazards. Reason from the physical facts and relationships in the context. A novel abnormal condition is allowed when the supplied facts support it.',
+      'Do not invent a visible fact, hidden cause, diagnosis, measurement, code requirement, electrical energization state, intent, or event that is absent from the context.',
+      'Do not use the environment name, filename, prior memory, expected change, or examples from previous scans as evidence.',
+      'Every condition must cite one or more exact EVIDENCE_ID values from the context. objectIds may contain only exact OBJECT_ID values from the context.',
+      'Use kind only from: attention|hazard|damage|maintenance|access|compliance. Do not emit normal/unknown conditions here.',
+      'Use status="present" only when the supplied grounded facts directly establish the abnormal physical state. Use status="uncertain" when the interpretation is plausible but the facts are insufficient for a present finding.',
+      'These are interpretations of grounded perception, so SENTINEL will persist them as inferred conditions and independently bound confidence. Do not inflate confidence to compensate for uncertainty.',
+      'Do not recommend actions in this step.',
+      'Avoid duplicate conditions that describe the same physical problem. Prefer the most specific concise condition supported by the facts.',
+      'If no abnormal condition is supported, return {"conditions":[]}.',
+      'Return ONLY JSON with shape {"conditions":[{"kind":"attention|hazard|damage|maintenance|access|compliance","title":"string","description":"string","status":"present|uncertain","confidence":0.0,"objectIds":["OBJECT_ID"],"evidenceIds":["EVIDENCE_ID"]}]}.',
+      'Grounded current-scene context:',
+      request.context,
+    ].join('\n')
+
+    const response = await this.requestCompletion(
+      'You are SENTINEL Condition Reasoner. Convert grounded current physical facts into conservative evidence-linked condition candidates. Never invent perception.',
+      [{ type: 'text', text: prompt }],
+      'condition-reasoning',
+      request.timeoutMs,
+    )
+    return this.parseConditionReasoningDraft(this.extractText(response))
   }
 
   async verifyTemporal(request: TemporalVerificationRequest): Promise<TemporalVerificationResult> {
@@ -152,8 +182,8 @@ export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapte
       'Use relatedObjectIds only when those IDs appear in context.',
       'Do not invent diagnoses, distances, costs, parts, vendors, contractors, payments, procurement, or schedules.',
       'Do not give unqualified hazardous repair instructions. For specialist electrical, fire-safety, structural, gas, pressurized, or similar work, recommend safe isolation when directly supportable and a qualified professional.',
-      'For each present actionable condition, include a step that physically corrects or removes the grounded problem when a safe remediation is supportable. Do not stop at warning signage, restricting access, or monitoring if the condition can also be cleaned, dried, removed, repositioned, secured, repaired, or replaced safely.',
-      'Use the supplied REMEDIATION OBJECTIVES as bounded safety guidance, not as new evidence. For example, a grounded wet floor can call for removing the liquid and mopping/drying it; exposed electrical conductors require isolation/access control plus qualified electrical repair rather than DIY handling.',
+      'For each present actionable condition, reason from the grounded physical facts to the smallest safe corrective step. Do not use a fixed hazard-to-action lookup and do not stop at warning/monitoring alone when the physical condition itself can be safely corrected.',
+      'When the grounded condition may involve dangerous specialist work, keep the user away from unsafe manipulation and route the corrective work to an appropriately qualified professional.',
       'For uncertain conditions, prefer inspection or re-observation.',
       'Keep the plan to 1-3 practical corrective steps before verification. Prefer: immediate control when needed -> physical remediation -> SENTINEL rescan. Each description should be concise (prefer under 180 characters). SENTINEL appends the final rescan/verification step deterministically.',
       'Return ONLY JSON with shape: {"goal":"string","rationale":"string","steps":[{"title":"string","description":"string","priority":"critical|high|medium|low","relatedConditionIds":["id"],"relatedIssueIds":["id"],"relatedObjectIds":["id"],"evidenceIds":["id"],"requiredSpecialist":"optional string"}]}.',
@@ -167,6 +197,51 @@ export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapte
       'action',
     )
     return this.parseActionPlanningDraft(this.extractText(response))
+  }
+
+  private parseConditionReasoningDraft(text: string): ConditionReasoningDraft {
+    let value: unknown
+    try {
+      const parsed = parseModelJson(text)
+      value = parsed.value
+      if (parsed.repaired) console.warn('SENTINEL_MODEL_JSON_REPAIRED', { model: this.model, kind: 'condition-reasoning', chars: text.length })
+    } catch {
+      throw new ModelAdapterError({ code: 'INVALID_CONDITION_REASONING_JSON', message: 'Nemotron returned invalid condition-reasoning JSON', retryable: false })
+    }
+
+    if (!isRecord(value) || !Array.isArray(value.conditions)) {
+      throw new ModelAdapterError({ code: 'INVALID_CONDITION_REASONING_SCHEMA', message: 'Nemotron condition reasoning did not match the required schema', retryable: false })
+    }
+
+    const conditions = value.conditions.flatMap((raw): ConditionReasoningDraft['conditions'] => {
+      if (
+        !isRecord(raw)
+        || typeof raw.title !== 'string'
+        || typeof raw.description !== 'string'
+        || typeof raw.confidence !== 'number'
+        || !isStringArray(raw.objectIds)
+        || !isStringArray(raw.evidenceIds)
+      ) return []
+
+      const kind = raw.kind === 'attention' || raw.kind === 'hazard' || raw.kind === 'damage'
+        || raw.kind === 'maintenance' || raw.kind === 'access' || raw.kind === 'compliance'
+        ? raw.kind
+        : undefined
+      const status = raw.status === 'present' || raw.status === 'uncertain' ? raw.status : undefined
+      if (!kind || !status) return []
+
+      return [{
+        kind,
+        title: raw.title.trim(),
+        description: raw.description.trim(),
+        status,
+        confidence: Math.max(0, Math.min(1, raw.confidence)),
+        objectIds: raw.objectIds,
+        evidenceIds: raw.evidenceIds,
+      }]
+    }).filter((item) => item.title && item.description)
+
+    return { conditions }
   }
 
   private parseActionPlanningDraft(text: string): ActionPlanningDraft {

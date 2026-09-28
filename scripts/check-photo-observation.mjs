@@ -101,6 +101,7 @@ try {
   const detailEnvironmentId = 'photo-detail-audit-test'
   const detailSourceId = 'photo-detail-source'
   const detailRequests = []
+  let detailReasoningContext = ''
   const detailModel = {
     provider: 'test-provider',
     model: 'test-model',
@@ -181,6 +182,31 @@ try {
         evidence: [],
       }
     },
+    async reasonConditions(request) {
+      detailReasoningContext = request.context
+      const objectLine = request.context.split('\n').find((line) =>
+        line.includes('OBJECT_ID') && line.includes('damaged wall outlet'),
+      )
+      const observationLine = request.context.split('\n').find((line) =>
+        line.includes('OBSERVATION_ID') && line.includes('damaged wall outlet'),
+      )
+      const objectId = objectLine?.match(/OBJECT_ID ([^ |]+)/)?.[1]
+      const evidenceId = observationLine?.match(/evidence=([^ |,]+)/)?.[1]
+        ?? objectLine?.match(/evidence=([^ |,]+)/)?.[1]
+      if (!objectId || !evidenceId) return { conditions: [] }
+
+      return {
+        conditions: [{
+          kind: 'hazard',
+          title: 'Visible electrical fixture condition',
+          description: 'The grounded current facts show a wall electrical fixture with internal wiring visibly exposed at an open or missing cover.',
+          status: 'present',
+          confidence: 0.97,
+          objectIds: [objectId],
+          evidenceIds: [evidenceId],
+        }],
+      }
+    },
   }
 
   const detailPipeline = new ScanPipeline({ model: detailModel })
@@ -217,14 +243,18 @@ try {
   if (!conditionRequest.prompt.includes('SAME capture')) throw new Error('condition audit must explicitly treat detail crops as one physical capture')
   if (!detailRequest || detailRequest.frameIds.length !== 5) throw new Error('localized detail audit must inspect the full photo plus all bounded crops')
   if (!detailRequest.prompt.includes('SAME capture')) throw new Error('detail audit must explicitly treat crops as one physical capture')
-  const electricalCondition = detailResult.conditions.find((item) => item.title === 'Electrical hazard')
-  if (!electricalCondition) throw new Error('grounded localized electrical observation did not derive an operational electrical condition')
-  if (!electricalCondition.evidenceIds.some((id) => id.includes('detail_'))) throw new Error('localized electrical condition must retain crop evidence from the current photo')
-  if (detailResult.state.issueIds.length !== 1) throw new Error('supported localized electrical condition must promote to one operational issue')
+  if (!detailReasoningContext.includes('damaged wall outlet') || !detailReasoningContext.includes('exposed wiring')) {
+    throw new Error('generic condition reasoner must receive the localized grounded physical facts')
+  }
+  const electricalCondition = detailResult.conditions.find((item) => item.title === 'Visible electrical fixture condition')
+  if (!electricalCondition) throw new Error('generic condition reasoning did not interpret the localized grounded physical defect')
+  if (electricalCondition.basis !== 'inferred') throw new Error('semantic condition interpretation must remain explicitly inferred')
+  if (!electricalCondition.evidenceIds.some((id) => id.includes('detail_'))) throw new Error('reasoned condition must retain crop evidence from the current photo')
+  if (detailResult.state.issueIds.length !== 1) throw new Error('supported reasoned condition must promote through the structural trust gate')
 
   console.log('PASS  still-photo detail crops are reserved for localized inspection rather than treated as separate scans')
   console.log('PASS  a broad scene miss can recover a small grounded physical defect from the same current capture')
-  console.log('PASS  localized current evidence deterministically derives and promotes an operational condition')
+  console.log('PASS  localized current evidence feeds generic semantic reasoning and structural issue promotion')
   console.log('SENTINEL PHOTO OBSERVATION VERIFIED')
 } finally {
   await vite.close()

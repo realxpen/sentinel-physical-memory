@@ -6,37 +6,32 @@ try {
   const { ScanPipeline } = await vite.ssrLoadModule('/src/scan/pipeline.ts')
   const { deriveOperationalConditions } = await vite.ssrLoadModule('/src/perception/condition-derivation.ts')
 
-  const environmentId = 'office-lounge-geometry-guard'
-  const sourceId = 'office-lounge-baseline'
   const capturedAt = '2026-09-26T12:00:00.000Z'
-  const prompts = []
 
-  const model = {
+  const baselineEnvironmentId = 'office-lounge-geometry-guard'
+  const baselineSourceId = 'office-lounge-baseline'
+  const baselinePrompts = []
+  const baselineModel = {
     provider: 'test-provider',
     model: 'test-model',
     async infer(request) {
-      prompts.push(request.prompt)
+      baselinePrompts.push(request.prompt)
       const frameId = request.artifacts.find((artifact) => artifact.kind === 'frame')?.frameId
       if (!frameId) throw new Error('expected trusted still frame')
 
-      if (request.prompt.includes('Condition audit for scan')) {
-        return { sourceId, observations: [], objects: [], conditions: [], relations: [], evidence: [] }
+      if (request.prompt.includes('Condition audit for scan') || request.prompt.includes('Localized physical-detail audit for scan')) {
+        return { sourceId: baselineSourceId, observations: [], objects: [], conditions: [], relations: [], evidence: [] }
       }
-
       if (request.prompt.includes('Targeted access-geometry verification')) {
         throw new Error('ordinary office furniture must not trigger the targeted access-geometry audit')
       }
 
-      if (request.prompt.includes('Targeted openable-object state verification')) {
-        return { sourceId, observations: [], objects: [], conditions: [], relations: [], evidence: [] }
-      }
-
       return {
-        sourceId,
+        sourceId: baselineSourceId,
         observations: [{
           id: 'obs_exit',
-          environmentId,
-          sourceId,
+          environmentId: baselineEnvironmentId,
+          sourceId: baselineSourceId,
           modality: 'image',
           capturedAt,
           label: 'EXIT sign above glass door',
@@ -47,7 +42,7 @@ try {
         }],
         objects: [{
           id: 'door',
-          environmentId,
+          environmentId: baselineEnvironmentId,
           category: 'door',
           name: 'glass door',
           description: 'Black-framed glass door leading outside.',
@@ -58,7 +53,7 @@ try {
           evidenceIds: [frameId],
         }, {
           id: 'exit_sign',
-          environmentId,
+          environmentId: baselineEnvironmentId,
           category: 'signage',
           name: 'exit sign',
           description: 'Green EXIT sign.',
@@ -69,7 +64,7 @@ try {
           evidenceIds: [frameId],
         }, {
           id: 'table',
-          environmentId,
+          environmentId: baselineEnvironmentId,
           category: 'furniture',
           name: 'round table',
           description: 'Round white table in the lounge seating area.',
@@ -80,7 +75,7 @@ try {
           evidenceIds: [frameId],
         }, {
           id: 'chair',
-          environmentId,
+          environmentId: baselineEnvironmentId,
           category: 'furniture',
           name: 'green chair',
           description: 'Green lounge chair beside the round table.',
@@ -92,7 +87,7 @@ try {
         }],
         conditions: [{
           id: 'normal',
-          environmentId,
+          environmentId: baselineEnvironmentId,
           kind: 'normal',
           title: 'Clean and organized office lounge',
           description: 'The visible lounge appears clean and organized.',
@@ -107,14 +102,17 @@ try {
         evidence: [],
       }
     },
+    async reasonConditions() {
+      return { conditions: [] }
+    },
   }
 
-  const pipeline = new ScanPipeline({ model })
-  const result = await pipeline.run({
-    environmentId,
+  const baselinePipeline = new ScanPipeline({ model: baselineModel })
+  const baselineResult = await baselinePipeline.run({
+    environmentId: baselineEnvironmentId,
     source: {
-      id: sourceId,
-      environmentId,
+      id: baselineSourceId,
+      environmentId: baselineEnvironmentId,
       modality: 'image',
       uri: 'data:image/jpeg;base64,AAA',
       capturedAt,
@@ -128,22 +126,22 @@ try {
     },
   })
 
-  if (prompts.some((prompt) => prompt.includes('Targeted access-geometry verification'))) {
+  if (baselinePrompts.some((prompt) => prompt.includes('Targeted access-geometry verification'))) {
     throw new Error('ordinary table/chair baseline must not trigger access-geometry verification')
   }
-  if (result.conditions.some((item) => item.kind === 'access')) {
+  if (baselineResult.conditions.some((item) => item.kind === 'access')) {
     throw new Error('clean office furniture must not create an access condition')
   }
-  if (result.state.issueIds.length !== 0) {
+  if (baselineResult.state.issueIds.length !== 0) {
     throw new Error('clean office furniture must not promote an access issue')
   }
 
   const grounded = {
-    sourceId,
+    sourceId: baselineSourceId,
     observations: [{
       id: 'geometry_table_claim',
-      environmentId,
-      sourceId,
+      environmentId: baselineEnvironmentId,
+      sourceId: baselineSourceId,
       modality: 'image',
       capturedAt,
       label: 'Round table in front of glass door',
@@ -154,7 +152,7 @@ try {
     }],
     objects: [{
       id: 'door_1',
-      environmentId,
+      environmentId: baselineEnvironmentId,
       category: 'door',
       name: 'glass door',
       description: 'Black-framed glass door.',
@@ -163,19 +161,8 @@ try {
       lastSeenAt: capturedAt,
       evidenceIds: ['frame_1'],
     }, {
-      id: 'sign_1',
-      environmentId,
-      category: 'signage',
-      name: 'exit sign',
-      description: 'Green EXIT sign.',
-      position: { description: 'above glass door' },
-      confidence: 0.99,
-      firstSeenAt: capturedAt,
-      lastSeenAt: capturedAt,
-      evidenceIds: ['frame_1'],
-    }, {
       id: 'table_1',
-      environmentId,
+      environmentId: baselineEnvironmentId,
       category: 'furniture',
       name: 'round table',
       description: 'Round white table.',
@@ -185,62 +172,56 @@ try {
       evidenceIds: ['frame_1'],
     }],
     conditions: [],
-    relations: [],
+    relations: [{
+      id: 'geometry_relation_table_door',
+      environmentId: baselineEnvironmentId,
+      fromId: 'table_1',
+      toId: 'door_1',
+      type: 'in_front_of',
+      confidence: 0.99,
+      evidenceIds: ['frame_1'],
+    }],
     evidence: [],
   }
 
-  const proseOnly = deriveOperationalConditions(grounded, capturedAt)
-  if (proseOnly.derivedConditions.length !== 0) {
-    throw new Error('geometry-audit prose without an explicit relation must not derive access obstruction')
+  const deterministic = deriveOperationalConditions(grounded, capturedAt)
+  if (deterministic.derivedConditions.length !== 0) {
+    throw new Error('deterministic compatibility layer must not infer semantic access conditions from geometry keywords/relations')
   }
 
-  const withRelation = structuredClone(grounded)
-  withRelation.relations = [{
-    id: 'geometry_relation_table_door',
-    environmentId,
-    fromId: 'table_1',
-    toId: 'door_1',
-    type: 'in_front_of',
-    confidence: 0.99,
-    evidenceIds: ['frame_1'],
-  }]
-  const relationBacked = deriveOperationalConditions(withRelation, capturedAt)
-  if (relationBacked.derivedConditions.length !== 1) {
-    throw new Error('explicit grounded obstacle -> door relation must remain eligible for access derivation')
-  }
-
-  const obstructionEnvironmentId = 'arbitrary-obstruction-geometry'
-  const obstructionSourceId = 'arbitrary-obstruction-source'
-  const obstructionPrompts = []
-  const obstructionModel = {
+  const environmentId = 'arbitrary-obstruction-geometry'
+  const sourceId = 'arbitrary-obstruction-source'
+  const prompts = []
+  let conditionReasoningContext = ''
+  const model = {
     provider: 'test-provider',
     model: 'test-model',
     async infer(request) {
-      obstructionPrompts.push(request.prompt)
+      prompts.push(request.prompt)
       const frameId = request.artifacts.find((artifact) => artifact.kind === 'frame')?.frameId
       if (!frameId) throw new Error('expected trusted still frame')
 
-      if (request.prompt.includes('Condition audit for scan')) {
-        return { sourceId: obstructionSourceId, observations: [], objects: [], conditions: [], relations: [], evidence: [] }
+      if (request.prompt.includes('Condition audit for scan') || request.prompt.includes('Localized physical-detail audit for scan')) {
+        return { sourceId, observations: [], objects: [], conditions: [], relations: [], evidence: [] }
       }
       if (request.prompt.includes('Targeted access-geometry verification')) {
         return {
-          sourceId: obstructionSourceId,
+          sourceId,
           observations: [{
             id: 'obs_geom',
-            environmentId: obstructionEnvironmentId,
-            sourceId: obstructionSourceId,
+            environmentId,
+            sourceId,
             modality: 'image',
             capturedAt,
-            label: 'physical obstruction at doorway',
-            description: 'The current obstruction occupies the doorway access path.',
+            label: 'physical object at doorway',
+            description: 'The current physical object occupies the doorway access area.',
             confidence: 0.97,
             basis: 'observed',
             evidenceIds: [frameId],
           }],
           objects: [{
             id: 'door_current',
-            environmentId: obstructionEnvironmentId,
+            environmentId,
             category: 'door',
             name: 'service door',
             description: 'Visible service door.',
@@ -249,11 +230,11 @@ try {
             lastSeenAt: capturedAt,
             evidenceIds: [frameId],
           }, {
-            id: 'obstruction_current',
-            environmentId: obstructionEnvironmentId,
+            id: 'object_current',
+            environmentId,
             category: 'obstruction',
-            name: 'temporary stored items',
-            description: 'Visible stored items in the access area.',
+            name: 'temporary physical item',
+            description: 'Visible item in the access area.',
             confidence: 0.96,
             firstSeenAt: capturedAt,
             lastSeenAt: capturedAt,
@@ -261,9 +242,9 @@ try {
           }],
           conditions: [],
           relations: [{
-            id: 'geometry_obstruction_front_door',
-            environmentId: obstructionEnvironmentId,
-            fromId: 'obstruction_current',
+            id: 'geometry_object_front_door',
+            environmentId,
+            fromId: 'object_current',
             toId: 'door_current',
             type: 'in_front_of',
             confidence: 0.97,
@@ -274,11 +255,11 @@ try {
       }
 
       return {
-        sourceId: obstructionSourceId,
+        sourceId,
         observations: [],
         objects: [{
           id: 'door_current',
-          environmentId: obstructionEnvironmentId,
+          environmentId,
           category: 'door',
           name: 'service door',
           description: 'Visible service door.',
@@ -288,11 +269,11 @@ try {
           lastSeenAt: capturedAt,
           evidenceIds: [frameId],
         }, {
-          id: 'obstruction_current',
-          environmentId: obstructionEnvironmentId,
+          id: 'object_current',
+          environmentId,
           category: 'obstruction',
-          name: 'temporary stored items',
-          description: 'Visible stored items in the middle area.',
+          name: 'temporary physical item',
+          description: 'Visible item in the middle area.',
           position: { description: 'middle area' },
           confidence: 0.96,
           firstSeenAt: capturedAt,
@@ -304,35 +285,55 @@ try {
         evidence: [],
       }
     },
+    async reasonConditions(request) {
+      conditionReasoningContext = request.context
+      const relation = request.context.match(/\|\s+([^\s]+)\s+-\[in_front_of\]->\s+([^\s]+)\s+\|[^\n]*evidence=([^\s,]+)/)
+      if (!relation) return { conditions: [] }
+      return {
+        conditions: [{
+          kind: 'access',
+          title: 'Doorway access obstructed',
+          description: 'The grounded current relation shows a physical item occupying the doorway access area.',
+          status: 'present',
+          confidence: 0.96,
+          objectIds: [relation[1], relation[2]],
+          evidenceIds: [relation[3]],
+        }],
+      }
+    },
   }
 
-  const obstructionPipeline = new ScanPipeline({ model: obstructionModel })
-  const obstructionResult = await obstructionPipeline.run({
-    environmentId: obstructionEnvironmentId,
+  const pipeline = new ScanPipeline({ model })
+  const result = await pipeline.run({
+    environmentId,
     source: {
-      id: obstructionSourceId,
-      environmentId: obstructionEnvironmentId,
+      id: sourceId,
+      environmentId,
       modality: 'image',
       uri: 'data:image/jpeg;base64,AAA',
       capturedAt,
-      metadata: { name: 'Arbitrary Obstruction Scene', environmentType: 'other', captureMode: 'photo' },
+      metadata: { name: 'Arbitrary Geometry Scene', environmentType: 'other', captureMode: 'photo' },
     },
     media: { kind: 'image', uri: 'data:image/jpeg;base64,AAA', mimeType: 'image/jpeg', sizeBytes: 3 },
   })
-  if (!obstructionPrompts.some((prompt) => prompt.includes('Targeted access-geometry verification'))) {
-    throw new Error('a grounded category=obstruction object plus visible door must trigger geometry verification even without a noun/proximity whitelist')
+
+  if (!prompts.some((prompt) => prompt.includes('Targeted access-geometry verification'))) {
+    throw new Error('grounded obstruction category plus visible door must still trigger geometry verification without a noun whitelist')
   }
-  if (!obstructionResult.conditions.some((item) => item.title === 'Doorway access obstructed')) {
-    throw new Error('relation-backed arbitrary obstruction must derive an ordinary doorway access condition')
+  if (!conditionReasoningContext.includes('-[in_front_of]->')) {
+    throw new Error('verified geometry relation must reach the generic condition reasoner as grounded context')
   }
-  if (obstructionResult.state.issueIds.length !== 1) {
-    throw new Error('relation-backed arbitrary obstruction must promote exactly one operational issue')
+  if (!result.conditions.some((item) => item.title === 'Doorway access obstructed')) {
+    throw new Error('generic condition reasoning did not convert grounded geometry into an access condition')
+  }
+  if (result.state.issueIds.length !== 1) {
+    throw new Error('grounded reasoned access condition must promote exactly one operational issue')
   }
 
   console.log('PASS  ordinary office furniture does not trigger targeted access-geometry auditing')
-  console.log('PASS  geometry-audit obstruction prose is non-authoritative without an explicit relation')
-  console.log('PASS  an explicit grounded obstacle -> door relation still supports access derivation')
-  console.log('PASS  arbitrary category=obstruction objects trigger geometry verification without demo nouns or prior proximity wording')
+  console.log('PASS  deterministic compatibility layer no longer infers semantic conditions from keywords')
+  console.log('PASS  arbitrary obstruction geometry is verified independently of object nouns')
+  console.log('PASS  verified relation feeds generic condition reasoning and then the structural trust gate')
   console.log('SENTINEL ACCESS GEOMETRY GUARD VERIFIED')
 } finally {
   await vite.close()

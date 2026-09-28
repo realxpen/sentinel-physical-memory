@@ -174,8 +174,9 @@ try {
   }
   const wetService = new ActionPlannerService({ get: async () => wetMemory }, wetModel)
   const wetResult = await wetService.create({ environmentId, stateId: state2.id })
-  expect(wetCaptured[0].context.includes('clean/mop and dry the affected walking surface'), 'wet-floor planning context must include direct cleanup/drying remediation instead of access restriction alone')
-  expect(wetResult.plan.steps[0].title === 'Dry the floor', 'wet-floor corrective remediation must survive grounding before deterministic verification')
+  expect(wetCaptured[0].context.includes('A visibly wet walking surface is present.'), 'planner must receive the grounded condition facts rather than a hazard-specific remediation lookup')
+  expect(wetCaptured[0].context.includes('Do not select actions from a hardcoded hazard lookup table.'), 'planner context must explicitly require reasoning rather than lookup behavior')
+  expect(wetResult.plan.steps[0].title === 'Dry the floor', 'model-reasoned wet-floor corrective remediation must survive grounding before deterministic verification')
 
   const electricalCondition = {
     id: 'condition_electrical', environmentId, kind: 'hazard', title: 'Exposed electrical wire',
@@ -218,8 +219,8 @@ try {
   }
   const electricalService = new ActionPlannerService({ get: async () => electricalMemory }, electricalModel)
   await electricalService.create({ environmentId, stateId: state2.id })
-  expect(electricalCaptured[0].context.includes('qualified electrical professional inspect and repair, insulate, secure, or replace'), 'exposed-electrical planning context must include qualified corrective repair while forbidding unsafe DIY handling')
-  expect(electricalCaptured[0].context.includes('never tell an unqualified person to handle or insulate a potentially live conductor'), 'electrical remediation must retain the specialist safety boundary')
+  expect(electricalCaptured[0].context.includes('Bare electrical wiring is visibly exposed near the floor.'), 'planner must receive the grounded electrical condition facts')
+  expect(electricalCaptured[0].context.includes('appropriately qualified professional'), 'generic specialist safety boundary must remain in planner context')
 
 
   let rejectedCurrent = false
@@ -255,16 +256,16 @@ try {
   expect(api.includes("from '../src/action/planner.ts'"), 'production action API must explicitly bundle the Phase 11 service')
   expect(api.includes("step.status !== 'recommended'"), 'production API must fail if model/service claims non-recommended execution state')
 
-  expect(nebius.includes('Do not stop at warning signage, restricting access, or monitoring'), 'Nemotron action prompt must require physical remediation when safely supportable')
-  expect(nebius.includes('a grounded wet floor can call for removing the liquid and mopping/drying it'), 'Nemotron prompt must explicitly preserve wet-floor remediation behavior')
-  expect(nebius.includes('qualified electrical repair rather than DIY handling'), 'Nemotron prompt must preserve specialist electrical remediation boundary')
+  expect(nebius.includes('Do not use a fixed hazard-to-action lookup'), 'Nemotron action prompt must require semantic reasoning rather than a remediation table')
+  expect(nebius.includes('appropriately qualified professional'), 'Nemotron prompt must preserve a generic specialist safety boundary')
+  expect(!nebius.includes('a grounded wet floor can call for'), 'Nemotron action prompt must not encode scene-specific remediation examples as runtime policy')
 
 
   console.log('PASS  historical state planning stays pinned to immutable state evidence')
   console.log('PASS  hallucinated condition/issue/object/evidence IDs fail closed')
   console.log('PASS  action priority is capped by trusted condition/issue authority')
-  console.log('PASS  wet-floor planning includes direct cleanup/drying remediation, not isolation alone')
-  console.log('PASS  exposed-electrical planning includes access control plus qualified repair without unsafe DIY instructions')
+  console.log('PASS  grounded conditions can produce direct corrective actions without a hardcoded remediation lookup')
+  console.log('PASS  specialist safety remains generic while model-reasoned corrective actions survive grounding')
   console.log('PASS  normal current state does not manufacture work')
   console.log('PASS  final rescan/verification handoff is deterministic and still recommended')
   console.log('PASS  product UI separates recommended action from Phase 12 verification')

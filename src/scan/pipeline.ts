@@ -6,6 +6,7 @@ import { EnvironmentalMemoryStore } from '../memory/store.js'
 import { matchObjectsConservatively } from '../memory/object-identity.js'
 import { InMemoryEnvironmentalMemoryRepository, type EnvironmentalMemoryRepository } from '../memory/repository.js'
 import { deriveOperationalConditions } from '../perception/condition-derivation.js'
+import { buildConditionReasoningContext, groundReasonedConditions } from '../perception/condition-reasoning.js'
 import { assessCondition } from '../perception/condition-model.js'
 import { resolvePersonGrounding } from '../perception/person-grounding.js'
 import { isPersonObject, isUnconfirmedPersonObject } from '../domain/object-policy.js'
@@ -25,6 +26,7 @@ const defaultId = (prefix: string) => `${prefix}_${crypto.randomUUID()}`
 const MAX_PERCEPTION_IMAGE_FRAMES = 10
 const MAX_PERCEPTION_ATTEMPTS = 2
 const OPTIONAL_AUDIT_TIMEOUT_MS = 25_000
+const CONDITION_REASONING_TIMEOUT_MS = 20_000
 const TEMPORAL_VERIFICATION_TIMEOUT_MS = 40_000
 const PERSISTENCE_RESERVE_MS = 15_000
 const ENVIRONMENT_TYPES = new Set<EnvironmentType>(['office', 'school', 'hotel', 'clinic', 'retail', 'home', 'warehouse', 'construction', 'other'])
@@ -117,7 +119,14 @@ export class ScanPipeline {
         })),
       })
     }
-    const derived = deriveOperationalConditions(completed.result, input.source.capturedAt)
+
+    const reasonedScene = await this.reasonCurrentConditions(
+      scanId,
+      completed.result,
+      input,
+      reserveAfterPerceptionMs,
+    )
+    const derived = deriveOperationalConditions(reasonedScene, input.source.capturedAt)
     let perception = validatePerceptionForScan(derived.result, input.environmentId, input.source.id)
     let verifiedTemporalChanges: VerifiedTemporalChange[] = []
     if (
@@ -289,6 +298,65 @@ export class ScanPipeline {
         rejectedObjectIds: resolution.rejectedObjectIds,
       })
       return resolution.result
+    }
+  }
+
+  private async reasonCurrentConditions(
+    scanId: string,
+    scene: PerceptionResult,
+    input: ScanInput,
+    reserveAfterPerceptionMs: number,
+  ): Promise<PerceptionResult> {
+    if (!this.model?.reasonConditions) return scene
+    if (scene.observations.length === 0 && scene.objects.length === 0 && scene.relations.length === 0) return scene
+    if (!this.hasRuntimeBudget(CONDITION_REASONING_TIMEOUT_MS + reserveAfterPerceptionMs)) {
+      console.warn('SENTINEL_CONDITION_REASONING_SKIPPED_FOR_RUNTIME_BUDGET', {
+        scanId,
+        remainingMs: this.remainingRuntimeMs(),
+      })
+      return scene
+    }
+
+    try {
+      const draft = await this.model.reasonConditions({
+        environmentId: input.environmentId,
+        sourceId: input.source.id,
+        capturedAt: input.source.capturedAt,
+        context: buildConditionReasoningContext(scene),
+        timeoutMs: CONDITION_REASONING_TIMEOUT_MS,
+      })
+      const grounded = groundReasonedConditions(
+        scene,
+        draft,
+        input.environmentId,
+        input.source.capturedAt,
+      )
+      console.warn('SENTINEL_CONDITION_REASONING_COMPLETED', {
+        scanId,
+        candidates: draft.conditions.length,
+        accepted: grounded.conditions.map((item) => ({
+          kind: item.kind,
+          title: item.title,
+          status: item.status,
+          confidence: item.confidence,
+          objectIds: item.objectIds,
+          evidenceIds: item.evidenceIds,
+        })),
+        rejected: grounded.rejected,
+      })
+
+      if (grounded.conditions.length === 0) return scene
+      return validatePerceptionForScan({
+        ...scene,
+        conditions: [...scene.conditions, ...grounded.conditions],
+      }, input.environmentId, input.source.id)
+    } catch (error) {
+      console.warn('SENTINEL_CONDITION_REASONING_SKIPPED', {
+        scanId,
+        code: errorCode(error),
+        message: error instanceof Error ? error.message : 'Unknown condition-reasoning failure',
+      })
+      return scene
     }
   }
 
@@ -591,17 +659,17 @@ export class ScanPipeline {
       `Previously remembered object naming context (NOT evidence): ${priorNamingContext}.`,
       'Inspect the supplied CURRENT image/video evidence from scratch. This is the current-scene safety and usability inspection, not merely a change detector. Identify what is wrong NOW even when the same problem existed in a previous state. Do not assume a particular building type, room type, object list, prior demo, filename, or expected change.',
       'For a still photo, any detail_* frames are overlapping crops from the SAME capture. Use them to inspect small details, but never treat them as separate times, separate rooms, or independent evidence of change.',
-      'Evaluate broadly and non-exhaustively: blocked or narrowed doors/egress approaches, chairs/carts/boxes/items in walkways, wet or slippery floors, spills/puddles, exposed/bare/frayed wiring, damaged sockets/plugs/electrical covers, sharp or cutting objects on walking surfaces, broken handles/fixtures/panels/guards, unstable stacking, unsafe storage/placement, blocked safety equipment, leaks, visible maintenance defects, smoke/fire cues, HVAC/electrical abnormalities, and clearly visible clutter/disorganization when it reduces safe or practical use of the space.',
-      'A condition is the PRIMARY output of this audit. When a visible problem is supported, emit it in conditions[]; do not leave the problem only as an observation, object name, category, state, or position.',
-      'A category="obstruction" object positioned in front of a door or access route is itself an operational access concern even if the literal threshold remains visible; distinguish reduced/encroached approach space from a fully blocked doorway rather than suppressing the concern.',
-      'Do not call ordinary aesthetic untidiness a hazard. Organization/clutter should become attention only when the visible arrangement plausibly reduces access, circulation, safe storage, reachability, or practical use.',
+      'Inspect for any directly visible abnormal physical state that materially affects safe use, access, maintenance, equipment or fixture integrity, compliance, or practical operation of the space. Do not constrain the inspection to a predefined hazard list.',
+      'Record the visible physical facts even when you are unsure how to classify their significance; a later reasoning stage will interpret grounded facts into conditions.',
+      'If you do emit a condition, make it specific to the visible physical state and bind it to current object/evidence IDs. Do not stretch ordinary appearance differences into operational problems.',
+      'Do not treat aesthetic preference alone as an abnormal condition unless the visible arrangement materially affects use of the physical space.',
       'Classify objects from visible morphology and context. If identity is uncertain, keep the label generic rather than forcing a familiar object name.',
       'When a condition depends on a spatial relationship, encode the grounded relation and bind the condition to the relevant current object IDs. Do not rely on vague narrative wording alone.',
       'Use basis="observed" only for the directly visible physical condition itself. Use basis="inferred" only when the visible facts support an operational interpretation that goes beyond direct appearance; status must remain uncertain unless the physical condition itself is visibly present.',
       'Do not recommend actions, diagnose invisible causes, predict hidden risk, or infer facts from filenames, metadata, prior memory, or expected changes.',
       'Reference only the exact supplied FRAME_ID values in evidenceIds. SENTINEL owns frame evidence records.',
       'Do not enumerate negative findings. If there is no concrete operational condition, return conditions=[] and do not add filler observations.',
-      'Before returning conditions=[], explicitly re-check the visible floor/walking surfaces, doors and their approach zones, aisles/corridors, electrical outlets/wiring, sharp floor objects/debris, handles/fixtures, storage/stacking, safety equipment, and overall work-area organization for directly visible abnormal state. This is a generic inspection checklist, not a list of expected findings.',
+      'Before returning, perform one systematic pass across the entire visible scene for small, local, partially occluded, structural, surface, fixture, connection, placement, or access abnormalities that may have been missed by the broad inventory. Do not assume what type of abnormality should exist.',
       'Return the full SENTINEL PerceptionResult JSON schema. It is acceptable for conditions to be empty when no issue is visually supported.',
     ].join('\n')
 
@@ -644,10 +712,10 @@ export class ScanPipeline {
         `The trusted scan capturedAt is ${input.source.capturedAt}.`,
         'Re-inspect the CURRENT frame evidence for small or localized abnormal physical details that a broad scene inventory can miss.',
         'For a still photo, the first frame is the full capture and any additional detail_* frames are overlapping crops from that SAME capture. Use them only to inspect smaller details; never treat them as separate times, separate rooms, or independent evidence of change.',
-        'Systematically inspect visible wall fixtures and connections, floor edges and walking surfaces, door/handle hardware, equipment connections, storage edges, and partially occluded details across the whole frame.',
-        'Look for directly visible abnormal states such as exposed or damaged wiring/electrical fixtures, missing or damaged covers, wet/slippery areas, sharp debris, broken or loose hardware, leaks, unstable placement, trip hazards, blocked access, or comparable physical defects.',
+        'Systematically inspect the whole visible frame, including small fixtures, connections, surfaces, edges, hardware, floor areas, object interfaces, placements, and partially occluded details.',
+        'Look for any directly visible state that is physically abnormal for the object or area and materially relevant to safe or practical use. Do not constrain the pass to known examples or a fixed hazard vocabulary.',
         'Do not enumerate ordinary intact inventory. Only return objects/observations needed to ground a visible abnormality.',
-        'Do not infer hidden electrical status, hidden causes, or unseen damage. Describe only the visible physical state.',
+        'Do not infer hidden operating status, hidden causes, or unseen damage. Describe only the visible physical state.',
         'For every supported abnormality, return the minimum grounded set: a direct observation, relevant object when identifiable, and a condition when the abnormal physical state itself is visible.',
         'Bind all returned items to CURRENT FRAME_ID evidence. Do not use prior memory, filenames, metadata, room expectations, or earlier model wording as evidence.',
         'If no abnormality is visually supportable, return empty observations/conditions rather than inventing one.',
