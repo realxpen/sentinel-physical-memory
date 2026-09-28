@@ -198,6 +198,7 @@ export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapte
       'You are SENTINEL Action Planner. Produce only safe, evidence-grounded recommended actions for the selected physical-environment state.',
       [{ type: 'text', text: prompt }],
       'action',
+      request.timeoutMs,
     )
     return this.parseActionPlanningDraft(this.extractText(response))
   }
