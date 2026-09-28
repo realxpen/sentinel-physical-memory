@@ -1,6 +1,6 @@
 const BASE_URL = (process.env.SENTINEL_BASE_URL || 'https://sentinel-physical-memory.vercel.app').replace(/\/$/, '')
 const RUN_ID = process.env.GITHUB_RUN_ID || String(Date.now())
-const EXPECTED_COMMIT = process.env.SENTINEL_EXPECTED_COMMIT || 'd87ec011bd08bdedfac241bf2d9173c7fdb3888f'
+const EXPECTED_COMMIT = process.env.SENTINEL_EXPECTED_COMMIT || 'ca546cd792de56231c8fbdd72d2bdd90cb208b9a'
 
 const cases = [
   {
