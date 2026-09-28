@@ -35,6 +35,10 @@ try {
         return { sourceId, observations: [], objects: [], conditions: [], relations: [], evidence: [] }
       }
 
+      if (request.prompt.includes('Localized physical-detail audit for scan')) {
+        return { sourceId, observations: [], objects: [], conditions: [], relations: [], evidence: [] }
+      }
+
       if (request.prompt.includes('Person confirmation audit for scan')) {
         return { sourceId, observations: [], objects: [], conditions: [], relations: [], evidence: [] }
       }
