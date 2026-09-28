@@ -365,7 +365,9 @@ try {
   expect(!conditionModelSource.includes('EXPLICIT_ACCESS_PATTERNS'), 'issue trust gate must not classify conditions by semantic keywords')
   expect(!plannerSource.includes('function remediationObjective'), 'action planning must not use a hardcoded hazard-to-remediation lookup')
 
-  console.log('PASS  provider perception conditions cannot bypass the generic observation-grounded reasoning boundary')\n  console.log('PASS  condition-audit direct abnormal observations survive into condition reasoning')\n  console.log('PASS  grounded perception and semantic interpretation are separate layers')
+  console.log('PASS  provider perception conditions cannot bypass the generic observation-grounded reasoning boundary')
+  console.log('PASS  condition-audit direct abnormal observations survive into condition reasoning')
+  console.log('PASS  grounded perception and semantic interpretation are separate layers')
   console.log('PASS  novel unseen abnormalities can become conditions without a predefined hazard vocabulary')
   console.log('PASS  condition reasoning cannot invent object/evidence references')
   console.log('PASS  confidence remains bounded by current grounded facts')
