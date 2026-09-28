@@ -61,6 +61,7 @@ try {
       description: 'The grounded current facts show a ceiling panel visibly sagging and partially detached above the work area.',
       status: 'present',
       confidence: 0.94,
+      supportingObservationIds: ['obs_panel'],
       objectIds: ['panel_object'],
       evidenceIds: [evidenceId],
     }],
@@ -78,6 +79,7 @@ try {
       description: 'Unsupported claim.',
       status: 'present',
       confidence: 1,
+      supportingObservationIds: ['obs_panel'],
       objectIds: ['panel_object'],
       evidenceIds: ['not_current_evidence'],
     }],
@@ -91,11 +93,41 @@ try {
       description: 'Unsupported object link.',
       status: 'present',
       confidence: 1,
+      supportingObservationIds: ['obs_panel'],
       objectIds: ['ghost_object'],
       evidenceIds: [evidenceId],
     }],
   }, environmentId, capturedAt)
   expect(badObject.conditions.length === 0 && badObject.rejected[0]?.reason === 'unknown-object-reference', 'reasoner cannot invent object IDs')
+
+  const salienceOnly = groundReasonedConditions({
+    ...perception,
+    observations: [{
+      id: 'obs_salience',
+      environmentId,
+      sourceId,
+      modality: 'image',
+      capturedAt,
+      label: 'red rectangle',
+      description: 'A red rectangle is visible on the left side of the image.',
+      confidence: 0.99,
+      basis: 'observed',
+      evidenceIds: [evidenceId],
+    }],
+  }, {
+    conditions: [{
+      kind: 'attention',
+      title: 'Red rectangle visible on left side',
+      description: 'A red rectangle is visible.',
+      status: 'present',
+      confidence: 0.99,
+      supportingObservationIds: ['obs_salience'],
+      objectIds: [],
+      evidenceIds: [evidenceId],
+    }],
+  }, environmentId, capturedAt)
+  expect(salienceOnly.conditions.length === 1 && salienceOnly.conditions[0].status === 'uncertain', 'catch-all attention reasoning must be downgraded to uncertain context instead of a present operational finding')
+  expect(assessCondition(salienceOnly.conditions[0]).operational === false, 'salience-only attention interpretation must never auto-promote')
 
   const uncertain = groundReasonedConditions(perception, {
     conditions: [{
@@ -104,6 +136,7 @@ try {
       description: 'The facts may indicate a panel issue.',
       status: 'uncertain',
       confidence: 0.99,
+      supportingObservationIds: ['obs_panel'],
       objectIds: ['panel_object'],
       evidenceIds: [evidenceId],
     }],
@@ -165,6 +198,7 @@ try {
           description: 'The current grounded observation shows the fixture separating from its support and hanging at an angle.',
           status: 'present',
           confidence: 0.96,
+          supportingObservationIds: ['obs_unknown_fixture'],
           objectIds: ['unknown_fixture'],
           evidenceIds: [evidenceMatch[1]],
         }],
@@ -216,6 +250,7 @@ try {
   console.log('PASS  condition reasoning cannot invent object/evidence references')
   console.log('PASS  confidence remains bounded by current grounded facts')
   console.log('PASS  uncertain interpretation stays memory context instead of auto-promoting')
+  console.log('PASS  catch-all visual-salience attention cannot become a present operational issue')
   console.log('PASS  issue promotion is structural and semantic-keyword agnostic')
   console.log('PASS  action planning no longer depends on a hardcoded remediation table')
   console.log('SENTINEL GENERIC CONDITION REASONING VERIFIED')
