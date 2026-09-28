@@ -548,7 +548,7 @@ export class ScanPipeline {
       `The trusted scan capturedAt is ${input.source.capturedAt}.`,
       `Previously remembered object naming context (NOT evidence): ${priorNamingContext}.`,
       'Reuse a remembered name only when the same physical object is directly visible now. Never infer presence from memory and never use prior memory as evidence.',
-      'Perform a grounded scene inventory: direct observations, visible objects, supported environmental conditions, and spatial relationships.',
+      'Perform a grounded scene inventory: direct observations, visible objects, and spatial relationships. Do not make operational condition interpretations in this perception pass; return conditions=[].',
       ...(input.media.kind === 'image' ? [
         'This source is ONE still photo. Emit each visually distinguishable physical object once. Never repeat the same object many times just because it is salient.',
         'If multiple objects share the same name, keep separate entries only when the image gives a distinct visible position, bounding box, or relationship for each instance. If instance multiplicity is not visually distinguishable, prefer one conservative representative.',
@@ -562,13 +562,13 @@ export class ScanPipeline {
       'For every durable physical item named in a direct observation, emit a corresponding object entry when the item is visually identifiable.',
       'Prefer stable whole-object identity names over viewpoint-dependent phrases. Classify from visible morphology and context, never from an expected room type, prior demo scenario, filename, or remembered change. If a specific identity is uncertain, use a conservative generic physical-object label instead of forcing a familiar noun.',
       'For any directly visible operational signage, safety device, access feature, equipment, fixture, or other durable scene anchor, emit a corresponding grounded object when visually identifiable.',
-      'Separate direct visual observations from condition interpretations.',
+      'Record directly visible physical facts as observations. Semantic condition interpretation belongs to the later generic condition-reasoning layer, so return conditions=[].',
       'Reference only the exact supplied FRAME_ID values in evidenceIds. SENTINEL owns frame evidence records; do not manufacture replacement frame evidence IDs.',
       'Omit unsupported optional claims instead of guessing.',
       'Return the SENTINEL PerceptionResult JSON schema exactly.',
     ].join('\n')
 
-    let scene = await this.inferPerceptionPass('scene', scenePrompt, artifacts, frames, input)
+    let scene = perceptionFactsOnly(await this.inferPerceptionPass('scene', scenePrompt, artifacts, frames, input))
 
     // If the primary scene call only succeeded after a transient provider retry,
     // persist that grounded scene immediately instead of spending the remaining
@@ -661,11 +661,11 @@ export class ScanPipeline {
       'For a still photo, any detail_* frames are overlapping crops from the SAME capture. Use them to inspect small details, but never treat them as separate times, separate rooms, or independent evidence of change.',
       'Inspect for any directly visible abnormal physical state that materially affects safe use, access, maintenance, equipment or fixture integrity, compliance, or practical operation of the space. Do not constrain the inspection to a predefined hazard list.',
       'Record the visible physical facts even when you are unsure how to classify their significance; a later reasoning stage will interpret grounded facts into conditions.',
-      'If you do emit a condition, make it specific to the visible physical state and bind it to current object/evidence IDs. Do not stretch ordinary appearance differences into operational problems.',
+      'Do not emit semantic conditions in this perception audit. For every supported abnormal physical state, record the directly visible fact as an observation and bind it to CURRENT evidence; include the relevant object and spatial relation when identifiable. Return conditions=[].',
       'Do not treat aesthetic preference alone as an abnormal condition unless the visible arrangement materially affects use of the physical space.',
       'Classify objects from visible morphology and context. If identity is uncertain, keep the label generic rather than forcing a familiar object name.',
       'When a condition depends on a spatial relationship, encode the grounded relation and bind the condition to the relevant current object IDs. Do not rely on vague narrative wording alone.',
-      'Use basis="observed" only for the directly visible physical condition itself. Use basis="inferred" only when the visible facts support an operational interpretation that goes beyond direct appearance; status must remain uncertain unless the physical condition itself is visibly present.',
+      'Use basis="observed" for direct observations only. Do not diagnose or classify the observation as a hazard/damage/maintenance/access condition here; the generic condition reasoner will do that from grounded facts.',
       'Do not recommend actions, diagnose invisible causes, predict hidden risk, or infer facts from filenames, metadata, prior memory, or expected changes.',
       'Reference only the exact supplied FRAME_ID values in evidenceIds. SENTINEL owns frame evidence records.',
       'Do not enumerate negative findings. If there is no concrete operational condition, return conditions=[] and do not add filler observations.',
@@ -680,7 +680,7 @@ export class ScanPipeline {
         reason: scene.conditions.length === 0 ? 'scene_pass_returned_zero_conditions' : 'scene_pass_has_only_benign_conditions',
         sceneConditions: scene.conditions.map((item) => ({ kind: item.kind, title: item.title })),
       })
-      const audit = pruneNegativeAuditObservations(await this.inferPerceptionPass('condition-audit', auditPrompt, artifacts, frames, input))
+      const audit = perceptionFactsOnly(await this.inferPerceptionPass('condition-audit', auditPrompt, artifacts, frames, input))
       const recovered = mergeCurrentStateAudit(scene, audit, 'audit_')
       merged = recovered.scene
       console.warn('SENTINEL_CONDITION_AUDIT_COMPLETED', {
@@ -716,7 +716,7 @@ export class ScanPipeline {
         'Look for any directly visible state that is physically abnormal for the object or area and materially relevant to safe or practical use. Do not constrain the pass to known examples or a fixed hazard vocabulary.',
         'Do not enumerate ordinary intact inventory. Only return objects/observations needed to ground a visible abnormality.',
         'Do not infer hidden operating status, hidden causes, or unseen damage. Describe only the visible physical state.',
-        'For every supported abnormality, return the minimum grounded set: a direct observation, relevant object when identifiable, and a condition when the abnormal physical state itself is visible.',
+        'For every supported abnormality, return the minimum grounded fact set: a direct observation plus the relevant object or relation when identifiable. Return conditions=[]; semantic condition interpretation belongs to the later generic condition reasoner.',
         'Bind all returned items to CURRENT FRAME_ID evidence. Do not use prior memory, filenames, metadata, room expectations, or earlier model wording as evidence.',
         'If no abnormality is visually supportable, return empty observations/conditions rather than inventing one.',
         'Return the full SENTINEL PerceptionResult JSON schema.',
@@ -727,7 +727,7 @@ export class ScanPipeline {
         reason: 'broad_passes_found_no_operational_condition',
       })
       try {
-        const detailAudit = await this.inferPerceptionPass('detail-audit', detailPrompt, artifacts, frames, input)
+        const detailAudit = perceptionFactsOnly(await this.inferPerceptionPass('detail-audit', detailPrompt, artifacts, frames, input))
         merged = mergeCurrentStateAudit(merged, detailAudit, 'detail_').scene
         console.warn('SENTINEL_DETAIL_AUDIT_COMPLETED', {
           scanId,
@@ -784,7 +784,7 @@ export class ScanPipeline {
         candidates: geometryCandidates,
       })
       try {
-        const geometryAudit = await this.inferPerceptionPass('access-geometry-audit', geometryPrompt, artifacts, frames, input)
+        const geometryAudit = perceptionFactsOnly(await this.inferPerceptionPass('access-geometry-audit', geometryPrompt, artifacts, frames, input))
         merged = mergeCurrentStateAudit(merged, geometryAudit, 'geometry_').scene
         console.warn('SENTINEL_ACCESS_GEOMETRY_AUDIT_COMPLETED', {
           scanId,
@@ -1057,11 +1057,13 @@ function sanitizeStateAudit(result: PerceptionResult): PerceptionResult {
   }
 }
 
-function pruneNegativeAuditObservations(result: PerceptionResult): PerceptionResult {
-  // Condition-audit conditions already carry grounded evidence. Audit prose is
-  // intentionally not persisted: it is a common source of repetitive "normal"
-  // inventory narration and does not add operational truth.
-  return { ...result, observations: [] }
+function perceptionFactsOnly(result: PerceptionResult): PerceptionResult {
+  // Perception models may still emit provider-shaped semantic conditions even
+  // when asked for facts only. Those interpretations are intentionally ignored.
+  // Current observations/objects/relations/evidence remain available to the
+  // generic condition reasoner, which is the sole active path that can create
+  // a semantic condition before deterministic issue trust/promotion.
+  return { ...result, conditions: [] }
 }
 
 
