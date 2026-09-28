@@ -125,6 +125,33 @@ try {
         evidence: [],
       }
     },
+    async reasonConditions(request) {
+      if (request.context.includes('Normal office environment')) {
+        throw new Error('provider scene conditions must not reach generic condition reasoning')
+      }
+      if (request.context.includes('Walkway obstructed')) {
+        throw new Error('provider audit conditions must not reach generic condition reasoning')
+      }
+      const observationLine = request.context.split('\n').find((line) => line.includes('Supply box across walkway'))
+      const objectLine = request.context.split('\n').find((line) => line.includes('name="supply box"'))
+      const evidenceLine = request.context.split('\n').find((line) => line.startsWith('- EVIDENCE_ID '))
+      const observationId = observationLine?.match(/OBSERVATION_ID ([^ |]+)/)?.[1]
+      const objectId = objectLine?.match(/OBJECT_ID ([^ |]+)/)?.[1]
+      const evidenceId = evidenceLine?.match(/EVIDENCE_ID ([^ |]+)/)?.[1]
+      if (!observationId || !objectId || !evidenceId) throw new Error('audit observation/object/evidence did not reach generic reasoning')
+      return {
+        conditions: [{
+          kind: 'access',
+          title: 'Walkway obstructed',
+          description: 'The current grounded observation shows a supply box positioned across the visible walking path.',
+          status: 'present',
+          confidence: 0.92,
+          supportingObservationIds: [observationId],
+          objectIds: [objectId],
+          evidenceIds: [evidenceId],
+        }],
+      }
+    },
   }
 
   const pipeline = new ScanPipeline({ model })
@@ -162,21 +189,23 @@ try {
   if (!prompts[1].includes('Do not constrain the inspection to a predefined hazard list')) throw new Error('condition audit must remain open-ended rather than hazard-list driven')
   if (!prompts[1].includes('Classify objects from visible morphology and context')) throw new Error('condition audit must independently re-check scene taxonomy')
   if (!prompts[1].includes('supply box (obstruction)')) throw new Error('condition audit prompt is missing scene-object context')
-  if (!prompts[1].includes('Normal office environment [normal]')) throw new Error('condition audit prompt is missing benign-condition context')
+  if (prompts[1].includes('Normal office environment [normal]')) throw new Error('provider-generated scene conditions must not be treated as semantic context')
   if (!prompts[1].includes('Do not enumerate negative findings')) throw new Error('condition audit prompt must prohibit negative finding spam')
-  if (result.observations.some((item) => /no visible obstructions/i.test(item.label))) throw new Error('generic negative audit observation should be pruned before memory')
-  if (result.conditions.length !== 2) throw new Error(`expected benign + audited conditions, got ${result.conditions.length}`)
+  if (!result.observations.some((item) => item.label === 'Supply box across walkway')) throw new Error('direct abnormal audit observation did not survive into memory')
+  if (result.conditions.length !== 1) throw new Error(`expected exactly one generic reasoned condition, got ${result.conditions.length}`)
   const obstruction = result.conditions.find((item) => item.title === 'Walkway obstructed')
-  if (!obstruction) throw new Error('audited condition did not survive merge')
-  if (obstruction.evidenceIds[0] !== 'condition-audit-frame-0') throw new Error('audited condition was not grounded to trusted frame')
-  if (result.state.conditionIds.length !== 2) throw new Error('benign and audited conditions were not persisted into State v1')
-  if (result.state.issueIds.length !== 1) throw new Error('supported observed access condition was not promoted by SENTINEL policy')
+  if (!obstruction) throw new Error('generic reasoner did not create the audited condition')
+  if (obstruction.basis !== 'inferred') throw new Error('semantic condition must be explicitly reasoned, not provider-observed')
+  if (obstruction.evidenceIds[0] !== 'condition-audit-frame-0') throw new Error('reasoned condition was not grounded to trusted frame')
+  if (result.conditions.some((item) => item.title === 'Normal office environment')) throw new Error('provider scene condition bypassed the generic reasoning boundary')
+  if (result.state.conditionIds.length !== 1) throw new Error('only the generic reasoned condition should persist into State v1')
+  if (result.state.issueIds.length !== 1) throw new Error('supported observation-grounded access condition was not promoted by SENTINEL policy')
 
-  console.log('PASS  benign-only scene still triggers an environment-agnostic operational-condition audit')
-  console.log('PASS  condition audit receives scene object + benign-condition context without a fixed object list')
-  console.log('PASS  audited condition remains grounded to SENTINEL-owned frame evidence')
-  console.log('PASS  audited access condition persists and issue policy remains SENTINEL-owned')
-  console.log('PASS  generic negative audit spam is pruned before memory')
+  console.log('PASS  provider conditions do not bypass the generic reasoning boundary')
+  console.log('PASS  condition audit receives grounded scene-object context without a fixed object list')
+  console.log('PASS  direct abnormal audit observations survive into generic condition reasoning')
+  console.log('PASS  generic reasoned condition remains grounded to SENTINEL-owned frame evidence')
+  console.log('PASS  observation-grounded access condition persists and issue policy remains SENTINEL-owned')
 
   const warehouseEnvironmentId = 'condition-audit-warehouse-identity-test'
   const warehouseSourceId = 'source-condition-audit-warehouse'
