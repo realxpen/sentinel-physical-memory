@@ -56,33 +56,33 @@ const benignBox = assessCondition(condition({
 expect('generic box-in-room statement stays benign', benignBox.operational === false)
 expect('generic box-in-room statement keeps normal effective kind', effectiveConditionKind(condition({ kind: 'normal', title: 'Supply Box', description: 'A cardboard box is visible in the room.' })) === 'normal')
 
-const doorwayBox = condition({
+const normalBlockingText = condition({
   kind: 'normal',
-  title: 'Supply Box',
-  description: "A physical item labeled 'SUPPLIES' is visibly blocking the doorway.",
-  confidence: 0.60,
+  title: 'Provider normal claim',
+  description: 'Text contains the words blocking doorway, but kind remains normal.',
+  confidence: 1,
 })
-const doorwayAssessment = assessCondition(doorwayBox)
-expect('explicit blocking of a doorway is policy-classified as access without depending on an object noun', effectiveConditionKind(doorwayBox) === 'access')
-expect('grounded observed doorway obstruction can become operational at bounded 0.60 threshold', doorwayAssessment.operational === true)
-expect('explicit doorway obstruction maps to access issue type', doorwayAssessment.issueType === 'access')
-expect('explicit doorway obstruction remains medium severity', doorwayAssessment.severity === 'medium')
+expect('trust policy does not reclassify a condition from keywords', effectiveConditionKind(normalBlockingText) === 'normal')
+expect('normal kind cannot auto-promote even when its prose contains hazard-like words', assessCondition(normalBlockingText).operational === false)
 
-const weakDoorwayBox = assessCondition(condition({
-  kind: 'normal',
-  title: 'Supply Box',
-  description: 'A physical item is visibly blocking the doorway.',
-  confidence: 0.59,
-}))
-expect('explicit doorway obstruction below bounded threshold stays context-only', weakDoorwayBox.operational === false)
+const explicitAccess = condition({
+  kind: 'access',
+  title: 'Doorway access obstructed',
+  description: 'A grounded current condition is semantically classified as access by perception/reasoning.',
+  confidence: 0.65,
+})
+const accessAssessment = assessCondition(explicitAccess)
+expect('semantic access kind at observed threshold becomes operational', accessAssessment.operational === true)
+expect('access kind maps to access issue type', accessAssessment.issueType === 'access')
+expect('observed access remains medium severity', accessAssessment.severity === 'medium')
 
-const personInDoorway = assessCondition(condition({
-  kind: 'normal',
-  title: 'Person',
-  description: 'A person is visible in the doorway.',
-  confidence: 0.95,
+const weakAccess = assessCondition(condition({
+  kind: 'access',
+  title: 'Possible access condition',
+  description: 'Grounded current access condition below trust threshold.',
+  confidence: 0.64,
 }))
-expect('transient person-in-doorway statement is not treated as physical access obstruction', personInDoorway.operational === false)
+expect('access condition below structural observed threshold stays context-only', weakAccess.operational === false)
 
 const perception = validatePerception({
   sourceId,
