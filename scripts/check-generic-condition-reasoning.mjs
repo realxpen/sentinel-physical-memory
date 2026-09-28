@@ -235,6 +235,126 @@ try {
   expect(result.conditions.some((item) => item.title === 'Mounted fixture is physically insecure'), 'pipeline must persist generic reasoned condition')
   expect(result.state.issueIds.length === 1, 'generic reasoned present condition must promote through the structural trust policy')
 
+
+  const auditEnvironmentId = 'provider-condition-boundary-test'
+  const auditSourceId = 'source_provider_condition_boundary'
+  const auditCapturedAt = '2026-09-28T13:30:00.000Z'
+  const boundaryModel = {
+    provider: 'test-provider',
+    model: 'test-model',
+    async infer(request) {
+      const frameId = request.artifacts.find((artifact) => artifact.kind === 'frame')?.frameId
+      if (!frameId) throw new Error('expected current frame evidence for provider-boundary regression')
+
+      const object = {
+        id: 'fixture_panel',
+        environmentId: auditEnvironmentId,
+        category: 'equipment',
+        name: 'mounted fixture panel',
+        description: 'mounted panel visible in the current image',
+        confidence: 0.97,
+        firstSeenAt: auditCapturedAt,
+        lastSeenAt: auditCapturedAt,
+        evidenceIds: [frameId],
+      }
+      const providerCondition = {
+        id: 'provider_condition_must_not_persist',
+        environmentId: auditEnvironmentId,
+        kind: 'damage',
+        title: 'Provider condition must not persist',
+        description: 'A provider-generated semantic condition that must not bypass the generic reasoner.',
+        status: 'present',
+        basis: 'observed',
+        confidence: 0.99,
+        objectIds: ['fixture_panel'],
+        evidenceIds: [frameId],
+        observedAt: auditCapturedAt,
+      }
+
+      if (request.prompt.includes('Condition audit for scan') || request.prompt.includes('Localized physical-detail audit for scan')) {
+        return {
+          sourceId: auditSourceId,
+          observations: [{
+            id: 'obs_fixture_state',
+            environmentId: auditEnvironmentId,
+            sourceId: auditSourceId,
+            modality: 'image',
+            capturedAt: auditCapturedAt,
+            label: 'fixture panel state',
+            description: 'A mounted fixture panel is visibly separated from its frame and hanging at an angle.',
+            confidence: 0.97,
+            basis: 'observed',
+            evidenceIds: [frameId],
+          }],
+          objects: [object],
+          conditions: [providerCondition],
+          relations: [],
+          evidence: [],
+        }
+      }
+
+      return {
+        sourceId: auditSourceId,
+        observations: [],
+        objects: [object],
+        conditions: [providerCondition],
+        relations: [],
+        evidence: [],
+      }
+    },
+    async reasonConditions(request) {
+      expect(request.context.includes('fixture panel state'), 'condition audit direct observation must survive into generic reasoning context')
+      expect(!request.context.includes('Provider condition must not persist'), 'provider-generated conditions must be stripped before generic reasoning')
+      const observationId = request.context.match(/OBSERVATION_ID ([^ |]+)/)?.[1]
+      const objectId = request.context.match(/OBJECT_ID ([^ |]+)/)?.[1]
+      const evidenceId = request.context.match(/EVIDENCE_ID ([^ |]+)/)?.[1]
+      if (!observationId || !objectId || !evidenceId) throw new Error('missing grounded IDs in provider-boundary reasoning context')
+      return {
+        conditions: [{
+          kind: 'maintenance',
+          title: 'Mounted fixture panel is physically insecure',
+          description: 'The current direct observation shows the panel separated from its frame and hanging at an angle.',
+          status: 'present',
+          confidence: 0.96,
+          supportingObservationIds: [observationId],
+          objectIds: [objectId],
+          evidenceIds: [evidenceId],
+        }],
+      }
+    },
+  }
+
+  let boundarySequence = 0
+  const boundaryPipeline = new ScanPipeline({
+    model: boundaryModel,
+    id(prefix) {
+      boundarySequence += 1
+      return `${prefix}_boundary_${boundarySequence}`
+    },
+  })
+  const boundaryResult = await boundaryPipeline.run({
+    environmentId: auditEnvironmentId,
+    source: {
+      id: auditSourceId,
+      environmentId: auditEnvironmentId,
+      modality: 'image',
+      uri: 'data:image/jpeg;base64,AAA',
+      capturedAt: auditCapturedAt,
+      metadata: { name: 'Boundary Scene', environmentType: 'other', captureMode: 'photo' },
+    },
+    media: {
+      kind: 'image',
+      uri: 'data:image/jpeg;base64,AAA',
+      mimeType: 'image/jpeg',
+      sizeBytes: 3,
+    },
+  })
+
+  expect(boundaryResult.observations.some((item) => item.description.includes('visibly separated from its frame')), 'condition-audit direct abnormal observation must be retained')
+  expect(boundaryResult.conditions.some((item) => item.title === 'Mounted fixture panel is physically insecure'), 'generic reasoner must create the trusted semantic condition')
+  expect(!boundaryResult.conditions.some((item) => item.title === 'Provider condition must not persist'), 'provider perception conditions must never bypass generic condition reasoning')
+  expect(boundaryResult.state.issueIds.length === 1, 'only the generic observation-grounded condition should promote to an issue')
+
   const [derivationSource, conditionModelSource, plannerSource] = await Promise.all([
     readFile(new URL('../src/perception/condition-derivation.ts', import.meta.url), 'utf8'),
     readFile(new URL('../src/perception/condition-model.ts', import.meta.url), 'utf8'),
@@ -245,7 +365,7 @@ try {
   expect(!conditionModelSource.includes('EXPLICIT_ACCESS_PATTERNS'), 'issue trust gate must not classify conditions by semantic keywords')
   expect(!plannerSource.includes('function remediationObjective'), 'action planning must not use a hardcoded hazard-to-remediation lookup')
 
-  console.log('PASS  grounded perception and semantic interpretation are separate layers')
+  console.log('PASS  provider perception conditions cannot bypass the generic observation-grounded reasoning boundary')\n  console.log('PASS  condition-audit direct abnormal observations survive into condition reasoning')\n  console.log('PASS  grounded perception and semantic interpretation are separate layers')
   console.log('PASS  novel unseen abnormalities can become conditions without a predefined hazard vocabulary')
   console.log('PASS  condition reasoning cannot invent object/evidence references')
   console.log('PASS  confidence remains bounded by current grounded facts')
