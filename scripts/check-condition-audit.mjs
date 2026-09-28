@@ -159,7 +159,7 @@ try {
   if (!prompts[0].includes('Classify from visible morphology and context')) throw new Error('scene prompt must classify from current visual evidence rather than environment-specific assumptions')
   if (!prompts[0].includes('never from an expected room type, prior demo scenario')) throw new Error('scene prompt must reject demo/room-type leakage')
   if (!prompts[1].includes('Do not assume a particular building type, room type, object list, prior demo, filename, or expected change')) throw new Error('condition audit must be environment-agnostic')
-  if (!prompts[1].includes('Evaluate broadly and non-exhaustively')) throw new Error('condition audit must inspect operational conditions broadly')
+  if (!prompts[1].includes('Do not constrain the inspection to a predefined hazard list')) throw new Error('condition audit must remain open-ended rather than hazard-list driven')
   if (!prompts[1].includes('Classify objects from visible morphology and context')) throw new Error('condition audit must independently re-check scene taxonomy')
   if (!prompts[1].includes('supply box (obstruction)')) throw new Error('condition audit prompt is missing scene-object context')
   if (!prompts[1].includes('Normal office environment [normal]')) throw new Error('condition audit prompt is missing benign-condition context')
