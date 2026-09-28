@@ -134,6 +134,94 @@ try {
   expect(verify.status === 'recommended', 'verification handoff must not claim verified work')
   expect(!('estimatedCost' in corrective), 'Phase 11 must not manufacture cost estimates')
 
+  const wetCondition = {
+    id: 'condition_wet', environmentId, kind: 'hazard', title: 'Wet floor',
+    description: 'A visibly wet walking surface is present.', status: 'present', basis: 'observed',
+    confidence: 0.98, objectIds: [], evidenceIds: ['e2'], observedAt: state2.capturedAt,
+  }
+  const wetIssue = {
+    id: 'issue_wet', environmentId, type: 'safety', title: 'Wet floor',
+    description: 'Wet walking surface requires attention.', severity: 'high', status: 'open',
+    confidence: 0.98, objectIds: [], evidenceIds: ['e2'],
+    firstDetectedAt: state2.capturedAt, lastObservedAt: state2.capturedAt,
+  }
+  const wetMemory = structuredClone(memory)
+  wetMemory.snapshots = wetMemory.snapshots.map((snapshot) =>
+    snapshot.stateId === state2.id
+      ? { ...snapshot, conditions: [wetCondition], issues: [wetIssue] }
+      : snapshot,
+  )
+  const wetCaptured = []
+  const wetModel = {
+    provider: 'test',
+    model: 'test',
+    async plan(request) {
+      wetCaptured.push(request)
+      return {
+        goal: 'Make the wet floor safe.',
+        rationale: 'Grounded wet-floor hazard.',
+        steps: [{
+          title: 'Dry the floor',
+          description: 'Remove the visible liquid, mop the affected area, and leave the walking surface dry.',
+          priority: 'high',
+          relatedConditionIds: ['condition_wet'],
+          relatedIssueIds: ['issue_wet'],
+          relatedObjectIds: [],
+          evidenceIds: ['e2'],
+        }],
+      }
+    },
+  }
+  const wetService = new ActionPlannerService({ get: async () => wetMemory }, wetModel)
+  const wetResult = await wetService.create({ environmentId, stateId: state2.id })
+  expect(wetCaptured[0].context.includes('clean/mop and dry the affected walking surface'), 'wet-floor planning context must include direct cleanup/drying remediation instead of access restriction alone')
+  expect(wetResult.plan.steps[0].title === 'Dry the floor', 'wet-floor corrective remediation must survive grounding before deterministic verification')
+
+  const electricalCondition = {
+    id: 'condition_electrical', environmentId, kind: 'hazard', title: 'Exposed electrical wire',
+    description: 'Bare electrical wiring is visibly exposed near the floor.', status: 'present', basis: 'observed',
+    confidence: 0.97, objectIds: [], evidenceIds: ['e2'], observedAt: state2.capturedAt,
+  }
+  const electricalIssue = {
+    id: 'issue_electrical', environmentId, type: 'safety', title: 'Exposed electrical wire',
+    description: 'Visible exposed wiring requires attention.', severity: 'high', status: 'open',
+    confidence: 0.97, objectIds: [], evidenceIds: ['e2'],
+    firstDetectedAt: state2.capturedAt, lastObservedAt: state2.capturedAt,
+  }
+  const electricalMemory = structuredClone(memory)
+  electricalMemory.snapshots = electricalMemory.snapshots.map((snapshot) =>
+    snapshot.stateId === state2.id
+      ? { ...snapshot, conditions: [electricalCondition], issues: [electricalIssue] }
+      : snapshot,
+  )
+  const electricalCaptured = []
+  const electricalModel = {
+    provider: 'test',
+    model: 'test',
+    async plan(request) {
+      electricalCaptured.push(request)
+      return {
+        goal: 'Control and repair the exposed electrical condition safely.',
+        rationale: 'Grounded exposed-wiring hazard.',
+        steps: [{
+          title: 'Isolate and arrange qualified repair',
+          description: 'Keep people away, isolate power only if safe and authorized, then use a qualified electrician for repair.',
+          priority: 'high',
+          relatedConditionIds: ['condition_electrical'],
+          relatedIssueIds: ['issue_electrical'],
+          relatedObjectIds: [],
+          evidenceIds: ['e2'],
+          requiredSpecialist: 'Qualified electrician',
+        }],
+      }
+    },
+  }
+  const electricalService = new ActionPlannerService({ get: async () => electricalMemory }, electricalModel)
+  await electricalService.create({ environmentId, stateId: state2.id })
+  expect(electricalCaptured[0].context.includes('qualified electrical professional inspect and repair, insulate, secure, or replace'), 'exposed-electrical planning context must include qualified corrective repair while forbidding unsafe DIY handling')
+  expect(electricalCaptured[0].context.includes('never tell an unqualified person to handle or insulate a potentially live conductor'), 'electrical remediation must retain the specialist safety boundary')
+
+
   let rejectedCurrent = false
   try {
     await service.create({ environmentId })
@@ -151,10 +239,11 @@ try {
   }
   expect(rejectedForeign, 'requested IDs outside the selected immutable state must fail closed')
 
-  const [main, css, api] = await Promise.all([
+  const [main, css, api, nebius] = await Promise.all([
     readFile(new URL('../src/main.tsx', import.meta.url), 'utf8'),
     readFile(new URL('../src/integration.css', import.meta.url), 'utf8'),
     readFile(new URL('../api/action-plan.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../src/ai/nebius.ts', import.meta.url), 'utf8'),
   ])
   expect(main.includes('ACTION PLAN / RECOMMENDED'), 'Phase 11 action plan panel must be present')
   expect(main.includes('HUMAN CHECKPOINT'), 'Phase 11 UI must separate recommendation from completion/verification')
@@ -166,9 +255,16 @@ try {
   expect(api.includes("from '../src/action/planner.ts'"), 'production action API must explicitly bundle the Phase 11 service')
   expect(api.includes("step.status !== 'recommended'"), 'production API must fail if model/service claims non-recommended execution state')
 
+  expect(nebius.includes('Do not stop at warning signage, restricting access, or monitoring'), 'Nemotron action prompt must require physical remediation when safely supportable')
+  expect(nebius.includes('a grounded wet floor can call for removing the liquid and mopping/drying it'), 'Nemotron prompt must explicitly preserve wet-floor remediation behavior')
+  expect(nebius.includes('qualified electrical repair rather than DIY handling'), 'Nemotron prompt must preserve specialist electrical remediation boundary')
+
+
   console.log('PASS  historical state planning stays pinned to immutable state evidence')
   console.log('PASS  hallucinated condition/issue/object/evidence IDs fail closed')
   console.log('PASS  action priority is capped by trusted condition/issue authority')
+  console.log('PASS  wet-floor planning includes direct cleanup/drying remediation, not isolation alone')
+  console.log('PASS  exposed-electrical planning includes access control plus qualified repair without unsafe DIY instructions')
   console.log('PASS  normal current state does not manufacture work')
   console.log('PASS  final rescan/verification handoff is deterministic and still recommended')
   console.log('PASS  product UI separates recommended action from Phase 12 verification')
