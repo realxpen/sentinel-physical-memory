@@ -753,9 +753,12 @@ export class ScanPipeline {
             ? 'SPARSE STILL-PHOTO RETRY: The prior grounded result contained no usable physical objects. Re-inspect the CURRENT still image from scratch and return a concise inventory of the major directly visible physical objects needed to represent this environment. Include stable whole-object entries for clearly visible doors, furniture, safety equipment, signage, fixtures, storage/cabinet units, plants, and other substantial scene anchors when actually visible. Do not invent objects, do not recover from memory, do not pad with decorative micro-items, and do not repeat aliases. Every object must reference the supplied FRAME_ID evidence. Return one complete JSON object only.'
             : 'FAST STRICT RETRY: Return one complete JSON object only. Prioritize operationally meaningful visible objects and anchors; for a still image keep the inventory concise (prefer at most 12 objects). Use canonical enum values, finite numeric confidences, arrays for reference fields, and reference only supplied FRAME_ID evidence. Omit decorative micro-inventory and unsupported optional claims instead of guessing.'
           : undefined
+        const inferenceArtifacts = input.media.kind === 'image' && pass !== 'detail-audit'
+          ? artifacts.filter((artifact) => artifact.kind !== 'frame' || !artifact.frameId?.startsWith('detail_'))
+          : artifacts
         const result = await this.model!.infer({
           role: 'perception',
-          artifacts,
+          artifacts: inferenceArtifacts,
           prompt: [prompt, retryInstruction].filter((item): item is string => Boolean(item)).join('\n'),
           ...(pass === 'scene' ? {} : { timeoutMs: OPTIONAL_AUDIT_TIMEOUT_MS }),
         })
@@ -848,7 +851,13 @@ export class ScanPipeline {
   }
 
   private sample(input: ScanInput): ScanFrame[] {
-    if (input.media.kind !== 'video' || !input.media.extractedFrames?.length) {
+    if (input.media.kind === 'image') {
+      const fullFrame = { frameId: this.id('frame'), timestampMs: 0, uri: input.media.uri }
+      const details = (input.media.extractedFrames ?? []).slice(0, Math.max(0, MAX_PERCEPTION_IMAGE_FRAMES - 1))
+      return [fullFrame, ...details]
+    }
+
+    if (!input.media.extractedFrames?.length) {
       return [{ frameId: this.id('frame'), timestampMs: 0, uri: input.media.uri }]
     }
 
