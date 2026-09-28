@@ -194,6 +194,7 @@ function deriveGroundedOperationalCues(
   observedAt: string,
 ): EnvironmentalCondition[] {
   const derived: EnvironmentalCondition[] = []
+  const electricalRule = OPERATIONAL_CUE_RULES.find((item) => item.title === 'Electrical hazard')
   const candidates = [
     ...perception.objects.map((item) => ({
       id: item.id,
@@ -215,6 +216,11 @@ function deriveGroundedOperationalCues(
     const matches = candidates.filter((candidate) => {
       if (!candidate.evidenceIds.length || candidate.confidence < 0.85) return false
       if (rule.category && candidate.object && !rule.category.includes(candidate.object.category)) return false
+      if (
+        rule.title === 'Visible physical damage'
+        && electricalRule
+        && electricalRule.pattern.test(candidate.text)
+      ) return false
       return rule.pattern.test(candidate.text)
     })
     if (matches.length === 0) continue

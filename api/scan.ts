@@ -9,6 +9,7 @@ type Response = { status(code: number): Response; json(body: unknown): void; set
 
 const MAX_BODY_BYTES = 4 * 1024 * 1024
 const MAX_VIDEO_FRAMES = 12
+const MAX_IMAGE_DETAIL_FRAMES = 4
 const MIN_VIDEO_FRAMES = 4
 const MIN_VIDEO_DURATION_MS = 5_000
 const MAX_VIDEO_DURATION_MS = 90_000
@@ -264,7 +265,9 @@ function parseScanInput(value: unknown): ScanInput {
     throw new ScanRequestError(400, 'ENVIRONMENT_MISMATCH', 'source.environmentId does not match environmentId')
   }
 
-  const extractedFrames = kind === 'video' ? parseFrames(value.extractedFrames, durationMs ?? 0) : undefined
+  const extractedFrames = kind === 'video'
+    ? parseFrames(value.extractedFrames, durationMs ?? 0)
+    : parseImageDetailFrames(value.extractedFrames)
   if (kind === 'video' && (!extractedFrames || extractedFrames.length === 0)) {
     throw new ScanRequestError(400, 'VIDEO_FRAMES_REQUIRED', 'Video requires extractedFrames')
   }
@@ -273,7 +276,11 @@ function parseScanInput(value: unknown): ScanInput {
     environmentId,
     source: { id: sourceId, environmentId, modality: kind, uri, capturedAt, durationMs, metadata },
     media: { kind, uri, mimeType, durationMs, sizeBytes, extractedFrames },
-    options: { maxFrames: extractedFrames?.length ?? 1, sampleIntervalMs: 2000, preserveAudio: false },
+    options: {
+      maxFrames: kind === 'image' ? 1 + (extractedFrames?.length ?? 0) : extractedFrames?.length ?? 1,
+      sampleIntervalMs: 2000,
+      preserveAudio: false,
+    },
   }
 }
 
@@ -310,6 +317,33 @@ function parseFrames(value: unknown, durationMs: number): ScanFrame[] {
     }
 
     return { frameId, timestampMs, uri }
+  })
+}
+
+function parseImageDetailFrames(value: unknown): ScanFrame[] | undefined {
+  if (value === undefined) return undefined
+  if (!Array.isArray(value)) throw new ScanRequestError(400, 'INVALID_FRAMES', 'image extractedFrames must be an array')
+  if (value.length > MAX_IMAGE_DETAIL_FRAMES) {
+    throw new ScanRequestError(422, 'TOO_MANY_IMAGE_DETAIL_FRAMES', `A maximum of ${MAX_IMAGE_DETAIL_FRAMES} still-photo detail frames is supported`)
+  }
+
+  const ids = new Set<string>()
+  return value.map((item, index) => {
+    const frame = record(item, `extractedFrames[${index}]`)
+    const frameId = requiredString(frame.frameId, `extractedFrames[${index}].frameId`)
+    if (ids.has(frameId)) throw new ScanRequestError(400, 'DUPLICATE_FRAME_ID', `Duplicate frameId ${frameId}`)
+    ids.add(frameId)
+
+    const uri = requiredString(frame.uri, `extractedFrames[${index}].uri`)
+    const frameMime = dataUrlMime(uri)
+    if (!frameMime || !ALLOWED_IMAGE_MIME.has(frameMime)) {
+      throw new ScanRequestError(415, 'UNSUPPORTED_FRAME_TYPE', `extractedFrames[${index}] must be a JPEG, PNG, or WebP data URL`)
+    }
+    if (Buffer.byteLength(uri, 'utf8') > MAX_FRAME_DATA_URL_BYTES) {
+      throw new ScanRequestError(413, 'FRAME_TOO_LARGE', `extractedFrames[${index}] exceeds the per-frame evidence budget`)
+    }
+
+    return { frameId, timestampMs: 0, uri }
   })
 }
 

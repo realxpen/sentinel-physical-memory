@@ -35,6 +35,10 @@ try {
         return { sourceId, observations: [], objects: [], conditions: [], relations: [], evidence: [] }
       }
 
+      if (request.prompt.includes('Localized physical-detail audit for scan')) {
+        return { sourceId, observations: [], objects: [], conditions: [], relations: [], evidence: [] }
+      }
+
       if (request.prompt.includes('Person confirmation audit for scan')) {
         return { sourceId, observations: [], objects: [], conditions: [], relations: [], evidence: [] }
       }
@@ -93,6 +97,134 @@ try {
   console.log('PASS  independently rejected person candidates are excluded before persistent memory')
   console.log('PASS  still photo creates durable environmental State v1')
   console.log('PASS  image observation remains grounded through the normal perception pipeline')
+
+  const detailEnvironmentId = 'photo-detail-audit-test'
+  const detailSourceId = 'photo-detail-source'
+  const detailRequests = []
+  const detailModel = {
+    provider: 'test-provider',
+    model: 'test-model',
+    async infer(request) {
+      detailRequests.push({
+        prompt: request.prompt,
+        frameIds: request.artifacts.filter((artifact) => artifact.kind === 'frame').map((artifact) => artifact.frameId),
+      })
+      const detailFrameId = request.artifacts
+        .filter((artifact) => artifact.kind === 'frame')
+        .map((artifact) => artifact.frameId)
+        .find((frameId) => frameId?.startsWith('detail_'))
+
+      if (request.prompt.includes('Localized physical-detail audit for scan')) {
+        if (!detailFrameId) throw new Error('localized detail audit must receive still-photo crop evidence')
+        return {
+          sourceId: detailSourceId,
+          observations: [{
+            id: 'detail-electrical-observation',
+            environmentId: detailEnvironmentId,
+            sourceId: detailSourceId,
+            modality: 'image',
+            capturedAt,
+            label: 'damaged wall outlet',
+            description: 'A wall electrical outlet has an open or missing cover with exposed wiring visible.',
+            confidence: 0.99,
+            basis: 'observed',
+            evidenceIds: [detailFrameId],
+          }],
+          objects: [{
+            id: 'detail-electrical-object',
+            environmentId: detailEnvironmentId,
+            category: 'electrical',
+            name: 'damaged wall outlet',
+            description: 'wall outlet with exposed wiring visible at the opening',
+            position: { description: 'wall beside work surface' },
+            confidence: 0.99,
+            firstSeenAt: capturedAt,
+            lastSeenAt: capturedAt,
+            evidenceIds: [detailFrameId],
+          }],
+          conditions: [],
+          relations: [],
+          evidence: [],
+        }
+      }
+
+      if (request.prompt.includes('Condition audit for scan')) {
+        return { sourceId: detailSourceId, observations: [], objects: [], conditions: [], relations: [], evidence: [] }
+      }
+
+      return {
+        sourceId: detailSourceId,
+        observations: [],
+        objects: [{
+          id: 'scene-counter',
+          environmentId: detailEnvironmentId,
+          category: 'furniture',
+          name: 'counter',
+          description: 'work counter',
+          confidence: 0.95,
+          firstSeenAt: capturedAt,
+          lastSeenAt: capturedAt,
+          evidenceIds: [request.artifacts.find((artifact) => artifact.kind === 'frame')?.frameId],
+        }, {
+          id: 'scene-table',
+          environmentId: detailEnvironmentId,
+          category: 'furniture',
+          name: 'table',
+          description: 'small work table',
+          confidence: 0.95,
+          firstSeenAt: capturedAt,
+          lastSeenAt: capturedAt,
+          evidenceIds: [request.artifacts.find((artifact) => artifact.kind === 'frame')?.frameId],
+        }],
+        conditions: [],
+        relations: [],
+        evidence: [],
+      }
+    },
+  }
+
+  const detailPipeline = new ScanPipeline({ model: detailModel })
+  const detailResult = await detailPipeline.run({
+    environmentId: detailEnvironmentId,
+    source: {
+      id: detailSourceId,
+      environmentId: detailEnvironmentId,
+      modality: 'image',
+      uri: 'data:image/jpeg;base64,FULL',
+      capturedAt,
+      metadata: { name: 'Generic Detail Test', environmentType: 'other', captureMode: 'photo' },
+    },
+    media: {
+      kind: 'image',
+      uri: 'data:image/jpeg;base64,FULL',
+      mimeType: 'image/jpeg',
+      sizeBytes: 4,
+      extractedFrames: [
+        { frameId: 'detail_top_left', timestampMs: 0, uri: 'data:image/jpeg;base64,TL' },
+        { frameId: 'detail_top_right', timestampMs: 0, uri: 'data:image/jpeg;base64,TR' },
+        { frameId: 'detail_bottom_left', timestampMs: 0, uri: 'data:image/jpeg;base64,BL' },
+        { frameId: 'detail_bottom_right', timestampMs: 0, uri: 'data:image/jpeg;base64,BR' },
+      ],
+    },
+  })
+
+  if (detailResult.frames.length !== 5) throw new Error(`expected full photo + 4 detail frames, got ${detailResult.frames.length}`)
+  const sceneRequest = detailRequests.find((item) => !item.prompt.includes('Condition audit for scan') && !item.prompt.includes('Localized physical-detail audit for scan'))
+  const conditionRequest = detailRequests.find((item) => item.prompt.includes('Condition audit for scan'))
+  const detailRequest = detailRequests.find((item) => item.prompt.includes('Localized physical-detail audit for scan'))
+  if (!sceneRequest || sceneRequest.frameIds.length !== 1) throw new Error('broad scene perception must use only the canonical full photo')
+  if (!conditionRequest || conditionRequest.frameIds.length !== 5) throw new Error('generic condition inspection must inspect the full photo plus all bounded crops')
+  if (!conditionRequest.prompt.includes('SAME capture')) throw new Error('condition audit must explicitly treat detail crops as one physical capture')
+  if (!detailRequest || detailRequest.frameIds.length !== 5) throw new Error('localized detail audit must inspect the full photo plus all bounded crops')
+  if (!detailRequest.prompt.includes('SAME capture')) throw new Error('detail audit must explicitly treat crops as one physical capture')
+  const electricalCondition = detailResult.conditions.find((item) => item.title === 'Electrical hazard')
+  if (!electricalCondition) throw new Error('grounded localized electrical observation did not derive an operational electrical condition')
+  if (!electricalCondition.evidenceIds.some((id) => id.includes('detail_'))) throw new Error('localized electrical condition must retain crop evidence from the current photo')
+  if (detailResult.state.issueIds.length !== 1) throw new Error('supported localized electrical condition must promote to one operational issue')
+
+  console.log('PASS  still-photo detail crops are reserved for localized inspection rather than treated as separate scans')
+  console.log('PASS  a broad scene miss can recover a small grounded physical defect from the same current capture')
+  console.log('PASS  localized current evidence deterministically derives and promotes an operational condition')
   console.log('SENTINEL PHOTO OBSERVATION VERIFIED')
 } finally {
   await vite.close()

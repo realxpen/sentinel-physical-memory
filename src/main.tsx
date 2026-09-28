@@ -331,6 +331,11 @@ function App() {
           mimeType: 'image/jpeg',
           sizeBytes: ingestion.sizeBytes,
         },
+        extractedFrames: ingestion.detailFrames.map((frame) => ({
+          frameId: id('detail'),
+          timestampMs: 0,
+          uri: frame.uri,
+        })),
       }
       const response = await postScanWithRetry(scanPayload, () => setStatus('Reconnecting · retrying observation safely'))
 
