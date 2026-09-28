@@ -187,7 +187,12 @@ try {
     async infer(request) {
       warehousePrompts.push(request.prompt)
       const isConditionAudit = request.prompt.includes('Condition audit for scan')
+      const isDetailAudit = request.prompt.includes('Localized physical-detail audit for scan')
       const isGeometryAudit = request.prompt.includes('Targeted access-geometry verification for scan')
+
+      if (isDetailAudit) {
+        return { sourceId: ordinaryGeometrySourceId, observations: [], objects: [], conditions: [], relations: [], evidence: [] }
+      }
 
       if (isGeometryAudit) {
         return {
@@ -761,8 +766,11 @@ try {
     },
   })
 
-  if (ordinaryGeometryPrompts.length !== 2) {
-    throw new Error(`expected scene + generic condition audit for ordinary furniture, got ${ordinaryGeometryPrompts.length}`)
+  if (ordinaryGeometryPrompts.length !== 3) {
+    throw new Error(`expected scene + generic condition audit + bounded detail audit for ordinary furniture, got ${ordinaryGeometryPrompts.length}`)
+  }
+  if (!ordinaryGeometryPrompts.some((prompt) => prompt.includes('Localized physical-detail audit for scan'))) {
+    throw new Error('ordinary still scene must receive one bounded detail pass before being declared clear')
   }
   if (ordinaryGeometryPrompts.some((prompt) => prompt.includes('Targeted access-geometry verification'))) {
     throw new Error('ordinary chair + door without a spatial proximity hint must not trigger targeted access geometry')
