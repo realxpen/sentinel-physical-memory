@@ -5,6 +5,7 @@ const vite = await createServer({ server: { middlewareMode: true }, appType: 'cu
 
 try {
   const { ScanPipeline } = await vite.ssrLoadModule('/src/scan/pipeline.ts')
+  const { ModelAdapterError } = await vite.ssrLoadModule('/src/ai/model.ts')
   const { buildConditionReasoningContext, groundReasonedConditions } = await vite.ssrLoadModule('/src/perception/condition-reasoning.ts')
   const { assessCondition } = await vite.ssrLoadModule('/src/perception/condition-model.ts')
 
@@ -235,6 +236,44 @@ try {
   expect(result.conditions.some((item) => item.title === 'Mounted fixture is physically insecure'), 'pipeline must persist generic reasoned condition')
   expect(result.state.issueIds.length === 1, 'generic reasoned present condition must promote through the structural trust policy')
 
+  let retryAttempts = 0
+  const retryTimeouts = []
+  const retryModel = {
+    ...model,
+    async reasonConditions(request) {
+      retryAttempts += 1
+      retryTimeouts.push(request.timeoutMs)
+      if (retryAttempts === 1) {
+        throw new ModelAdapterError({
+          code: 'NEBIUS_TIMEOUT',
+          message: 'simulated transient condition-reasoning timeout',
+          retryable: true,
+        })
+      }
+      return model.reasonConditions(request)
+    },
+  }
+  const retryPipeline = new ScanPipeline({ model: retryModel })
+  const retryResult = await retryPipeline.run({
+    environmentId,
+    source: {
+      id: sourceId,
+      environmentId,
+      modality: 'image',
+      uri: 'data:image/jpeg;base64,AAA',
+      capturedAt,
+      metadata: { name: 'Retry Scene', environmentType: 'other', captureMode: 'photo' },
+    },
+    media: {
+      kind: 'image',
+      uri: 'data:image/jpeg;base64,AAA',
+      mimeType: 'image/jpeg',
+      sizeBytes: 3,
+    },
+  })
+  expect(retryAttempts === 2, 'retryable condition reasoning failure must get exactly one bounded retry')
+  expect(retryTimeouts[0] === 30000 && retryTimeouts[1] === 25000, 'condition reasoning attempts must use bounded primary/retry timeouts')
+  expect(retryResult.conditions.some((item) => item.title === 'Mounted fixture is physically insecure'), 'bounded retry must still pass through the same grounding and trust path')
 
   const auditEnvironmentId = 'provider-condition-boundary-test'
   const auditSourceId = 'source_provider_condition_boundary'
@@ -365,6 +404,7 @@ try {
   expect(!conditionModelSource.includes('EXPLICIT_ACCESS_PATTERNS'), 'issue trust gate must not classify conditions by semantic keywords')
   expect(!plannerSource.includes('function remediationObjective'), 'action planning must not use a hardcoded hazard-to-remediation lookup')
 
+  console.log('PASS  retryable condition-reasoning provider failures receive one bounded retry without weakening grounding')
   console.log('PASS  provider perception conditions cannot bypass the generic observation-grounded reasoning boundary')
   console.log('PASS  condition-audit direct abnormal observations survive into condition reasoning')
   console.log('PASS  grounded perception and semantic interpretation are separate layers')
