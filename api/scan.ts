@@ -115,7 +115,14 @@ export default async function handler(req: Request, res: Response) {
         onTrace: (trace) => inference.push(trace),
         artifactResolver,
       })
-    const adapter = createLatencyResilientPerceptionAdapter(configuredAdapter, preferredAdapter)
+    const perceptionAdapter = createLatencyResilientPerceptionAdapter(configuredAdapter, preferredAdapter)
+    const conditionReasoningAdapter = createNebiusNemotronAdapter(apiKey, {
+      baseUrl: process.env.NEBIUS_TOKEN_FACTORY_BASE_URL,
+      // Intentionally omit a perception-model override: generic condition
+      // interpretation belongs to Nemotron reasoning, not the vision model.
+      onTrace: (trace) => inference.push(trace),
+    })
+    const adapter = createScanIntelligenceAdapter(perceptionAdapter, conditionReasoningAdapter)
 
     const pipeline = new ScanPipeline({
       model: adapter,
@@ -168,6 +175,22 @@ export default async function handler(req: Request, res: Response) {
     const message = error instanceof Error ? error.message : 'Unknown scan error'
     console.error('SENTINEL_SCAN_FAILED', summarizeError(error))
     return res.status(500).json({ error: 'SCAN_FAILED', message })
+  }
+}
+
+export function createScanIntelligenceAdapter(perception: ModelAdapter, reasoning: ModelAdapter): ModelAdapter {
+  return {
+    provider: perception.provider,
+    model: perception.model,
+    infer: (request) => perception.infer(request),
+    async reasonConditions(request) {
+      if (!reasoning.reasonConditions) return { conditions: [] }
+      return reasoning.reasonConditions(request)
+    },
+    async verifyTemporal(request) {
+      if (!perception.verifyTemporal) return { changes: [] }
+      return perception.verifyTemporal(request)
+    },
   }
 }
 
