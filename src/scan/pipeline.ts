@@ -635,6 +635,7 @@ export class ScanPipeline {
         `The scan source id is ${input.source.id}.`,
         `The trusted scan capturedAt is ${input.source.capturedAt}.`,
         'Re-inspect the CURRENT frame evidence for small or localized abnormal physical details that a broad scene inventory can miss.',
+        'For a still photo, the first frame is the full capture and any additional detail_* frames are overlapping crops from that SAME capture. Use them only to inspect smaller details; never treat them as separate times, separate rooms, or independent evidence of change.',
         'Systematically inspect visible wall fixtures and connections, floor edges and walking surfaces, door/handle hardware, equipment connections, storage edges, and partially occluded details across the whole frame.',
         'Look for directly visible abnormal states such as exposed or damaged wiring/electrical fixtures, missing or damaged covers, wet/slippery areas, sharp debris, broken or loose hardware, leaks, unstable placement, trip hazards, blocked access, or comparable physical defects.',
         'Do not enumerate ordinary intact inventory. Only return objects/observations needed to ground a visible abnormality.',
