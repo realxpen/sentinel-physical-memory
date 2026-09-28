@@ -4,11 +4,20 @@ export interface ImageIngestionOptions {
   maxBytes?: number
 }
 
+export interface ImageDetailFrame {
+  label: string
+  uri: string
+  width: number
+  height: number
+  sizeBytes: number
+}
+
 export interface ImageIngestionResult {
   uri: string
   width: number
   height: number
   sizeBytes: number
+  detailFrames: ImageDetailFrame[]
 }
 
 export class ImageIngestionError extends Error {
@@ -55,8 +64,9 @@ export async function ingestImageFile(file: File, options: ImageIngestionOptions
     const uri = canvas.toDataURL('image/jpeg', quality)
     const sizeBytes = dataUrlByteLength(uri)
     if (sizeBytes <= maxBytes) {
+      const detailFrames = createDetailFrames(image)
       URL.revokeObjectURL(loaded.objectUrl)
-      return { uri, width: canvas.width, height: canvas.height, sizeBytes }
+      return { uri, width: canvas.width, height: canvas.height, sizeBytes, detailFrames }
     }
     if (quality > 0.52) quality = Math.max(0.5, quality - 0.08)
     else {
@@ -67,6 +77,57 @@ export async function ingestImageFile(file: File, options: ImageIngestionOptions
 
   URL.revokeObjectURL(loaded.objectUrl)
   throw new ImageIngestionError('IMAGE_TOO_LARGE', 'This photo could not be compressed enough for a reliable scan. Try a closer or simpler photo.')
+}
+
+function createDetailFrames(image: HTMLImageElement): ImageDetailFrame[] {
+  // Four overlapping crops make small localized details materially larger to the
+  // vision model while preserving the full image as the canonical source.
+  // These are not separate observations in time; they are alternate views of the
+  // same capture and are used only by the detail-audit pass.
+  const regions = [
+    { label: 'top-left', x: 0, y: 0 },
+    { label: 'top-right', x: 0.4, y: 0 },
+    { label: 'bottom-left', x: 0, y: 0.4 },
+    { label: 'bottom-right', x: 0.4, y: 0.4 },
+  ]
+  const cropWidth = Math.max(1, Math.round(image.naturalWidth * 0.6))
+  const cropHeight = Math.max(1, Math.round(image.naturalHeight * 0.6))
+
+  return regions.flatMap((region): ImageDetailFrame[] => {
+    const sourceX = Math.min(Math.max(0, Math.round(image.naturalWidth * region.x)), Math.max(0, image.naturalWidth - cropWidth))
+    const sourceY = Math.min(Math.max(0, Math.round(image.naturalHeight * region.y)), Math.max(0, image.naturalHeight - cropHeight))
+    const outputWidth = Math.min(960, Math.max(640, cropWidth))
+    const outputHeight = Math.max(1, Math.round(cropHeight * outputWidth / cropWidth))
+    const canvas = document.createElement('canvas')
+    canvas.width = outputWidth
+    canvas.height = outputHeight
+    const context = canvas.getContext('2d')
+    if (!context) return []
+
+    context.drawImage(
+      image,
+      sourceX,
+      sourceY,
+      cropWidth,
+      cropHeight,
+      0,
+      0,
+      outputWidth,
+      outputHeight,
+    )
+
+    let quality = 0.74
+    let uri = canvas.toDataURL('image/jpeg', quality)
+    let sizeBytes = dataUrlByteLength(uri)
+    while (sizeBytes > 280_000 && quality > 0.5) {
+      quality -= 0.06
+      uri = canvas.toDataURL('image/jpeg', quality)
+      sizeBytes = dataUrlByteLength(uri)
+    }
+
+    if (sizeBytes > 320_000) return []
+    return [{ label: region.label, uri, width: outputWidth, height: outputHeight, sizeBytes }]
+  })
 }
 
 async function loadImage(file: File): Promise<{ image: HTMLImageElement; objectUrl: string }> {
