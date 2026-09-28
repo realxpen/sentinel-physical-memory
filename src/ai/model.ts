@@ -1,4 +1,4 @@
-import type { ActionPlanningRequest, ActionPriority, AskBuildingRequest, AskBuildingResponse, PerceptionResult, TemporalChangeKind, VerificationConditionStatus, VerificationRequest } from '../domain/sentinel'
+import type { ActionPlanningRequest, ActionPriority, AskBuildingRequest, AskBuildingResponse, ConditionKind, PerceptionResult, TemporalChangeKind, VerificationConditionStatus, VerificationRequest } from '../domain/sentinel'
 import type { ScanArtifact } from '../scan/types'
 
 export type ModelRole = 'perception' | 'reasoning' | 'verification'
@@ -68,10 +68,33 @@ export interface TemporalVerificationResult {
 }
 
 
+export interface ConditionReasoningDraftCondition {
+  kind: ConditionKind
+  title: string
+  description: string
+  status: 'present' | 'uncertain'
+  confidence: number
+  objectIds: string[]
+  evidenceIds: string[]
+}
+
+export interface ConditionReasoningDraft {
+  conditions: ConditionReasoningDraftCondition[]
+}
+
+export interface ConditionReasoningInferenceRequest {
+  environmentId: string
+  sourceId: string
+  capturedAt: string
+  context: string
+  timeoutMs?: number
+}
+
 export interface ModelAdapter {
   readonly provider: string
   readonly model: string
   infer(request: ModelInferenceRequest): Promise<PerceptionResult>
+  reasonConditions?(request: ConditionReasoningInferenceRequest): Promise<ConditionReasoningDraft>
   verifyTemporal?(request: TemporalVerificationRequest): Promise<TemporalVerificationResult>
 }
 
