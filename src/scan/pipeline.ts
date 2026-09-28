@@ -6,6 +6,7 @@ import { EnvironmentalMemoryStore } from '../memory/store.js'
 import { matchObjectsConservatively } from '../memory/object-identity.js'
 import { InMemoryEnvironmentalMemoryRepository, type EnvironmentalMemoryRepository } from '../memory/repository.js'
 import { deriveOperationalConditions } from '../perception/condition-derivation.js'
+import { buildConditionReasoningContext, groundReasonedConditions } from '../perception/condition-reasoning.js'
 import { assessCondition } from '../perception/condition-model.js'
 import { resolvePersonGrounding } from '../perception/person-grounding.js'
 import { isPersonObject, isUnconfirmedPersonObject } from '../domain/object-policy.js'
@@ -25,6 +26,7 @@ const defaultId = (prefix: string) => `${prefix}_${crypto.randomUUID()}`
 const MAX_PERCEPTION_IMAGE_FRAMES = 10
 const MAX_PERCEPTION_ATTEMPTS = 2
 const OPTIONAL_AUDIT_TIMEOUT_MS = 25_000
+const CONDITION_REASONING_TIMEOUT_MS = 20_000
 const TEMPORAL_VERIFICATION_TIMEOUT_MS = 40_000
 const PERSISTENCE_RESERVE_MS = 15_000
 const ENVIRONMENT_TYPES = new Set<EnvironmentType>(['office', 'school', 'hotel', 'clinic', 'retail', 'home', 'warehouse', 'construction', 'other'])
@@ -117,7 +119,14 @@ export class ScanPipeline {
         })),
       })
     }
-    const derived = deriveOperationalConditions(completed.result, input.source.capturedAt)
+
+    const reasonedScene = await this.reasonCurrentConditions(
+      scanId,
+      completed.result,
+      input,
+      reserveAfterPerceptionMs,
+    )
+    const derived = deriveOperationalConditions(reasonedScene, input.source.capturedAt)
     let perception = validatePerceptionForScan(derived.result, input.environmentId, input.source.id)
     let verifiedTemporalChanges: VerifiedTemporalChange[] = []
     if (
@@ -289,6 +298,65 @@ export class ScanPipeline {
         rejectedObjectIds: resolution.rejectedObjectIds,
       })
       return resolution.result
+    }
+  }
+
+  private async reasonCurrentConditions(
+    scanId: string,
+    scene: PerceptionResult,
+    input: ScanInput,
+    reserveAfterPerceptionMs: number,
+  ): Promise<PerceptionResult> {
+    if (!this.model?.reasonConditions) return scene
+    if (scene.observations.length === 0 && scene.objects.length === 0 && scene.relations.length === 0) return scene
+    if (!this.hasRuntimeBudget(CONDITION_REASONING_TIMEOUT_MS + reserveAfterPerceptionMs)) {
+      console.warn('SENTINEL_CONDITION_REASONING_SKIPPED_FOR_RUNTIME_BUDGET', {
+        scanId,
+        remainingMs: this.remainingRuntimeMs(),
+      })
+      return scene
+    }
+
+    try {
+      const draft = await this.model.reasonConditions({
+        environmentId: input.environmentId,
+        sourceId: input.source.id,
+        capturedAt: input.source.capturedAt,
+        context: buildConditionReasoningContext(scene),
+        timeoutMs: CONDITION_REASONING_TIMEOUT_MS,
+      })
+      const grounded = groundReasonedConditions(
+        scene,
+        draft,
+        input.environmentId,
+        input.source.capturedAt,
+      )
+      console.warn('SENTINEL_CONDITION_REASONING_COMPLETED', {
+        scanId,
+        candidates: draft.conditions.length,
+        accepted: grounded.conditions.map((item) => ({
+          kind: item.kind,
+          title: item.title,
+          status: item.status,
+          confidence: item.confidence,
+          objectIds: item.objectIds,
+          evidenceIds: item.evidenceIds,
+        })),
+        rejected: grounded.rejected,
+      })
+
+      if (grounded.conditions.length === 0) return scene
+      return validatePerceptionForScan({
+        ...scene,
+        conditions: [...scene.conditions, ...grounded.conditions],
+      }, input.environmentId, input.source.id)
+    } catch (error) {
+      console.warn('SENTINEL_CONDITION_REASONING_SKIPPED', {
+        scanId,
+        code: errorCode(error),
+        message: error instanceof Error ? error.message : 'Unknown condition-reasoning failure',
+      })
+      return scene
     }
   }
 
