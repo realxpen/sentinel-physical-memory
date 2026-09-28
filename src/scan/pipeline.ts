@@ -1,7 +1,7 @@
 import type { ConditionKind, EnvironmentType, PerceptionResult, SpatialObject, VerifiedTemporalChange, ScanSource, EnvironmentalStateSnapshot } from '../domain/sentinel.js'
 import { PerceptionValidationError, validatePerceptionForScan } from '../ai/perception-schema.js'
 import { groundPerceptionToTrustedFrames } from '../ai/trusted-evidence.js'
-import { ModelAdapterError, type ModelAdapter, type TemporalVerificationCandidate } from '../ai/model.js'
+import { ModelAdapterError, type ConditionReasoningDraft, type ModelAdapter, type TemporalVerificationCandidate } from '../ai/model.js'
 import { EnvironmentalMemoryStore } from '../memory/store.js'
 import { matchObjectsConservatively } from '../memory/object-identity.js'
 import { InMemoryEnvironmentalMemoryRepository, type EnvironmentalMemoryRepository } from '../memory/repository.js'
@@ -26,7 +26,8 @@ const defaultId = (prefix: string) => `${prefix}_${crypto.randomUUID()}`
 const MAX_PERCEPTION_IMAGE_FRAMES = 10
 const MAX_PERCEPTION_ATTEMPTS = 2
 const OPTIONAL_AUDIT_TIMEOUT_MS = 25_000
-const CONDITION_REASONING_TIMEOUT_MS = 20_000
+const CONDITION_REASONING_TIMEOUT_MS = 30_000
+const CONDITION_REASONING_RETRY_TIMEOUT_MS = 25_000
 const TEMPORAL_VERIFICATION_TIMEOUT_MS = 40_000
 const PERSISTENCE_RESERVE_MS = 15_000
 const ENVIRONMENT_TYPES = new Set<EnvironmentType>(['office', 'school', 'hotel', 'clinic', 'retail', 'home', 'warehouse', 'construction', 'other'])
@@ -318,13 +319,35 @@ export class ScanPipeline {
     }
 
     try {
-      const draft = await this.model.reasonConditions({
+      const request = {
         environmentId: input.environmentId,
         sourceId: input.source.id,
         capturedAt: input.source.capturedAt,
         context: buildConditionReasoningContext(scene),
         timeoutMs: CONDITION_REASONING_TIMEOUT_MS,
-      })
+      }
+
+      let draft: ConditionReasoningDraft
+      try {
+        draft = await this.model.reasonConditions(request)
+      } catch (error) {
+        const retryable = error instanceof ModelAdapterError && error.retryable
+        const canRetry = retryable
+          && this.hasRuntimeBudget(CONDITION_REASONING_RETRY_TIMEOUT_MS + reserveAfterPerceptionMs)
+        if (!canRetry) throw error
+
+        console.warn('SENTINEL_CONDITION_REASONING_RETRY', {
+          scanId,
+          code: error.code,
+          message: error.message,
+          retryTimeoutMs: CONDITION_REASONING_RETRY_TIMEOUT_MS,
+        })
+        draft = await this.model.reasonConditions({
+          ...request,
+          timeoutMs: CONDITION_REASONING_RETRY_TIMEOUT_MS,
+        })
+      }
+
       const grounded = groundReasonedConditions(
         scene,
         draft,
