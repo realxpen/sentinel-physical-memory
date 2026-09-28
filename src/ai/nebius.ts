@@ -88,14 +88,17 @@ export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapte
       'Do not limit yourself to a memorized list of hazards. Reason from the physical facts and relationships in the context. A novel abnormal condition is allowed when the supplied facts support it.',
       'Do not invent a visible fact, hidden cause, diagnosis, measurement, code requirement, electrical energization state, intent, or event that is absent from the context.',
       'Do not use the environment name, filename, prior memory, expected change, or examples from previous scans as evidence.',
-      'Every condition must cite one or more exact EVIDENCE_ID values from the context. objectIds may contain only exact OBJECT_ID values from the context.',
-      'Use kind only from: attention|hazard|damage|maintenance|access|compliance. Do not emit normal/unknown conditions here.',
-      'Use status="present" only when the supplied grounded facts directly establish the abnormal physical state. Use status="uncertain" when the interpretation is plausible but the facts are insufficient for a present finding.',
+      'Every candidate must cite at least one exact OBSERVATION_ID whose grounded text describes the physical abnormality or impaired relationship being interpreted. Evidence/object presence alone is not enough. Also cite one or more exact EVIDENCE_ID values; objectIds may contain only exact OBJECT_ID values from the context.',
+      'Mere visibility, color, shape, ordinary identity, ordinary location, visual salience, signage text, or an object with unknown status is NOT an abnormal condition by itself. Omit such candidates.',
+      'A present condition requires grounded facts that describe a physical deviation, impairment, defect, unsafe relationship, or operationally material abnormal state. If you cannot point to such a grounded observation, return no condition.',
+      'Use kind only from: attention|hazard|damage|maintenance|access|compliance. Use attention only as uncertain context when the facts suggest something worth re-observing but do not establish a specific operational condition; never emit status="present" with kind="attention".',
+      'Use status="present" only when the cited grounded observations directly establish the abnormal physical state. Use status="uncertain" when the interpretation is plausible but the facts are insufficient for a present finding.',
       'These are interpretations of grounded perception, so SENTINEL will persist them as inferred conditions and independently bound confidence. Do not inflate confidence to compensate for uncertainty.',
       'Do not recommend actions in this step.',
       'Avoid duplicate conditions that describe the same physical problem. Prefer the most specific concise condition supported by the facts.',
+      'Before returning each candidate, perform a skeptical check: would the candidate still exist if the cited observation were only an ordinary visible feature? If yes, omit it. Do not turn "something is visible" into "something needs attention".',
       'If no abnormal condition is supported, return {"conditions":[]}.',
-      'Return ONLY JSON with shape {"conditions":[{"kind":"attention|hazard|damage|maintenance|access|compliance","title":"string","description":"string","status":"present|uncertain","confidence":0.0,"objectIds":["OBJECT_ID"],"evidenceIds":["EVIDENCE_ID"]}]}.',
+      'Return ONLY JSON with shape {"conditions":[{"kind":"attention|hazard|damage|maintenance|access|compliance","title":"string","description":"string","status":"present|uncertain","confidence":0.0,"supportingObservationIds":["OBSERVATION_ID"],"objectIds":["OBJECT_ID"],"evidenceIds":["EVIDENCE_ID"]}]}.',
       'Grounded current-scene context:',
       request.context,
     ].join('\n')
@@ -219,6 +222,7 @@ export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapte
         || typeof raw.title !== 'string'
         || typeof raw.description !== 'string'
         || typeof raw.confidence !== 'number'
+        || !isStringArray(raw.supportingObservationIds)
         || !isStringArray(raw.objectIds)
         || !isStringArray(raw.evidenceIds)
       ) return []
@@ -227,8 +231,9 @@ export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapte
         || raw.kind === 'maintenance' || raw.kind === 'access' || raw.kind === 'compliance'
         ? raw.kind
         : undefined
-      const status = raw.status === 'present' || raw.status === 'uncertain' ? raw.status : undefined
-      if (!kind || !status) return []
+      const parsedStatus = raw.status === 'present' || raw.status === 'uncertain' ? raw.status : undefined
+      if (!kind || !parsedStatus || raw.supportingObservationIds.length === 0) return []
+      const status = kind === 'attention' ? 'uncertain' : parsedStatus
 
       return [{
         kind,
@@ -236,6 +241,7 @@ export class NebiusNemotronAdapter implements ModelAdapter, ReasoningModelAdapte
         description: raw.description.trim(),
         status,
         confidence: Math.max(0, Math.min(1, raw.confidence)),
+        supportingObservationIds: raw.supportingObservationIds,
         objectIds: raw.objectIds,
         evidenceIds: raw.evidenceIds,
       }]
