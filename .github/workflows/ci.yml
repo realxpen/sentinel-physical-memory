@@ -99,5 +99,5 @@ jobs:
       - name: Validate generic condition reasoning in production
         env:
           SENTINEL_BASE_URL: https://sentinel-physical-memory.vercel.app
-          SENTINEL_EXPECTED_COMMIT: d87ec011bd08bdedfac241bf2d9173c7fdb3888f
+          SENTINEL_EXPECTED_COMMIT: ca546cd792de56231c8fbdd72d2bdd90cb208b9a
         run: node scripts/check-production-condition-smoke.mjs
