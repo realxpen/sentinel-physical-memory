@@ -558,8 +558,14 @@ export class ScanPipeline {
       }
     }
 
-    if (hasOperationalConditionCandidate(scene)) return scene
-    if (input.media.kind === 'image' && !shouldRunStillImageConditionAudit(scene) && !shouldRunAccessGeometryAudit(scene)) return scene
+    const hasStillDetailFrames = input.media.kind === 'image' && (input.media.extractedFrames?.length ?? 0) > 0
+    if (hasOperationalConditionCandidate(scene) && !hasStillDetailFrames) return scene
+    if (
+      input.media.kind === 'image'
+      && !hasStillDetailFrames
+      && !shouldRunStillImageConditionAudit(scene)
+      && !shouldRunAccessGeometryAudit(scene)
+    ) return scene
     if (!this.hasRuntimeBudget(OPTIONAL_AUDIT_TIMEOUT_MS + reserveAfterPerceptionMs)) {
       console.warn('SENTINEL_CONDITION_AUDIT_SKIPPED_FOR_RUNTIME_BUDGET', {
         scanId,
@@ -584,6 +590,7 @@ export class ScanPipeline {
       `The scene inventory reported these conditions: ${sceneConditionSummary}. Benign/normal conditions do not count as a completed operational-condition audit.`,
       `Previously remembered object naming context (NOT evidence): ${priorNamingContext}.`,
       'Inspect the supplied CURRENT image/video evidence from scratch. This is the current-scene safety and usability inspection, not merely a change detector. Identify what is wrong NOW even when the same problem existed in a previous state. Do not assume a particular building type, room type, object list, prior demo, filename, or expected change.',
+      'For a still photo, any detail_* frames are overlapping crops from the SAME capture. Use them to inspect small details, but never treat them as separate times, separate rooms, or independent evidence of change.',
       'Evaluate broadly and non-exhaustively: blocked or narrowed doors/egress approaches, chairs/carts/boxes/items in walkways, wet or slippery floors, spills/puddles, exposed/bare/frayed wiring, damaged sockets/plugs/electrical covers, sharp or cutting objects on walking surfaces, broken handles/fixtures/panels/guards, unstable stacking, unsafe storage/placement, blocked safety equipment, leaks, visible maintenance defects, smoke/fire cues, HVAC/electrical abnormalities, and clearly visible clutter/disorganization when it reduces safe or practical use of the space.',
       'A condition is the PRIMARY output of this audit. When a visible problem is supported, emit it in conditions[]; do not leave the problem only as an observation, object name, category, state, or position.',
       'A category="obstruction" object positioned in front of a door or access route is itself an operational access concern even if the literal threshold remains visible; distinguish reduced/encroached approach space from a fully blocked doorway rather than suppressing the concern.',
@@ -755,7 +762,7 @@ export class ScanPipeline {
             ? 'SPARSE STILL-PHOTO RETRY: The prior grounded result contained no usable physical objects. Re-inspect the CURRENT still image from scratch and return a concise inventory of the major directly visible physical objects needed to represent this environment. Include stable whole-object entries for clearly visible doors, furniture, safety equipment, signage, fixtures, storage/cabinet units, plants, and other substantial scene anchors when actually visible. Do not invent objects, do not recover from memory, do not pad with decorative micro-items, and do not repeat aliases. Every object must reference the supplied FRAME_ID evidence. Return one complete JSON object only.'
             : 'FAST STRICT RETRY: Return one complete JSON object only. Prioritize operationally meaningful visible objects and anchors; for a still image keep the inventory concise (prefer at most 12 objects). Use canonical enum values, finite numeric confidences, arrays for reference fields, and reference only supplied FRAME_ID evidence. Omit decorative micro-inventory and unsupported optional claims instead of guessing.'
           : undefined
-        const inferenceArtifacts = input.media.kind === 'image' && pass !== 'detail-audit'
+        const inferenceArtifacts = input.media.kind === 'image' && pass !== 'detail-audit' && pass !== 'condition-audit'
           ? artifacts.filter((artifact) => artifact.kind !== 'frame' || !artifact.frameId?.startsWith('detail_'))
           : artifacts
         const result = await this.model!.infer({
