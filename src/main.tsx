@@ -182,6 +182,7 @@ function App() {
   const currentUnpromotedConditions = currentSnapshot
     ? currentSnapshot.conditions.filter((item) =>
         item.kind !== 'normal' &&
+        item.status === 'present' &&
         !currentIssueTitles.has(normalizeFindingTitle(item.title)),
       )
     : []
