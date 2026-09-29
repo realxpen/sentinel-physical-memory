@@ -689,6 +689,7 @@ export class ScanPipeline {
       'Classify objects from visible morphology and context. If identity is uncertain, keep the label generic rather than forcing a familiar object name.',
       'When a condition depends on a spatial relationship, encode the grounded relation and bind the condition to the relevant current object IDs. Do not rely on vague narrative wording alone.',
       'Use basis="observed" for direct observations only. Do not diagnose or classify the observation as a hazard/damage/maintenance/access condition here; the generic condition reasoner will do that from grounded facts.',
+      'A direct observation must describe visually inspectable geometry, material appearance, placement, or spatial relationship. Do not assert hidden mechanical, electrical, internal, functional, secured/locked, powered, or operating state unless that state is itself directly visible from physical geometry; otherwise describe only the visible cue and leave interpretation to reasoning.',
       'Do not recommend actions, diagnose invisible causes, predict hidden risk, or infer facts from filenames, metadata, prior memory, or expected changes.',
       'Reference only the exact supplied FRAME_ID values in evidenceIds. SENTINEL owns frame evidence records.',
       'Do not enumerate negative findings. If there is no concrete operational condition, return conditions=[] and do not add filler observations.',
@@ -739,6 +740,7 @@ export class ScanPipeline {
         'Look for any directly visible state that is physically abnormal for the object or area and materially relevant to safe or practical use. Do not constrain the pass to known examples or a fixed hazard vocabulary.',
         'Do not enumerate ordinary intact inventory. Only return objects/observations needed to ground a visible abnormality.',
         'Do not infer hidden operating status, hidden causes, or unseen damage. Describe only the visible physical state.',
+        'Do not convert a control, handle, keyhole, switch, indicator, enclosure, connector, or other visible feature into a hidden state claim. If internal/mechanical/electrical/functional status is not visibly established by geometry or material evidence, describe the visible feature only or omit the observation.',
         'For every supported abnormality, return the minimum grounded fact set: a direct observation plus the relevant object or relation when identifiable. Return conditions=[]; semantic condition interpretation belongs to the later generic condition reasoner.',
         'Bind all returned items to CURRENT FRAME_ID evidence. Do not use prior memory, filenames, metadata, room expectations, or earlier model wording as evidence.',
         'If no abnormality is visually supportable, return empty observations/conditions rather than inventing one.',
@@ -1146,7 +1148,7 @@ function mergeCurrentStateAudit(
   }
 
   const mappedObservationText = audit.observations
-    .filter((item) => item.confidence >= 0.9 && item.evidenceIds.length > 0)
+    .filter((item) => item.basis === 'observed' && item.confidence >= 0.9 && item.evidenceIds.length > 0)
     .map((item) => ({ ...item, id: `${prefix}${item.id}` }))
 
   const mappedConditions = audit.conditions.flatMap((item) => {
