@@ -40,6 +40,7 @@ export function groundReasonedConditions(
   const allowedObservationIds = new Set(perception.observations.filter((item) => item.basis === 'observed').map((item) => item.id))
   const allowedObjectIds = new Set(perception.objects.map((item) => item.id))
   const allowedEvidenceIds = new Set(perception.evidence.map((item) => item.id))
+  const evidenceById = new Map(perception.evidence.map((item) => [item.id, item]))
   const existingTitles = new Set(perception.conditions.map((item) => normalizeText(item.title)))
   const accepted: EnvironmentalCondition[] = []
   const rejected: ConditionReasoningGroundingResult['rejected'] = []
@@ -76,8 +77,28 @@ export function groundReasonedConditions(
 
     const evidenceSet = new Set(evidenceIds)
     const citedObjects = objectIds.map((id) => perception.objects.find((item) => item.id === id)!).filter(Boolean)
-    if (citedObjects.some((item) => !item.evidenceIds.some((id) => evidenceSet.has(id)))) {
-      rejected.push({ title, reason: 'object-not-grounded-by-cited-evidence' })
+    const citedEvidenceCaptureKeys = new Set(
+      evidenceIds
+        .map((id) => evidenceById.get(id))
+        .filter(Boolean)
+        .map((item) => evidenceCaptureKey(item!)),
+    )
+    const sameCaptureObjectEvidenceIds: string[] = []
+    let objectEvidenceMismatch = false
+    for (const item of citedObjects) {
+      if (item.evidenceIds.some((id) => evidenceSet.has(id))) continue
+      const sameCaptureIds = item.evidenceIds.filter((id) => {
+        const evidence = evidenceById.get(id)
+        return Boolean(evidence) && citedEvidenceCaptureKeys.has(evidenceCaptureKey(evidence!))
+      })
+      if (sameCaptureIds.length === 0) {
+        objectEvidenceMismatch = true
+        break
+      }
+      sameCaptureObjectEvidenceIds.push(...sameCaptureIds)
+    }
+    if (objectEvidenceMismatch) {
+      rejected.push({ title, reason: 'object-not-grounded-by-current-capture-evidence' })
       continue
     }
 
@@ -120,6 +141,7 @@ export function groundReasonedConditions(
       supportConfidence * 0.95,
       0.95,
     ).toFixed(3))
+    const groundedEvidenceIds = unique([...evidenceIds, ...sameCaptureObjectEvidenceIds])
 
     const normalizedTitle = normalizeText(title)
     if (existingTitles.has(normalizedTitle) || accepted.some((item) => normalizeText(item.title) === normalizedTitle)) {
@@ -137,12 +159,16 @@ export function groundReasonedConditions(
       basis: 'inferred',
       confidence,
       objectIds,
-      evidenceIds,
+      evidenceIds: groundedEvidenceIds,
       observedAt: capturedAt,
     })
   }
 
   return { conditions: accepted, rejected }
+}
+
+function evidenceCaptureKey(item: { sourceId: string; capturedAt: string }): string {
+  return `${item.sourceId}::${item.capturedAt}`
 }
 
 function normalizeText(value: string): string {
