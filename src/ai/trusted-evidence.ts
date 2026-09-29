@@ -90,12 +90,16 @@ export function groundPerceptionToTrustedFrames(
   }
 
   const observations = result.observations.flatMap((item) => {
+    if (item.basis !== 'observed') {
+      droppedUngroundedItems += 1
+      return []
+    }
     const evidenceIds = groundIds(item.evidenceIds)
     if (!evidenceIds.length) {
       droppedUngroundedItems += 1
       return []
     }
-    return [{ ...item, sourceId, capturedAt, basis: item.basis === 'observed' ? 'observed' as const : 'inferred' as const, evidenceIds }]
+    return [{ ...item, sourceId, capturedAt, basis: 'observed' as const, evidenceIds }]
   })
 
   const objects = result.objects.flatMap((item) => {
