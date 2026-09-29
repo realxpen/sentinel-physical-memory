@@ -74,6 +74,73 @@ try {
   expect(grounded.conditions[0].confidence === 0.912, `reasoned confidence must be bounded by current support, got ${grounded.conditions[0].confidence}`)
   expect(assessCondition(grounded.conditions[0]).operational === true, 'strong grounded novel condition must pass the existing structural trust gate')
 
+  const crossViewEvidenceId = 'evidence_detail'
+  const crossViewPerception = {
+    ...perception,
+    objects: [{
+      ...perception.objects[0],
+      evidenceIds: [crossViewEvidenceId],
+    }],
+    evidence: [
+      ...perception.evidence,
+      {
+        id: crossViewEvidenceId,
+        type: 'frame',
+        sourceId,
+        capturedAt,
+        frameIndex: 1,
+        description: 'Overlapping detail view from the same current still capture.',
+      },
+    ],
+  }
+  const crossViewGrounded = groundReasonedConditions(crossViewPerception, {
+    conditions: [{
+      kind: 'maintenance',
+      title: 'Same-capture detail view condition',
+      description: 'The current observation and cited object are grounded by two views of the same still capture.',
+      status: 'present',
+      confidence: 0.94,
+      supportingObservationIds: ['obs_panel'],
+      objectIds: ['panel_object'],
+      evidenceIds: [evidenceId],
+    }],
+  }, environmentId, capturedAt)
+  expect(crossViewGrounded.conditions.length === 1, 'same-capture full/detail evidence may jointly ground one cited current object')
+  expect(crossViewGrounded.conditions[0].evidenceIds.includes(evidenceId) && crossViewGrounded.conditions[0].evidenceIds.includes(crossViewEvidenceId), 'condition evidence must retain the observation evidence and add the cited object same-capture evidence')
+
+  const foreignEvidenceId = 'evidence_foreign_capture'
+  const foreignCapturePerception = {
+    ...crossViewPerception,
+    objects: [{
+      ...crossViewPerception.objects[0],
+      evidenceIds: [foreignEvidenceId],
+    }],
+    evidence: [
+      ...perception.evidence,
+      {
+        id: foreignEvidenceId,
+        type: 'frame',
+        sourceId: 'different_source',
+        capturedAt: '2026-09-27T12:00:00.000Z',
+        frameIndex: 0,
+        description: 'Evidence from a different capture.',
+      },
+    ],
+  }
+  const foreignCaptureGrounded = groundReasonedConditions(foreignCapturePerception, {
+    conditions: [{
+      kind: 'maintenance',
+      title: 'Foreign capture object must fail',
+      description: 'A current observation must not borrow object evidence from another capture.',
+      status: 'present',
+      confidence: 0.94,
+      supportingObservationIds: ['obs_panel'],
+      objectIds: ['panel_object'],
+      evidenceIds: [evidenceId],
+    }],
+  }, environmentId, capturedAt)
+  expect(foreignCaptureGrounded.conditions.length === 0 && foreignCaptureGrounded.rejected[0]?.reason === 'object-not-grounded-by-current-capture-evidence', 'cross-view object grounding must never bridge to prior or foreign capture evidence')
+
   const badEvidence = groundReasonedConditions(perception, {
     conditions: [{
       kind: 'hazard',
@@ -437,6 +504,7 @@ try {
   expect(!plannerSource.includes('function remediationObjective'), 'action planning must not use a hardcoded hazard-to-remediation lookup')
 
   console.log('PASS  retryable condition-reasoning provider failures receive one bounded retry without weakening grounding')
+  console.log('PASS  same-capture full/detail evidence can jointly ground one current condition without bridging captures')
   console.log('PASS  trusted frame grounding drops non-observed provider claims before present-condition reasoning')
   console.log('PASS  provider perception conditions cannot bypass the generic observation-grounded reasoning boundary')
   console.log('PASS  condition-audit direct abnormal observations survive into condition reasoning')
