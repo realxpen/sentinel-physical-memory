@@ -162,7 +162,7 @@ try {
     sourceId,
     capturedAt,
   )
-  expect(groundedEvidence.result.observations[0]?.basis === 'inferred', 'trusted frame grounding must never upgrade an inferred provider claim into an observed fact')
+  expect(groundedEvidence.result.observations.length === 0, 'trusted frame grounding must drop provider claims that are not explicitly direct observations')
   const hiddenStateCandidate = groundReasonedConditions(groundedEvidence.result, {
     conditions: [{
       kind: 'access',
@@ -437,7 +437,7 @@ try {
   expect(!plannerSource.includes('function remediationObjective'), 'action planning must not use a hardcoded hazard-to-remediation lookup')
 
   console.log('PASS  retryable condition-reasoning provider failures receive one bounded retry without weakening grounding')
-  console.log('PASS  trusted frame grounding preserves inferred observation basis and present-condition grounding rejects it')
+  console.log('PASS  trusted frame grounding drops non-observed provider claims before present-condition reasoning')
   console.log('PASS  provider perception conditions cannot bypass the generic observation-grounded reasoning boundary')
   console.log('PASS  condition-audit direct abnormal observations survive into condition reasoning')
   console.log('PASS  grounded perception and semantic interpretation are separate layers')
