@@ -90,6 +90,10 @@ export function groundPerceptionToTrustedFrames(
   }
 
   const observations = result.observations.flatMap((item) => {
+    if (item.basis !== 'observed') {
+      droppedUngroundedItems += 1
+      return []
+    }
     const evidenceIds = groundIds(item.evidenceIds)
     if (!evidenceIds.length) {
       droppedUngroundedItems += 1
