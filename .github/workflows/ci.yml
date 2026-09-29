@@ -84,3 +84,20 @@ jobs:
         run: npm run check:phase18-demo
       - name: Build
         run: npm run build
+
+
+  pr67-condition-preview-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate generic condition reasoning on PR67 preview
+        env:
+          SENTINEL_BASE_URL: https://sentinel-physical-memory-o7lx9hxsq-swifnatechnologyltd.vercel.app
+          SENTINEL_EXPECTED_COMMIT: 022506c692cbfac5c0dfdd15d8a13902c49848ab
+        run: node scripts/check-production-condition-smoke.mjs
